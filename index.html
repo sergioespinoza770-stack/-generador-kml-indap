@@ -2195,6 +2195,62 @@ document.getElementById('btnCampoReset').addEventListener('click', function(){
 // Al abrir la pagina, intentamos recuperar poligonos KML cargados en una sesion anterior
 cargarPoligonosDesdeStorage();
 
+// Si la app se abrio porque el usuario "compartio" un .kml/.kmz desde otra app
+// (ej: explorador de archivos o Gmail), el service worker lo dejo guardado en
+// una cache especial. Lo leemos y lo cargamos automaticamente.
+async function revisarArchivoCompartido(){
+  const parametros = new URLSearchParams(window.location.search);
+  if(parametros.get('compartido') !== '1') return;
+
+  const statusEl = document.getElementById('status');
+  try{
+    if(!('caches' in window)) throw new Error('Este navegador no soporta Cache API.');
+    const cache = await caches.open('generador-kml-compartidos');
+    const respCantidad = await cache.match('./compartido-cantidad');
+    if(!respCantidad) throw new Error('No se encontro el archivo compartido.');
+    const cantidad = parseInt(await respCantidad.text(), 10) || 0;
+
+    let cargados = 0;
+    for(let i = 0; i < cantidad; i++){
+      const resp = await cache.match('./compartido-' + i);
+      if(!resp) continue;
+      const nombreOriginal = resp.headers.get('X-Nombre-Original') || ('compartido_' + i + '.kml');
+      const blob = await resp.blob();
+      const archivo = new File([blob], nombreOriginal, { type: blob.type });
+
+      let texto;
+      if(/\.kmz$/i.test(nombreOriginal)){
+        const buffer = await archivo.arrayBuffer();
+        texto = await extraerKmlDeKmz(buffer);
+      }else{
+        texto = await archivo.text();
+      }
+      const resultado = parsearKML(texto);
+      const nombreEtiqueta = resultado.nombreDetectado || nombreOriginal.replace(/\.(kml|kmz)$/i, '');
+      agregarPoligonoSubido(nombreEtiqueta, resultado.puntos);
+      cargados++;
+
+      await cache.delete('./compartido-' + i);
+    }
+    await cache.delete('./compartido-cantidad');
+
+    if(cargados > 0){
+      document.querySelector('input[name=tipoCoord][value=kml]').checked = true;
+      actualizarModo();
+      statusEl.className = 'status ok';
+      statusEl.textContent = 'Se cargo ' + cargados + ' poligono(s) compartido(s) desde otra app.';
+    }
+  }catch(err){
+    statusEl.className = 'status err';
+    statusEl.textContent = 'No se pudo procesar el archivo compartido: ' + err.message;
+  }finally{
+    // Limpiamos el ?compartido=1 de la URL para que un refresh no lo vuelva a intentar
+    const urlLimpia = window.location.pathname;
+    window.history.replaceState({}, document.title, urlLimpia);
+  }
+}
+revisarArchivoCompartido();
+
 // Registro del Service Worker (solo funciona sobre HTTPS o localhost, no sobre file://)
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
