@@ -1,4 +1,4 @@
-const CACHE_NAME = 'generador-kml-v2';
+const CACHE_NAME = 'generador-kml-v3';
 const CACHE_COMPARTIDOS = 'generador-kml-compartidos';
 const ARCHIVOS_APP = [
   './index.html',
@@ -38,13 +38,33 @@ self.addEventListener('fetch', function(event){
     return;
   }
 
-  // Las teselas satelitales (Esri) y cualquier otro origen externo van directo a la red,
-  // no las cacheamos aca (cambian segun donde mires el mapa).
+  // Las teselas satelitales (Esri), Overpass, OSRM y cualquier otro origen externo
+  // van directo a la red, no las cacheamos aca.
   if(url.origin !== self.location.origin){
     return;
   }
 
-  // App shell: cache primero, si no esta, va a la red y lo guarda para la proxima.
+  const esPaginaPrincipal = event.request.mode === 'navigate' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('manifest.json');
+
+  if(esPaginaPrincipal){
+    // Red primero: siempre intenta traer la version mas nueva del servidor.
+    // Si no hay conexion, recien ahi usa la copia guardada.
+    event.respondWith(
+      fetch(event.request).then(function(respuestaRed){
+        caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, respuestaRed.clone()); });
+        return respuestaRed;
+      }).catch(function(){
+        return caches.match(event.request).then(function(resp){
+          return resp || caches.match('./index.html');
+        });
+      })
+    );
+    return;
+  }
+
+  // Resto de archivos de la app (iconos): cache primero, mas rapido y no cambian seguido.
   event.respondWith(
     caches.match(event.request).then(function(respuestaCache){
       if(respuestaCache) return respuestaCache;
