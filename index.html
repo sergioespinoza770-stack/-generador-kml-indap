@@ -1310,6 +1310,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:#8f8f8f;
     opacity:0.6;
   }
+  .overlay-offline-nav{
+    position:absolute;
+    top:70px;
+    left:16px;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    border:2px solid #5a5a5a;
+    color:#ffffff;
+    font-size:19px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:10;
+  }
+  .overlay-offline-nav.activo{
+    border-color:#ffc700;
+    background:rgba(255,199,0,0.18);
+  }
   #navMapa{
     width:min(94vw, 480px);
     height:230px;
@@ -1542,6 +1563,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <div id="overlayNav" class="overlay-full overlay-scroll">
   <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
   <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
+  <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
   <div id="navMapa"></div>
   <div id="navBrujula">
     <div id="navFlecha"></div>
@@ -2680,17 +2702,8 @@ function hablar(texto){
     u.lang = 'es-CL';
     const voz = elegirVozEspanol();
     if(voz) u.voice = voz;
-    // Si no encontramos una voz explicitamente masculina (lo mas comun: el celular
-    // suele traer solo una voz en español, casi siempre femenina), bajamos bastante
-    // el tono y un poco la velocidad para que suene claramente mas grave/varonil.
-    const esProbablementeMasculina = voz && PISTAS_VOZ_MASCULINA.some(p => (voz.name||'').toLowerCase().includes(p));
-    if(esProbablementeMasculina){
-      u.pitch = 1.0;
-      u.rate = 1.0;
-    }else{
-      u.pitch = 0.35;
-      u.rate = 0.92;
-    }
+    u.rate = 1.0;
+    u.pitch = 1.0;
     window.speechSynthesis.speak(u);
   }catch(e){ /* si la voz falla, seguimos solo con texto en pantalla */ }
 }
@@ -2747,6 +2760,39 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   });
 }
 
+let navModoOfflineActivo = false;
+
+function activarOfflineEnNav(mapaRef){
+  navModoOfflineActivo = true;
+  if(mapaRef.hasLayer(navCapaSatNav)) mapaRef.removeLayer(navCapaSatNav);
+  const meta = buscarPlanoParaVista(mapaRef);
+  if(meta){
+    mostrarPlanoOfflineEnMapa(mapaRef, meta);
+  }else{
+    if(!mapaRef.hasLayer(navCapaOfflineNav)) navCapaOfflineNav.addTo(mapaRef);
+    mostrarSoloCallesGuardadas(mapaRef);
+  }
+  if(!mapaRef._capaRedVialInstancia){
+    mapaRef._capaRedVialInstancia = obtenerCapaRedVialRegional();
+  }
+  if(mapaRef._capaRedVialInstancia && !mapaRef.hasLayer(mapaRef._capaRedVialInstancia)){
+    mapaRef._capaRedVialInstancia.addTo(mapaRef);
+  }
+  const btn = document.getElementById('btnCapaOfflineNav');
+  if(btn) btn.classList.add('activo');
+}
+
+function activarSatelitalEnNav(mapaRef){
+  navModoOfflineActivo = false;
+  if(mapaRef.hasLayer(navCapaOfflineNav)) mapaRef.removeLayer(navCapaOfflineNav);
+  if(capaImagenOfflineActual && mapaRef.hasLayer(capaImagenOfflineActual)) mapaRef.removeLayer(capaImagenOfflineActual);
+  if(capaCallesOfflineActual && mapaRef.hasLayer(capaCallesOfflineActual)) mapaRef.removeLayer(capaCallesOfflineActual);
+  if(mapaRef._capaRedVialInstancia && mapaRef.hasLayer(mapaRef._capaRedVialInstancia)) mapaRef.removeLayer(mapaRef._capaRedVialInstancia);
+  if(!mapaRef.hasLayer(navCapaSatNav)) navCapaSatNav.addTo(mapaRef);
+  const btn = document.getElementById('btnCapaOfflineNav');
+  if(btn) btn.classList.remove('activo');
+}
+
 function asegurarMiniMapaNav(){
   if(navMapaInstancia) return navMapaInstancia;
   navMapaInstancia = L.map('navMapa', { attributionControl:false, zoomControl:true });
@@ -2756,26 +2802,19 @@ function asegurarMiniMapaNav(){
   let fallasNav = 0;
   navCapaSatNav.on('tileerror', function(){
     fallasNav++;
-    if(fallasNav >= 4 && navMapaInstancia.hasLayer(navCapaSatNav)){
-      navMapaInstancia.removeLayer(navCapaSatNav);
-      const meta = buscarPlanoParaVista(navMapaInstancia);
-      if(meta){
-        mostrarPlanoOfflineEnMapa(navMapaInstancia, meta);
-      }else{
-        navCapaOfflineNav.addTo(navMapaInstancia);
-        mostrarSoloCallesGuardadas(navMapaInstancia);
-      }
-      if(!navMapaInstancia._capaRedVialInstancia){
-        navMapaInstancia._capaRedVialInstancia = obtenerCapaRedVialRegional();
-      }
-      if(navMapaInstancia._capaRedVialInstancia && !navMapaInstancia.hasLayer(navMapaInstancia._capaRedVialInstancia)){
-        navMapaInstancia._capaRedVialInstancia.addTo(navMapaInstancia);
-      }
+    if(fallasNav >= 4 && navMapaInstancia.hasLayer(navCapaSatNav) && !navModoOfflineActivo){
+      activarOfflineEnNav(navMapaInstancia);
     }
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
   return navMapaInstancia;
 }
+
+document.getElementById('btnCapaOfflineNav').addEventListener('click', function(){
+  const m = asegurarMiniMapaNav();
+  if(navModoOfflineActivo) activarSatelitalEnNav(m);
+  else activarOfflineEnNav(m);
+});
 
 function trazarRutaEnMiniMapa(lat, lon){
   const m = asegurarMiniMapaNav();
