@@ -2289,6 +2289,7 @@ let navCapaRuta = null;
 let navPasos = [];
 let navPasoActualIdx = 0;
 let navDistanciaTotalRuta = null;
+let navTieneRutaValida = false;
 let navUltimoFetchRuta = 0;
 let navUltimaPosParaRuta = null;
 let navVozActiva = true;
@@ -2351,7 +2352,12 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   const url = 'https://router.project-osrm.org/route/v1/driving/' +
     lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
     '?overview=full&geometries=geojson&steps=true';
-  return fetch(url).then(function(resp){
+
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 6000); // 6s maximo: con mala señal, mejor fallar rapido y usar respaldo
+
+  return fetch(url, { signal: controlador.signal }).then(function(resp){
+    clearTimeout(timeoutId);
     if(!resp.ok) throw new Error('Servicio de rutas no disponible (' + resp.status + ')');
     return resp.json();
   }).then(function(data){
@@ -2370,6 +2376,10 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
       });
     });
     return { coords: coords, pasos: pasos, distanciaTotal: ruta.distance };
+  }).catch(function(err){
+    clearTimeout(timeoutId);
+    if(err.name === 'AbortError') throw new Error('sin respuesta a tiempo (señal muy debil)');
+    throw err;
   });
 }
 
@@ -2423,12 +2433,24 @@ function trazarRutaEnMiniMapa(lat, lon){
       navPasos = res.pasos;
       navPasoActualIdx = 0;
       navDistanciaTotalRuta = res.distanciaTotal;
+      navTieneRutaValida = true;
       document.getElementById('navEstado').textContent = 'Ruta por camino encontrada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
       if(res.pasos.length > 0) hablar(res.pasos[0].texto);
     }).catch(function(err){
-      navPasos = [];
-      document.getElementById('navEstado').textContent = 'Sin ruta por camino disponible (' + err.message + '). Usando línea recta y brújula.';
-      m.setView([lat, lon], 15);
+      // Importante: si ya teniamos una ruta buena de un intento anterior, NO la borramos.
+      // Con mala señal es mejor seguir con la ultima ruta conocida que quedarse sin nada.
+      if(navTieneRutaValida){
+        document.getElementById('navEstado').textContent = 'Señal débil: no se pudo actualizar la ruta, seguimos con la última calculada.';
+      }else{
+        navPasos = [];
+        const meta = buscarPlanoParaVista(m);
+        if(meta && meta.calles && meta.calles.length > 0){
+          document.getElementById('navEstado').textContent = 'Sin señal para calcular ruta en vivo — mostrando los caminos guardados de esta zona y brújula/línea recta.';
+        }else{
+          document.getElementById('navEstado').textContent = 'Sin ruta por camino disponible (' + err.message + '). Usando línea recta y brújula.';
+        }
+        m.setView([lat, lon], 15);
+      }
     });
   }
 }
@@ -2480,6 +2502,7 @@ function abrirNavegador(){
   navUltimoFetchRuta = 0;
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
+  navTieneRutaValida = false;
   elNombre.textContent = 'Yendo hacia: ' + objetivo.nombre;
   elDistancia.textContent = '— m';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
