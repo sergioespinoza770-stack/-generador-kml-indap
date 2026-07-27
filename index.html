@@ -1705,14 +1705,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <p class="hint">Mientras tengas señal, encuadrá el mapa en la zona que te interesa y tocá 💾. Queda guardada la imagen real de esa zona en este celular — cuando te falte señal en terreno, se usa esa imagen fija en vez de la grilla genérica. Además, los caminos de cualquier zona que mires con conexión se van guardando solos, sin tocar nada.</p>
       <div id="listaPlanosOffline" class="lista-kml"></div>
-
-      <div class="divider" style="margin:16px 0;"></div>
-
-      <div class="planos-offline-header">
-        <strong>🗺️ Red vial por región</strong>
-      </div>
-      <p class="hint">Descargá la red vial principal (rutas y caminos importantes, no cada huella rural) de las regiones que necesites. Cada una se guarda para siempre en este celular, sin depender de por dónde hayas navegado antes. <strong>Usá wifi</strong> — cada región puede tardar entre 10 segundos y 1-2 minutos según su tamaño.</p>
-      <div id="listaRegionesRedVial" class="lista-kml"></div>
     </div>
   </div>
 
@@ -2005,177 +1997,28 @@ function obtenerCallesOverpass(bounds){
   });
 }
 
-// ---------- Red vial por region (descarga unica, permanente, red vial principal) ----------
-const REGIONES_CHILE = [
-  { id:'arica',        nombre:'Arica y Parinacota',      bounds:{south:-19.5, west:-70.5, north:-17.4, east:-68.5} },
-  { id:'tarapaca',     nombre:'Tarapacá',                bounds:{south:-21.6, west:-70.5, north:-19.2, east:-68.0} },
-  { id:'antofagasta',  nombre:'Antofagasta',             bounds:{south:-26.2, west:-70.9, north:-20.9, east:-67.0} },
-  { id:'atacama',      nombre:'Atacama',                 bounds:{south:-29.5, west:-71.5, north:-25.9, east:-68.0} },
-  { id:'coquimbo',     nombre:'Coquimbo',                bounds:{south:-32.4, west:-71.8, north:-29.0, east:-69.8} },
-  { id:'valparaiso',   nombre:'Valparaíso',              bounds:{south:-33.7, west:-71.8, north:-32.0, east:-70.0} },
-  { id:'metropolitana',nombre:'Metropolitana',           bounds:{south:-34.3, west:-71.2, north:-32.9, east:-69.8} },
-  { id:'ohiggins',     nombre:"O'Higgins",               bounds:{south:-35.1, west:-72.2, north:-33.9, east:-69.9} },
-  { id:'maule',        nombre:'Maule',                   bounds:{south:-36.6, west:-72.8, north:-34.6, east:-70.0} },
-  { id:'nuble',        nombre:'Ñuble',                   bounds:{south:-37.3, west:-72.6, north:-35.9, east:-71.0} },
-  { id:'biobio',       nombre:'Biobío',                  bounds:{south:-38.5, west:-73.7, north:-36.0, east:-71.0} },
-  { id:'araucania',    nombre:'La Araucanía',            bounds:{south:-39.7, west:-73.6, north:-37.8, east:-71.0} },
-  { id:'losrios',      nombre:'Los Ríos',                bounds:{south:-40.6, west:-73.5, north:-39.4, east:-71.4} },
-  { id:'loslagos',     nombre:'Los Lagos',               bounds:{south:-44.1, west:-75.0, north:-40.4, east:-71.0} },
-  { id:'aysen',        nombre:'Aysén',                   bounds:{south:-49.4, west:-75.8, north:-43.6, east:-71.0} },
-  { id:'magallanes',   nombre:'Magallanes',              bounds:{south:-56.0, west:-75.8, north:-48.3, east:-66.4} },
-];
-
-function obtenerCallesOverpassRegion(bounds){
-  // Red vial principal solamente (no huellas/residencial), para mantener el tamaño manejable en areas grandes
-  const bbox = bounds.south + ',' + bounds.west + ',' + bounds.north + ',' + bounds.east;
-  const consulta = '[out:json][timeout:120];way["highway"~"motorway|trunk|primary|secondary|tertiary"](' + bbox + ');out geom;';
-  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
-
-  const controlador = new AbortController();
-  const timeoutId = setTimeout(function(){ controlador.abort(); }, 110000);
-
-  return fetch(url, { signal: controlador.signal }).then(function(resp){
-    clearTimeout(timeoutId);
-    if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
-    return resp.json();
-  }).then(function(data){
-    const calles = [];
-    (data.elements || []).forEach(function(el){
-      if(el.type === 'way' && el.geometry){
-        calles.push(el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
-      }
-    });
-    return calles;
-  }).catch(function(err){
-    clearTimeout(timeoutId);
-    if(err.name === 'AbortError') throw new Error('sin respuesta a tiempo (region muy grande o señal debil)');
-    throw err;
-  });
-}
-
-function cargarMetaRegionesRedVial(){
+// ---------- Limpieza de datos viejos de "red vial por region" (funcion descontinuada) ----------
+// Si en una version anterior se llego a descargar alguna region, la borramos sola para no
+// dejar datos guardados sin usar. Los caminos automaticos (los que se guardan solos al
+// navegar el mapa) no se tocan, siguen funcionando igual.
+(function limpiarRedVialPorRegionVieja(){
   try{
-    const crudo = localStorage.getItem('generadorKml_regionesRedVial');
-    return crudo ? JSON.parse(crudo) : {};
-  }catch(e){ return {}; }
-}
-function guardarMetaRegionesRedVial(meta){
-  try{ localStorage.setItem('generadorKml_regionesRedVial', JSON.stringify(meta)); }catch(e){ /* sin espacio */ }
-}
-
-let metaRegionesRedVial = cargarMetaRegionesRedVial();
-
-function renderizarListaRegionesRedVial(){
-  const cont = document.getElementById('listaRegionesRedVial');
-  if(!cont) return;
-  cont.innerHTML = '';
-  REGIONES_CHILE.forEach(function(region){
-    const info = metaRegionesRedVial[region.id];
-    const fila = document.createElement('div');
-    fila.className = 'item-region';
-
-    const nombre = document.createElement('span');
-    nombre.className = 'nombre-region';
-    nombre.textContent = region.nombre;
-
-    const estado = document.createElement('span');
-    estado.className = 'estado-region' + (info ? ' ok' : '');
-    estado.id = 'estadoRegion_' + region.id;
-    estado.textContent = info ? ('✓ ' + info.cantidad + ' tramos — ' + info.fecha) : 'no descargada';
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'btnRegion_' + region.id;
-    btn.textContent = info ? 'Actualizar' : 'Descargar';
-    btn.addEventListener('click', function(){ descargarRegionRedVial(region, btn, estado); });
-
-    fila.appendChild(nombre);
-    fila.appendChild(estado);
-    fila.appendChild(btn);
-    cont.appendChild(fila);
-  });
-}
-
-function descargarRegionRedVial(region, btn, estadoEl){
-  btn.disabled = true;
-  const textoOriginal = btn.textContent;
-  btn.textContent = 'Descargando...';
-  estadoEl.textContent = 'Pidiendo datos a OpenStreetMap (puede tardar)...';
-
-  obtenerCallesOverpassRegion(region.bounds).then(function(calles){
-    if(calles.length === 0){
-      estadoEl.textContent = 'No se encontraron caminos principales para esta región.';
-      btn.disabled = false;
-      btn.textContent = textoOriginal;
-      return;
+    if(localStorage.getItem('generadorKml_regionesRedVial')){
+      localStorage.removeItem('generadorKml_regionesRedVial');
     }
-    if(!('caches' in window)){
-      estadoEl.textContent = 'Este navegador no soporta guardar esto offline (falta Cache Storage).';
-      btn.disabled = false;
-      btn.textContent = textoOriginal;
-      return;
-    }
-    const blob = new Blob([JSON.stringify(calles)], { type: 'application/json' });
+  }catch(e){ /* nada que limpiar */ }
+
+  if('caches' in window){
     caches.open('generador-kml-planos').then(function(cache){
-      return cache.put('./red-vial-region-' + region.id, new Response(blob));
-    }).then(function(){
-      metaRegionesRedVial[region.id] = {
-        cantidad: calles.length,
-        fecha: new Date().toLocaleString('es-CL')
-      };
-      guardarMetaRegionesRedVial(metaRegionesRedVial);
-      estadoEl.className = 'estado-region ok';
-      estadoEl.textContent = '✓ ' + calles.length + ' tramos — ' + metaRegionesRedVial[region.id].fecha;
-      btn.textContent = 'Actualizar';
-      btn.disabled = false;
-      cargarRedVialRegionalGuardada(); // refresca la capa en memoria con el nuevo agregado
-    }).catch(function(err){
-      estadoEl.textContent = 'No se pudo guardar: ' + err.message;
-      btn.disabled = false;
-      btn.textContent = textoOriginal;
-    });
-  }).catch(function(err){
-    estadoEl.textContent = 'Error: ' + err.message + '. Probá de nuevo con mejor señal.';
-    btn.disabled = false;
-    btn.textContent = textoOriginal;
-  });
-}
-
-// Carga en memoria (una sola vez, o cuando se agrega/actualiza una region) todas las
-// regiones ya descargadas, armando una unica capa persistente para usar offline.
-let datosRedVialRegional = []; // datos crudos (tramos), reutilizables para armar una capa por cada mapa
-
-function cargarRedVialRegionalGuardada(){
-  if(!('caches' in window)) return Promise.resolve();
-  const ids = Object.keys(metaRegionesRedVial);
-  if(ids.length === 0) return Promise.resolve();
-
-  return caches.open('generador-kml-planos').then(function(cache){
-    return Promise.all(ids.map(function(id){
-      return cache.match('./red-vial-region-' + id).then(function(resp){
-        return resp ? resp.json() : [];
-      }).catch(function(){ return []; });
-    }));
-  }).then(function(listas){
-    let todasLasCalles = [];
-    listas.forEach(function(l){ todasLasCalles = todasLasCalles.concat(l); });
-    datosRedVialRegional = todasLasCalles;
-  });
-}
-
-// Cada mapa (principal y el mini-mapa del navegador) necesita su PROPIA instancia de capa
-// (Leaflet no permite que la misma capa este en dos mapas a la vez), por eso construimos
-// una nueva cada vez a partir de los mismos datos ya cargados en memoria.
-function obtenerCapaRedVialRegional(){
-  if(datosRedVialRegional.length === 0) return null;
-  return L.layerGroup(
-    datosRedVialRegional.map(function(tramo){
-      return L.polyline(tramo, { color:'#2f2f2f', weight:1.5, opacity:0.7, renderer: L.canvas() });
-    })
-  );
-}
-cargarRedVialRegionalGuardada();
-renderizarListaRegionesRedVial();
+      return cache.keys().then(function(claves){
+        return Promise.all(
+          claves.filter(function(req){ return req.url.indexOf('/red-vial-region-') !== -1; })
+                .map(function(req){ return cache.delete(req); })
+        );
+      });
+    }).catch(function(){ /* nada que limpiar */ });
+  }
+})();
 
 function guardarPlanoOffline(){
   const m = obtenerMapa();
@@ -2412,14 +2255,6 @@ function activarCapaOffline(mapaRef, metaForzada){
         : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
     }
   }
-
-  // Ademas de lo especifico de la vista, si hay red vial regional descargada, siempre se muestra
-  if(!mapaRef._capaRedVialInstancia){
-    mapaRef._capaRedVialInstancia = obtenerCapaRedVialRegional();
-  }
-  if(mapaRef._capaRedVialInstancia && !mapaRef.hasLayer(mapaRef._capaRedVialInstancia)){
-    mapaRef._capaRedVialInstancia.addTo(mapaRef);
-  }
 }
 
 function activarCapaSatelital(mapaRef){
@@ -2428,7 +2263,6 @@ function activarCapaSatelital(mapaRef){
   if(mapaRef.hasLayer(capaOffline)) mapaRef.removeLayer(capaOffline);
   if(capaImagenOfflineActual){ mapaRef.removeLayer(capaImagenOfflineActual); capaImagenOfflineActual = null; }
   if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
-  if(mapaRef._capaRedVialInstancia && mapaRef.hasLayer(mapaRef._capaRedVialInstancia)){ mapaRef.removeLayer(mapaRef._capaRedVialInstancia); }
   if(!mapaRef.hasLayer(capaSatelital)) capaSatelital.addTo(mapaRef);
   const btn = document.getElementById('btnCapaOffline');
   if(btn){ btn.classList.remove('activo'); btn.title = 'Cambiar entre imagen satelital y grilla sin conexión'; }
@@ -2772,12 +2606,6 @@ function activarOfflineEnNav(mapaRef){
     if(!mapaRef.hasLayer(navCapaOfflineNav)) navCapaOfflineNav.addTo(mapaRef);
     mostrarSoloCallesGuardadas(mapaRef);
   }
-  if(!mapaRef._capaRedVialInstancia){
-    mapaRef._capaRedVialInstancia = obtenerCapaRedVialRegional();
-  }
-  if(mapaRef._capaRedVialInstancia && !mapaRef.hasLayer(mapaRef._capaRedVialInstancia)){
-    mapaRef._capaRedVialInstancia.addTo(mapaRef);
-  }
   const btn = document.getElementById('btnCapaOfflineNav');
   if(btn) btn.classList.add('activo');
 }
@@ -2787,7 +2615,6 @@ function activarSatelitalEnNav(mapaRef){
   if(mapaRef.hasLayer(navCapaOfflineNav)) mapaRef.removeLayer(navCapaOfflineNav);
   if(capaImagenOfflineActual && mapaRef.hasLayer(capaImagenOfflineActual)) mapaRef.removeLayer(capaImagenOfflineActual);
   if(capaCallesOfflineActual && mapaRef.hasLayer(capaCallesOfflineActual)) mapaRef.removeLayer(capaCallesOfflineActual);
-  if(mapaRef._capaRedVialInstancia && mapaRef.hasLayer(mapaRef._capaRedVialInstancia)) mapaRef.removeLayer(mapaRef._capaRedVialInstancia);
   if(!mapaRef.hasLayer(navCapaSatNav)) navCapaSatNav.addTo(mapaRef);
   const btn = document.getElementById('btnCapaOfflineNav');
   if(btn) btn.classList.remove('activo');
