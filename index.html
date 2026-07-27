@@ -3952,10 +3952,37 @@ async function revisarArchivoCompartido(){
 revisarArchivoCompartido();
 
 // Registro del Service Worker (solo funciona sobre HTTPS o localhost, no sobre file://)
+// Con auto-actualizacion: si aparece una version nueva, se recarga sola para aplicarla,
+// sin que el usuario tenga que borrar datos de navegacion nunca mas.
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('./service-worker.js').catch(function(err){
+    navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).then(function(registro){
+      // Revisamos si hay version nueva apenas se abre la app...
+      registro.update().catch(function(){});
+      // ...y de nuevo cada 30 minutos si se deja la app abierta mucho rato.
+      setInterval(function(){ registro.update().catch(function(){}); }, 30 * 60 * 1000);
+
+      registro.addEventListener('updatefound', function(){
+        const nuevoWorker = registro.installing;
+        if(!nuevoWorker) return;
+        nuevoWorker.addEventListener('statechange', function(){
+          // "installed" + ya habia un controlador previo = es una actualizacion real (no la primera instalacion)
+          if(nuevoWorker.state === 'installed' && navigator.serviceWorker.controller){
+            window.location.reload();
+          }
+        });
+      });
+    }).catch(function(err){
       console.log('No se pudo registrar el service worker (normal si se abre como file://):', err);
+    });
+
+    // Si el nuevo Service Worker toma el control mientras la pagina esta abierta, recargamos
+    // (evita quedarse con una pestaña usando JS viejo mientras el SW ya cambio).
+    let yaRecargoPorControllerChange = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(yaRecargoPorControllerChange) return;
+      yaRecargoPorControllerChange = true;
+      window.location.reload();
     });
   });
 }
