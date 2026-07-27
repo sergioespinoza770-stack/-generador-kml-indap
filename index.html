@@ -2098,9 +2098,10 @@ let capaCallesOfflineActual = null;
 
 function mostrarPlanoOfflineEnMapa(mapaRef, meta){
   if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
-  if(meta.calles && meta.calles.length > 0){
+  const calles = buscarTodasLasCallesParaVista(mapaRef);
+  if(calles.length > 0){
     capaCallesOfflineActual = L.layerGroup(
-      meta.calles.map(function(tramo){
+      calles.map(function(tramo){
         return L.polyline(tramo, { color:'#3a3a3a', weight:2.5, opacity:0.85 });
       })
     ).addTo(mapaRef);
@@ -2183,6 +2184,43 @@ document.getElementById('btnGuardarPlano').addEventListener('click', guardarPlan
 cargarMetaPlanosOffline();
 renderizarListaPlanosOffline();
 
+// ---------- Cacheo automatico de caminos en segundo plano (sin tocar el boton guardar) ----------
+let autoCacheCallesTimer = null;
+let vistasAutoCacheadasEstaSesion = [];
+
+function intentarCachearCallesAutomatico(mapaRef){
+  if(navigator.onLine === false) return; // sin señal, ni lo intentamos
+  clearTimeout(autoCacheCallesTimer);
+  autoCacheCallesTimer = setTimeout(function(){
+    const b = mapaRef.getBounds();
+    const vista = { north:b.getNorth(), south:b.getSouth(), east:b.getEast(), west:b.getWest() };
+
+    // Si ya hay caminos guardados (manuales o automaticos) que cubren esta vista, no repetimos
+    const yaCubierto = planosOfflineMeta.some(function(p){
+      return p.calles && p.calles.length > 0 && bboxSeSuperponen(vista, p.bounds);
+    });
+    if(yaCubierto) return;
+
+    // Si ya lo intentamos esta sesion (haya dado caminos o no), tampoco reintentamos
+    if(vistasAutoCacheadasEstaSesion.some(function(v){ return bboxSeSuperponen(vista, v); })) return;
+    vistasAutoCacheadasEstaSesion.push(vista);
+
+    obtenerCallesOverpass(b).then(function(calles){
+      if(calles.length === 0) return;
+      planosOfflineMeta.push({
+        id: 'auto_' + Date.now(),
+        nombre: 'Caminos (automático)',
+        bounds: vista,
+        fecha: new Date().toLocaleString('es-CL'),
+        calles: calles,
+        automatico: true
+      });
+      guardarMetaPlanosOffline();
+      renderizarListaPlanosOffline();
+    }).catch(function(){ /* si Overpass falla, seguimos sin caminos automaticos para esta vista */ });
+  }, 1500); // esperamos un poco a que el usuario deje de mover/zoomear el mapa
+}
+
 function obtenerMapa(){
   if(!mapa){
     mapa = L.map('map', { attributionControl: true });
@@ -2219,9 +2257,13 @@ function obtenerMapa(){
       if(!modoMedicionActivo) return;
       agregarPuntoCampo(e.latlng.lat, e.latlng.lng);
     });
+
+    mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
   }
   document.getElementById('mapPanel').style.display = 'block';
   setTimeout(() => mapa.invalidateSize(), 150);
+  // Apenas se ve el mapa (con conexion), probamos cachear los caminos de esta vista sin pedir nada
+  intentarCachearCallesAutomatico(mapa);
   return mapa;
 }
 
@@ -2404,11 +2446,17 @@ function hablar(texto){
     u.lang = 'es-CL';
     const voz = elegirVozEspanol();
     if(voz) u.voice = voz;
-    u.rate = 1.0;
-    // Si no encontramos una voz explicitamente masculina, bajamos un poco el tono
-    // como aproximacion (no hay garantia de que el dispositivo tenga una voz de hombre en español).
+    // Si no encontramos una voz explicitamente masculina (lo mas comun: el celular
+    // suele traer solo una voz en español, casi siempre femenina), bajamos bastante
+    // el tono y un poco la velocidad para que suene claramente mas grave/varonil.
     const esProbablementeMasculina = voz && PISTAS_VOZ_MASCULINA.some(p => (voz.name||'').toLowerCase().includes(p));
-    u.pitch = esProbablementeMasculina ? 1.0 : 0.85;
+    if(esProbablementeMasculina){
+      u.pitch = 1.0;
+      u.rate = 1.0;
+    }else{
+      u.pitch = 0.35;
+      u.rate = 0.92;
+    }
     window.speechSynthesis.speak(u);
   }catch(e){ /* si la voz falla, seguimos solo con texto en pantalla */ }
 }
@@ -2485,6 +2533,7 @@ function asegurarMiniMapaNav(){
       }
     }
   });
+  navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
   return navMapaInstancia;
 }
 
