@@ -2061,12 +2061,37 @@ function borrarPlanoOffline(id){
   renderizarListaPlanosOffline();
 }
 
+function bboxSeSuperponen(a, b){
+  // a y b son {north, south, east, west}. true si los rectangulos se tocan/superponen en algo.
+  return a.south <= b.north && a.north >= b.south && a.west <= b.east && a.east >= b.west;
+}
+
 function buscarPlanoParaVista(mapaRef){
-  const centro = mapaRef.getCenter();
-  return planosOfflineMeta.find(function(p){
-    return centro.lat <= p.bounds.north && centro.lat >= p.bounds.south &&
-           centro.lng <= p.bounds.east && centro.lng >= p.bounds.west;
-  }) || null;
+  const b = mapaRef.getBounds();
+  const vista = { north:b.getNorth(), south:b.getSouth(), east:b.getEast(), west:b.getWest() };
+  // Preferimos el que mas se superponga con la vista actual, no solo el primero que matchee
+  let mejor = null;
+  let mejorSolapamiento = 0;
+  planosOfflineMeta.forEach(function(p){
+    if(!bboxSeSuperponen(vista, p.bounds)) return;
+    const solapLat = Math.min(vista.north, p.bounds.north) - Math.max(vista.south, p.bounds.south);
+    const solapLon = Math.min(vista.east, p.bounds.east) - Math.max(vista.west, p.bounds.west);
+    const area = Math.max(0, solapLat) * Math.max(0, solapLon);
+    if(area > mejorSolapamiento){ mejorSolapamiento = area; mejor = p; }
+  });
+  return mejor;
+}
+
+function buscarTodasLasCallesParaVista(mapaRef){
+  const b = mapaRef.getBounds();
+  const vista = { north:b.getNorth(), south:b.getSouth(), east:b.getEast(), west:b.getWest() };
+  let calles = [];
+  planosOfflineMeta.forEach(function(p){
+    if(p.calles && p.calles.length > 0 && bboxSeSuperponen(vista, p.bounds)){
+      calles = calles.concat(p.calles);
+    }
+  });
+  return calles;
 }
 
 let capaCallesOfflineActual = null;
@@ -2096,6 +2121,21 @@ function mostrarPlanoOfflineEnMapa(mapaRef, meta){
   });
 }
 
+// Muestra SOLO las calles guardadas (sin imagen), por ejemplo encima de la grilla
+// cuando no hay ninguna imagen guardada que coincida con la vista actual.
+function mostrarSoloCallesGuardadas(mapaRef){
+  if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
+  const calles = buscarTodasLasCallesParaVista(mapaRef);
+  if(calles.length > 0){
+    capaCallesOfflineActual = L.layerGroup(
+      calles.map(function(tramo){
+        return L.polyline(tramo, { color:'#3a3a3a', weight:2.5, opacity:0.85 });
+      })
+    ).addTo(mapaRef);
+  }
+  return calles.length;
+}
+
 function usarPlanoOfflineManual(meta){
   const m = obtenerMapa();
   activarCapaOffline(m, meta);
@@ -2107,19 +2147,24 @@ function activarCapaOffline(mapaRef, metaForzada){
   if(mapaRef.hasLayer(capaSatelital)) mapaRef.removeLayer(capaSatelital);
 
   const meta = metaForzada || buscarPlanoParaVista(mapaRef);
+  const btn = document.getElementById('btnCapaOffline');
+
   if(meta){
     if(mapaRef.hasLayer(capaOffline)) mapaRef.removeLayer(capaOffline);
     mostrarPlanoOfflineEnMapa(mapaRef, meta);
+    if(btn){ btn.classList.add('activo'); btn.title = 'Sin conexión: usando el plano guardado "' + meta.nombre + '"'; }
   }else{
+    // No hay imagen que coincida, pero mostramos igual la grilla + cualquier
+    // tramo de camino guardado que se superponga con esta vista (aunque sea de otro plano).
     if(capaImagenOfflineActual){ mapaRef.removeLayer(capaImagenOfflineActual); capaImagenOfflineActual = null; }
-    if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
     if(!mapaRef.hasLayer(capaOffline)) capaOffline.addTo(mapaRef);
-  }
-
-  const btn = document.getElementById('btnCapaOffline');
-  if(btn){
-    btn.classList.add('activo');
-    btn.title = meta ? ('Sin conexión: usando el plano guardado "' + meta.nombre + '"') : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
+    const cantidadCalles = mostrarSoloCallesGuardadas(mapaRef);
+    if(btn){
+      btn.classList.add('activo');
+      btn.title = cantidadCalles > 0
+        ? ('Sin conexión: sin imagen guardada para esta vista, mostrando ' + cantidadCalles + ' tramo(s) de camino guardados')
+        : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
+    }
   }
 }
 
@@ -2313,11 +2358,44 @@ function elegirObjetivoNavegacion(){
 }
 
 // ---- Voz (Web Speech API) ----
+// Nombres de voces que suelen ser masculinas en distintos sistemas (heuristica, no hay
+// una propiedad de "genero" estandar en la Web Speech API).
+const PISTAS_VOZ_MASCULINA = ['male', 'hombre', 'varon', 'diego', 'jorge', 'carlos', 'juan', 'miguel', 'jose', 'tono'];
+const PISTAS_VOZ_FEMENINA = ['female', 'mujer', 'paulina', 'monica', 'mónica', 'laura', 'esperanza', 'maria', 'lucia', 'lucía', 'sabina'];
+
+function puntajeVoz(v){
+  const nombre = (v.name || '').toLowerCase();
+  const lang = (v.lang || '').toLowerCase();
+  let puntos = 0;
+
+  if(lang === 'es-cl') puntos += 100;          // chileno exacto: lo mejor posible
+  else if(lang.startsWith('es-419')) puntos += 40; // espanol latinoamericano generico
+  else if(lang.startsWith('es-us') || lang.startsWith('es-mx') || lang.startsWith('es-ar')) puntos += 25; // otro latino, mejor que de España
+  else if(lang.startsWith('es-es')) puntos += 5;   // espanol de España: ultima opcion dentro del espanol
+  else if(lang.startsWith('es')) puntos += 10;
+
+  if(PISTAS_VOZ_MASCULINA.some(p => nombre.includes(p))) puntos += 15;
+  if(PISTAS_VOZ_FEMENINA.some(p => nombre.includes(p))) puntos -= 15;
+
+  return puntos;
+}
+
 function elegirVozEspanol(){
   if(!('speechSynthesis' in window)) return null;
-  const voces = window.speechSynthesis.getVoices();
-  return voces.find(v => v.lang && v.lang.toLowerCase().startsWith('es')) || null;
+  const voces = window.speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('es'));
+  if(voces.length === 0) return null;
+  voces.sort(function(a, b){ return puntajeVoz(b) - puntajeVoz(a); });
+  return voces[0];
 }
+
+// Las voces a veces se cargan de forma asincronica (sobre todo la primera vez);
+// nos aseguramos de tenerlas listas antes de la primera vez que se use la voz.
+let vocesListas = false;
+if('speechSynthesis' in window){
+  if(window.speechSynthesis.getVoices().length > 0) vocesListas = true;
+  window.speechSynthesis.addEventListener('voiceschanged', function(){ vocesListas = true; });
+}
+
 function hablar(texto){
   if(!navVozActiva || !('speechSynthesis' in window)) return;
   try{
@@ -2327,6 +2405,10 @@ function hablar(texto){
     const voz = elegirVozEspanol();
     if(voz) u.voice = voz;
     u.rate = 1.0;
+    // Si no encontramos una voz explicitamente masculina, bajamos un poco el tono
+    // como aproximacion (no hay garantia de que el dispositivo tenga una voz de hombre en español).
+    const esProbablementeMasculina = voz && PISTAS_VOZ_MASCULINA.some(p => (voz.name||'').toLowerCase().includes(p));
+    u.pitch = esProbablementeMasculina ? 1.0 : 0.85;
     window.speechSynthesis.speak(u);
   }catch(e){ /* si la voz falla, seguimos solo con texto en pantalla */ }
 }
@@ -2399,6 +2481,7 @@ function asegurarMiniMapaNav(){
         mostrarPlanoOfflineEnMapa(navMapaInstancia, meta);
       }else{
         navCapaOfflineNav.addTo(navMapaInstancia);
+        mostrarSoloCallesGuardadas(navMapaInstancia);
       }
     }
   });
