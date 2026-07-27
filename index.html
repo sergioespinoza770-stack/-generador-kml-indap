@@ -1978,21 +1978,26 @@ function lat2tileY(lat, z){
 
 function obtenerCallesOverpass(bounds){
   const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
-  const consulta = '[out:json][timeout:25];way["highway"](' + bbox + ');out geom;';
+  const consulta = '[out:json][timeout:90];way["highway"](' + bbox + ');out geom;';
   const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
 
-  return fetch(url).then(function(resp){
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 80000);
+
+  return fetch(url, { signal: controlador.signal }).then(function(resp){
+    clearTimeout(timeoutId);
     if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
     return resp.json();
   }).then(function(data){
     const calles = [];
-    (data.elements || []).slice(0, 800).forEach(function(el){
+    (data.elements || []).slice(0, 4000).forEach(function(el){
       if(el.type === 'way' && el.geometry){
         calles.push(el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
       }
     });
     return calles;
   }).catch(function(){
+    clearTimeout(timeoutId);
     return []; // Sin calles disponibles: seguimos igual solo con la imagen
   });
 }
@@ -2311,6 +2316,50 @@ function intentarCachearCallesAutomatico(mapaRef){
   }, 1500); // esperamos un poco a que el usuario deje de mover/zoomear el mapa
 }
 
+// ---------- Cacheo automatico centrado en el DESTINO real (no en donde se mueva el mapa por casualidad) ----------
+// Se dispara cuando se genera/previsualiza un poligono o se abre el navegador hacia el, con
+// un radio generoso alrededor del punto — asi el camino para LLEGAR ahi queda cubierto,
+// no solo el cuadradito exacto que se alcanzo a ver en pantalla.
+function cachearCallesAlrededorDePunto(lat, lon, radioKm, etiqueta){
+  if(navigator.onLine === false) return;
+
+  const gradosLat = radioKm / 111;
+  const gradosLon = radioKm / (111 * Math.max(0.2, Math.cos(lat * Math.PI/180)));
+  const vista = {
+    north: lat + gradosLat, south: lat - gradosLat,
+    east: lon + gradosLon, west: lon - gradosLon
+  };
+
+  const yaCubierto = planosOfflineMeta.some(function(p){
+    return p.calles && p.calles.length > 0 && bboxSeSuperponen(vista, p.bounds);
+  });
+  if(yaCubierto) return;
+
+  if(vistasAutoCacheadasEstaSesion.some(function(v){ return bboxSeSuperponen(vista, v); })) return;
+  vistasAutoCacheadasEstaSesion.push(vista);
+
+  const boundsFalso = {
+    getSouth: function(){ return vista.south; },
+    getWest: function(){ return vista.west; },
+    getNorth: function(){ return vista.north; },
+    getEast: function(){ return vista.east; }
+  };
+
+  obtenerCallesOverpass(boundsFalso).then(function(calles){
+    if(calles.length === 0) return;
+    planosOfflineMeta.push({
+      id: 'auto_' + Date.now(),
+      nombre: 'Caminos hacia ' + (etiqueta || 'el destino'),
+      bounds: vista,
+      fecha: new Date().toLocaleString('es-CL'),
+      calles: calles,
+      automatico: true
+    });
+    guardarMetaPlanosOffline();
+    renderizarListaPlanosOffline();
+  }).catch(function(){ /* si falla, seguimos sin esos caminos extra */ });
+}
+
 function obtenerMapa(){
   if(!mapa){
     mapa = L.map('map', { attributionControl: true });
@@ -2379,6 +2428,10 @@ function mostrarMapa(puntos){
 
   const area = calcularAreaHa(latlngs);
   document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ~' + area.toFixed(2) + ' ha';
+
+  // Con conexion, aprovechamos para guardar los caminos de acceso alrededor de este predio (25 km de radio)
+  const centro = centroide(latlngs);
+  cachearCallesAlrededorDePunto(centro[0], centro[1], 25, 'este predio');
 }
 
 // Area aproximada (formula del area esferica, suficiente para previsualizacion)
@@ -2748,6 +2801,10 @@ function abrirNavegador(){
   setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
 
   hablar('Navegando hacia ' + objetivo.nombre + '.');
+
+  // Con conexion, guardamos un radio generoso de caminos alrededor del destino (20 km),
+  // asi si mas adelante se corta la señal en el camino, ya hay cobertura para llegar.
+  cachearCallesAlrededorDePunto(navObjetivo[0], navObjetivo[1], 40, objetivo.nombre);
 
   // Pedir permiso de orientacion en iOS (tiene que dispararse en un gesto del usuario, como este click)
   if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
@@ -3246,6 +3303,11 @@ function agregarPoligonoSubido(nombre, puntos){
   dibujarCapaKmlSubido(item);
   renderizarListaKml();
   guardarPoligonosEnStorage();
+
+  // Apenas tenemos los puntos, arrancamos ya mismo la descarga de caminos alrededor (no esperamos a nada mas)
+  const centro = centroide(puntos);
+  cachearCallesAlrededorDePunto(centro[0], centro[1], 25, nombre);
+
   return item;
 }
 
@@ -3601,6 +3663,13 @@ function agregarPuntoCampo(lat, lon){
   redibujarPoligonoCampo(m);
   actualizarInfoCampo();
   actualizarTextareaDesdeCampo();
+
+  // Apenas el trazado toma forma de poligono (3+ puntos), ya arrancamos la descarga de caminos
+  // alrededor — no hace falta esperar a terminar de trazar ni a exportar.
+  if(puntosCampo.length === 3){
+    const centro = centroide(puntosCampo);
+    cachearCallesAlrededorDePunto(centro[0], centro[1], 25, 'el polígono que estás trazando');
+  }
 }
 
 function cargarPuntosEnModoCampo(puntos){
