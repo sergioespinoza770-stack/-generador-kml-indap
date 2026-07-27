@@ -822,6 +822,26 @@ svg.leaflet-image-layer.leaflet-interactive path {
     flex-direction:column;
     gap:8px;
   }
+  .planos-offline{
+    margin-top:20px;
+    background:#ffffff;
+    border:2px solid #ffc700;
+    border-radius:12px;
+    padding:14px 16px;
+  }
+  .planos-offline-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .planos-offline-header strong{
+    font-family:var(--sans);
+    font-size:13.5px;
+    color:#000000;
+  }
   .item-kml{
     display:flex;
     align-items:center;
@@ -996,6 +1016,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:#e0776b;
   }
   .btn-icono.exportar{
+    border-color:#3fa66b;
+  }
+  .btn-icono.navegar{
+    border-color:#1a73e8;
+  }
+  .btn-icono.camara{
+    border-color:#8a4be0;
+  }
+  .btn-icono.offline{
+    border-color:#5a5a5a;
+  }
+  .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
   .area-flotante{
@@ -1176,12 +1208,338 @@ svg.leaflet-image-layer.leaflet-interactive path {
     color:var(--accent-text);
     box-shadow:0 10px 40px rgba(0,0,0,0.2);
   }
+
+  /* ---- Overlay generico (navegador y camara) ---- */
+  .overlay-full{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:3000;
+    background:#0a0a0a;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    color:#ffffff;
+  }
+  .overlay-full.activo{
+    display:flex;
+  }
+  .overlay-scroll{
+    overflow-y:auto;
+    padding:78px 16px 30px;
+    box-sizing:border-box;
+  }
+  .overlay-cerrar{
+    position:absolute;
+    top:16px;
+    right:16px;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    border:2px solid #ffffff;
+    color:#ffffff;
+    font-size:20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:10;
+  }
+  .overlay-mute{
+    position:absolute;
+    top:16px;
+    left:16px;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    border:2px solid #ffc700;
+    color:#ffffff;
+    font-size:19px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:10;
+  }
+  .overlay-mute.silenciado{
+    border-color:#8f8f8f;
+    opacity:0.6;
+  }
+  #navMapa{
+    width:min(94vw, 480px);
+    height:230px;
+    border-radius:14px;
+    border:2px solid #ffc700;
+    margin-bottom:18px;
+    flex-shrink:0;
+  }
+
+  /* ---- Navegador ---- */
+  #navBrujula{
+    width:200px;
+    height:200px;
+    border-radius:50%;
+    background:radial-gradient(circle at 50% 45%, #1c1c1c, #050505);
+    border:4px solid #ffc700;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 0 40px rgba(255,199,0,0.15);
+  }
+  #navFlecha{
+    width:0;
+    height:0;
+    border-left:20px solid transparent;
+    border-right:20px solid transparent;
+    border-bottom:68px solid #ffc700;
+    position:absolute;
+    top:24px;
+    transform-origin:50% 76px;
+    transition:transform 0.25s ease-out;
+    filter:drop-shadow(0 0 6px rgba(255,199,0,0.5));
+  }
+  #navCentro{
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:#ffffff;
+    z-index:2;
+  }
+  .nav-info{
+    text-align:center;
+    margin-top:26px;
+    font-family:var(--sans);
+  }
+  .nav-distancia{
+    font-size:34px;
+    font-weight:800;
+    color:#ffc700;
+  }
+  .nav-nombre{
+    font-size:14px;
+    color:#cfcfcf;
+    margin-top:4px;
+  }
+  .nav-estado{
+    font-size:12px;
+    color:#8f8f8f;
+    margin-top:14px;
+    max-width:320px;
+    text-align:center;
+    padding:0 20px;
+  }
+
+  /* ---- Camara ---- */
+  #camaraVideo, #camaraCanvas{
+    max-width:96vw;
+    max-height:66vh;
+    border-radius:10px;
+    background:#000;
+  }
+  #camaraCanvas{ display:none; }
+  .camara-controles{
+    display:flex;
+    gap:18px;
+    margin-top:22px;
+    align-items:center;
+  }
+  .camara-controles-col{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    margin-top:22px;
+  }
+  .camara-etiqueta-boton{
+    font-family:var(--sans);
+    font-size:13px;
+    font-weight:700;
+    color:#ffffff;
+  }
+  .btn-disparador{
+    width:70px;
+    height:70px;
+    border-radius:50%;
+    background:#ffffff;
+    border:5px solid #ffc700;
+    cursor:pointer;
+  }
+  .btn-camara-sec{
+    background:rgba(255,255,255,0.12);
+    border:1px solid #ffffff;
+    color:#ffffff;
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:13px;
+    padding:10px 16px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .camara-estado{
+    margin-top:14px;
+    font-family:var(--sans);
+    font-size:12px;
+    color:#cfcfcf;
+    max-width:340px;
+    text-align:center;
+  }
+  .btn-camara-sec.btn-confirmar{
+    background:#ffc700;
+    color:#000000;
+    border-color:#ffc700;
+    font-weight:700;
+  }
+  .camara-nombre-wrap{
+    width:min(94vw, 420px);
+    margin-bottom:14px;
+    flex-shrink:0;
+  }
+  .camara-nombre-wrap label{
+    display:block;
+    font-family:var(--sans);
+    font-size:11px;
+    font-weight:600;
+    color:#cfcfcf;
+    margin-bottom:5px;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .camara-nombre-wrap input{
+    width:100%;
+    background:rgba(255,255,255,0.08);
+    border:2px solid #ffc700;
+    color:#ffffff;
+    font-family:var(--sans);
+    font-size:14px;
+    padding:10px 12px;
+    border-radius:8px;
+  }
+  .camara-nombre-wrap input::placeholder{
+    color:#8f8f8f;
+  }
+  .camara-galeria-wrap{
+    width:min(94vw, 620px);
+    margin-top:22px;
+    border-top:1px solid rgba(255,255,255,0.15);
+    padding-top:16px;
+  }
+  .camara-galeria-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+    font-family:var(--sans);
+  }
+  .camara-galeria-header strong{
+    color:#ffffff;
+    font-size:13.5px;
+  }
+  .camara-galeria{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .foto-item{
+    width:120px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.15);
+    border-radius:10px;
+    overflow:hidden;
+    font-family:var(--sans);
+  }
+  .foto-item img{
+    width:100%;
+    height:90px;
+    object-fit:cover;
+    display:block;
+  }
+  .foto-item .foto-nombre{
+    font-size:10.5px;
+    color:#ffffff;
+    padding:6px 7px 2px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .foto-item .foto-botones{
+    display:flex;
+    gap:4px;
+    padding:0 6px 6px;
+  }
+  .foto-item button{
+    flex:1;
+    font-size:10px;
+    padding:5px 2px;
+    border-radius:5px;
+    border:none;
+    cursor:pointer;
+    font-family:var(--sans);
+    font-weight:600;
+  }
+  .foto-item .foto-btn-descargar{
+    background:#ffc700;
+    color:#000;
+  }
+  .foto-item .foto-btn-borrar{
+    background:rgba(255,255,255,0.12);
+    color:#ff8f80;
+  }
 </style>
 </head>
 <body>
 <div id="zonaArrastrar" class="zona-arrastrar">
   <div class="zona-arrastrar-caja">📂 Soltá el/los archivo(s) .kml o .kmz acá</div>
 </div>
+
+<div id="overlayNav" class="overlay-full overlay-scroll">
+  <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
+  <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
+  <div id="navMapa"></div>
+  <div id="navBrujula">
+    <div id="navFlecha"></div>
+    <div id="navCentro"></div>
+  </div>
+  <div class="nav-info">
+    <div class="nav-distancia" id="navDistancia">— m</div>
+    <div class="nav-nombre" id="navNombre">Buscando ubicación...</div>
+  </div>
+  <div class="nav-estado" id="navEstado"></div>
+</div>
+
+<div id="overlayCamara" class="overlay-full overlay-scroll">
+  <button class="overlay-cerrar" id="btnCerrarCamara" type="button" aria-label="Cerrar cámara">✕</button>
+  <video id="camaraVideo" autoplay playsinline muted></video>
+  <canvas id="camaraCanvas"></canvas>
+  <div class="camara-controles-col" id="camaraControlesVivo">
+    <div class="btn-disparador" id="btnDisparar" title="Tomar foto"></div>
+    <div class="camara-etiqueta-boton">Tomar foto</div>
+  </div>
+  <div id="camaraControlesFoto" style="display:none; flex-direction:column; align-items:center; width:100%;">
+    <div class="camara-nombre-wrap">
+      <label for="camaraNombreAgricultor">Nombre / descripción de esta foto</label>
+      <input type="text" id="camaraNombreAgricultor" placeholder="Ej: Juan Pérez — daño post lluvia potrero norte">
+    </div>
+    <div class="camara-controles">
+      <button class="btn-camara-sec" id="btnNuevaFoto" type="button">↩️ Volver atrás (no guardar)</button>
+      <button class="btn-camara-sec btn-confirmar" id="btnGuardarFotoGaleria" type="button">✅ Guardar en galería</button>
+    </div>
+  </div>
+  <div class="camara-estado" id="camaraEstado"></div>
+
+  <div class="camara-galeria-wrap">
+    <div class="camara-galeria-header">
+      <strong>📸 Fotos de esta sesión</strong>
+      <span id="camaraGaleriaVacio" class="hint" style="color:#cfcfcf;">Todavía no tomaste ninguna.</span>
+    </div>
+    <div id="camaraGaleria" class="camara-galeria"></div>
+  </div>
+</div>
+
 <div class="wrap">
   <p class="eyebrow">INDAP · Lautaro</p>
   <h1>Generador de KML</h1>
@@ -1265,11 +1623,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">↩️</button>
         <button type="button" class="btn-icono peligro" id="btnCampoReset" style="display:none;" title="Borrar puntos" aria-label="Borrar puntos">🗑️</button>
         <button type="button" class="btn-icono exportar" id="btnExportarCampo" style="display:none;" title="Exportar este polígono como KML" aria-label="Exportar KML">⬇️</button>
+        <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">🧭</button>
+        <button type="button" class="btn-icono camara" id="btnCamara" title="Cámara georreferenciada" aria-label="Cámara georreferenciada">📷</button>
+        <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">🛰️</button>
+        <button type="button" class="btn-icono guardarplano" id="btnGuardarPlano" title="Guardar esta vista como plano fijo (para navegar sin conexión)" aria-label="Guardar plano offline">💾</button>
       </div>
       <div id="campoAreaBadge" class="area-flotante" style="display:none;"></div>
     </div>
     <p class="hint" id="campoInfo" style="margin-top:8px;"></p>
     <p class="campo-lista" id="campoLista"></p>
+
+    <div class="planos-offline">
+      <div class="planos-offline-header">
+        <strong>💾 Planos guardados para navegar sin conexión</strong>
+        <span id="planosOfflineEstado" class="hint" style="margin:0;"></span>
+      </div>
+      <p class="hint">Mientras tengas señal, encuadrá el mapa en la zona que te interesa y tocá 💾. Queda guardada la imagen real de esa zona en este celular — cuando te falte señal en terreno, se usa esa imagen fija en vez de la grilla genérica.</p>
+      <div id="listaPlanosOffline" class="lista-kml"></div>
+    </div>
   </div>
 
   <div class="preview" id="preview"></div>
@@ -1488,13 +1859,307 @@ let mapa = null;
 let capaPoligono = null;
 let etiquetasMedida = [];
 
+// ---------- Capa "sin conexion": grilla dibujada localmente, cero requests de red ----------
+const CapaSinConexion = L.GridLayer.extend({
+  createTile: function(coords){
+    const tile = document.createElement('canvas');
+    const size = this.getTileSize();
+    tile.width = size.x;
+    tile.height = size.y;
+    const ctx = tile.getContext('2d');
+
+    ctx.fillStyle = '#eef2ee';
+    ctx.fillRect(0, 0, size.x, size.y);
+    ctx.strokeStyle = '#cfd9d2';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, size.x-1, size.y-1);
+
+    // Cuadricula interna cada 32px, como referencia visual de escala
+    ctx.strokeStyle = '#dde6df';
+    for(let x=32; x<size.x; x+=32){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,size.y); ctx.stroke(); }
+    for(let y=32; y<size.y; y+=32){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(size.x,y); ctx.stroke(); }
+
+    ctx.fillStyle = '#8aa79c';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('sin conexión', 6, 14);
+
+    return tile;
+  }
+});
+
+let capaSatelital = null;
+let capaOffline = null;
+let capaImagenOfflineActual = null;
+let modoOfflineActivo = false;
+let fallasTeselas = 0;
+let planosOfflineMeta = [];
+
+// ---------- Guardar/usar "planos" fijos (imagen satelital real capturada mientras hay señal) ----------
+function cargarMetaPlanosOffline(){
+  try{
+    const crudo = localStorage.getItem('generadorKml_planosOffline');
+    planosOfflineMeta = crudo ? JSON.parse(crudo) : [];
+  }catch(e){ planosOfflineMeta = []; }
+}
+function guardarMetaPlanosOffline(){
+  try{ localStorage.setItem('generadorKml_planosOffline', JSON.stringify(planosOfflineMeta)); }catch(e){ /* sin espacio o no disponible */ }
+}
+
+function lon2tileX(lon, z){ return Math.floor((lon+180)/360 * Math.pow(2,z)); }
+function lat2tileY(lat, z){
+  const r = lat*Math.PI/180;
+  return Math.floor((1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * Math.pow(2,z));
+}
+
+function obtenerCallesOverpass(bounds){
+  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  const consulta = '[out:json][timeout:25];way["highway"](' + bbox + ');out geom;';
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
+
+  return fetch(url).then(function(resp){
+    if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
+    return resp.json();
+  }).then(function(data){
+    const calles = [];
+    (data.elements || []).slice(0, 400).forEach(function(el){
+      if(el.type === 'way' && el.geometry){
+        calles.push(el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
+      }
+    });
+    return calles;
+  }).catch(function(){
+    return []; // Sin calles disponibles: seguimos igual solo con la imagen
+  });
+}
+
+function guardarPlanoOffline(){
+  const m = obtenerMapa();
+  const estado = document.getElementById('planosOfflineEstado');
+  const bounds = m.getBounds();
+  const zoom = Math.min(18, Math.round(m.getZoom()));
+
+  const minX = lon2tileX(bounds.getWest(), zoom);
+  const maxX = lon2tileX(bounds.getEast(), zoom);
+  const minY = lat2tileY(bounds.getNorth(), zoom);
+  const maxY = lat2tileY(bounds.getSouth(), zoom);
+  const tilesX = maxX - minX + 1;
+  const tilesY = maxY - minY + 1;
+  const totalTiles = tilesX * tilesY;
+
+  if(totalTiles > 100){
+    estado.textContent = 'La zona visible es muy grande para guardar (' + totalTiles + ' teselas, máximo 100). Acercá el zoom sobre el predio y probá de nuevo.';
+    return;
+  }
+
+  estado.textContent = 'Descargando ' + totalTiles + ' teselas y el trazado de caminos de esta zona...';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = tilesX * 256;
+  canvas.height = tilesY * 256;
+  const ctx = canvas.getContext('2d');
+
+  const promesas = [];
+  for(let ty = minY; ty <= maxY; ty++){
+    for(let tx = minX; tx <= maxX; tx++){
+      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
+      const px = (tx - minX) * 256;
+      const py = (ty - minY) * 256;
+      promesas.push(new Promise(function(resolve){
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function(){ ctx.drawImage(img, px, py, 256, 256); resolve(true); };
+        img.onerror = function(){ resolve(false); };
+        img.src = url;
+      }));
+    }
+  }
+
+  Promise.all(promesas).then(function(resultados){
+    const okCount = resultados.filter(Boolean).length;
+    if(okCount === 0){
+      estado.textContent = 'No se pudo descargar ninguna tesela (revisá tu conexión).';
+      return;
+    }
+
+    obtenerCallesOverpass(bounds).then(function(calles){
+      try{
+        canvas.toBlob(function(blobResultante){
+          if(!blobResultante){
+            estado.textContent = 'No se pudo generar la imagen del plano.';
+            return;
+          }
+          const id = 'plano_' + Date.now();
+          const nombre = prompt('Nombre para este plano guardado:', 'Zona ' + new Date().toLocaleDateString('es-CL')) || ('Plano ' + new Date().toLocaleDateString('es-CL'));
+
+          if(!('caches' in window)){
+            estado.textContent = 'Este navegador no soporta guardar planos offline (falta Cache Storage).';
+            return;
+          }
+          caches.open('generador-kml-planos').then(function(cache){
+            return cache.put('./' + id, new Response(blobResultante));
+          }).then(function(){
+            planosOfflineMeta.push({
+              id: id,
+              nombre: nombre,
+              bounds: { north: bounds.getNorth(), south: bounds.getSouth(), east: bounds.getEast(), west: bounds.getWest() },
+              fecha: new Date().toLocaleString('es-CL'),
+              calles: calles
+            });
+            guardarMetaPlanosOffline();
+            renderizarListaPlanosOffline();
+            const avisoCalles = calles.length > 0 ? (' + ' + calles.length + ' tramos de camino.') : ' (sin caminos mapeados en OpenStreetMap para esta zona).';
+            estado.textContent = 'Plano "' + nombre + '" guardado (' + okCount + '/' + totalTiles + ' teselas)' + avisoCalles + ' Se va a usar solo cuando estés sin conexión en esta zona, o tocando "Usar ahora".';
+          }).catch(function(err){
+            estado.textContent = 'No se pudo guardar el plano: ' + err.message;
+          });
+        }, 'image/jpeg', 0.78);
+      }catch(err){
+        estado.textContent = 'No se pudo generar la imagen (el proveedor de mapas pudo haber bloqueado la exportación): ' + err.message;
+      }
+    });
+  });
+}
+
+function renderizarListaPlanosOffline(){
+  const cont = document.getElementById('listaPlanosOffline');
+  if(!cont) return;
+  cont.innerHTML = '';
+  planosOfflineMeta.forEach(function(meta){
+    const fila = document.createElement('div');
+    fila.className = 'item-kml';
+
+    const nombre = document.createElement('span');
+    nombre.className = 'nombre-kml';
+    nombre.textContent = meta.nombre + ' — ' + meta.fecha;
+    nombre.title = nombre.textContent;
+
+    const btnUsar = document.createElement('button');
+    btnUsar.type = 'button';
+    btnUsar.className = 'btn-ir';
+    btnUsar.textContent = 'Usar ahora';
+    btnUsar.addEventListener('click', function(){ usarPlanoOfflineManual(meta); });
+
+    const btnQuitar = document.createElement('button');
+    btnQuitar.type = 'button';
+    btnQuitar.className = 'btn-quitar';
+    btnQuitar.textContent = 'Borrar';
+    btnQuitar.addEventListener('click', function(){ borrarPlanoOffline(meta.id); });
+
+    fila.appendChild(nombre);
+    fila.appendChild(btnUsar);
+    fila.appendChild(btnQuitar);
+    cont.appendChild(fila);
+  });
+}
+
+function borrarPlanoOffline(id){
+  planosOfflineMeta = planosOfflineMeta.filter(p => p.id !== id);
+  guardarMetaPlanosOffline();
+  if('caches' in window){
+    caches.open('generador-kml-planos').then(function(cache){ cache.delete('./' + id); });
+  }
+  renderizarListaPlanosOffline();
+}
+
+function buscarPlanoParaVista(mapaRef){
+  const centro = mapaRef.getCenter();
+  return planosOfflineMeta.find(function(p){
+    return centro.lat <= p.bounds.north && centro.lat >= p.bounds.south &&
+           centro.lng <= p.bounds.east && centro.lng >= p.bounds.west;
+  }) || null;
+}
+
+let capaCallesOfflineActual = null;
+
+function mostrarPlanoOfflineEnMapa(mapaRef, meta){
+  if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
+  if(meta.calles && meta.calles.length > 0){
+    capaCallesOfflineActual = L.layerGroup(
+      meta.calles.map(function(tramo){
+        return L.polyline(tramo, { color:'#3a3a3a', weight:2.5, opacity:0.85 });
+      })
+    ).addTo(mapaRef);
+  }
+
+  if(!('caches' in window)) return;
+  caches.open('generador-kml-planos').then(function(cache){
+    return cache.match('./' + meta.id);
+  }).then(function(resp){
+    return resp ? resp.blob() : null;
+  }).then(function(blob){
+    if(!blob) return;
+    const url = URL.createObjectURL(blob);
+    if(capaImagenOfflineActual){ mapaRef.removeLayer(capaImagenOfflineActual); }
+    const b = meta.bounds;
+    capaImagenOfflineActual = L.imageOverlay(url, [[b.south, b.west],[b.north, b.east]], { opacity:1 }).addTo(mapaRef);
+    capaImagenOfflineActual.bringToBack();
+  });
+}
+
+function usarPlanoOfflineManual(meta){
+  const m = obtenerMapa();
+  activarCapaOffline(m, meta);
+  m.fitBounds([[meta.bounds.south, meta.bounds.west],[meta.bounds.north, meta.bounds.east]]);
+}
+
+function activarCapaOffline(mapaRef, metaForzada){
+  modoOfflineActivo = true;
+  if(mapaRef.hasLayer(capaSatelital)) mapaRef.removeLayer(capaSatelital);
+
+  const meta = metaForzada || buscarPlanoParaVista(mapaRef);
+  if(meta){
+    if(mapaRef.hasLayer(capaOffline)) mapaRef.removeLayer(capaOffline);
+    mostrarPlanoOfflineEnMapa(mapaRef, meta);
+  }else{
+    if(capaImagenOfflineActual){ mapaRef.removeLayer(capaImagenOfflineActual); capaImagenOfflineActual = null; }
+    if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
+    if(!mapaRef.hasLayer(capaOffline)) capaOffline.addTo(mapaRef);
+  }
+
+  const btn = document.getElementById('btnCapaOffline');
+  if(btn){
+    btn.classList.add('activo');
+    btn.title = meta ? ('Sin conexión: usando el plano guardado "' + meta.nombre + '"') : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
+  }
+}
+
+function activarCapaSatelital(mapaRef){
+  modoOfflineActivo = false;
+  fallasTeselas = 0;
+  if(mapaRef.hasLayer(capaOffline)) mapaRef.removeLayer(capaOffline);
+  if(capaImagenOfflineActual){ mapaRef.removeLayer(capaImagenOfflineActual); capaImagenOfflineActual = null; }
+  if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
+  if(!mapaRef.hasLayer(capaSatelital)) capaSatelital.addTo(mapaRef);
+  const btn = document.getElementById('btnCapaOffline');
+  if(btn){ btn.classList.remove('activo'); btn.title = 'Cambiar entre imagen satelital y grilla sin conexión'; }
+}
+
+document.getElementById('btnGuardarPlano').addEventListener('click', guardarPlanoOffline);
+cargarMetaPlanosOffline();
+renderizarListaPlanosOffline();
+
 function obtenerMapa(){
   if(!mapa){
     mapa = L.map('map', { attributionControl: true });
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+
+    capaSatelital = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
       attribution: 'Imagen: Esri, Maxar, Earthstar Geographics'
-    }).addTo(mapa);
+    });
+    capaOffline = new CapaSinConexion({ maxZoom: 19 });
+
+    capaSatelital.addTo(mapa);
+
+    // Si varias teselas fallan seguidas (sin señal), pasamos solas a la grilla offline
+    capaSatelital.on('tileerror', function(){
+      fallasTeselas++;
+      if(fallasTeselas >= 4) activarCapaOffline(mapa);
+    });
+    capaSatelital.on('tileload', function(){ fallasTeselas = 0; });
+
+    window.addEventListener('offline', function(){ activarCapaOffline(mapa); });
+    window.addEventListener('online', function(){ activarCapaSatelital(mapa); });
+    if(navigator.onLine === false){ activarCapaOffline(mapa); }
 
     L.control.scale({
       metric: true,
@@ -1553,6 +2218,581 @@ function calcularAreaHa(latlngs){
   return area / 10000; // m2 a hectareas
 }
 
+// ---------- Conversion Lat/Lon -> UTM (directa, formula Snyder, WGS84) ----------
+function latLonToUtm(lat, lon){
+  const a = 6378137.0;
+  const eccSquared = 0.00669438;
+  const k0 = 0.9996;
+  const eccPrimeSquared = eccSquared / (1 - eccSquared);
+
+  const latRad = lat * Math.PI/180;
+  const lonRad = lon * Math.PI/180;
+
+  const zona = Math.floor((lon + 180) / 6) + 1;
+  const lonOrigenRad = ((zona - 1) * 6 - 180 + 3) * Math.PI/180;
+
+  const N = a / Math.sqrt(1 - eccSquared * Math.pow(Math.sin(latRad),2));
+  const T = Math.pow(Math.tan(latRad),2);
+  const C = eccPrimeSquared * Math.pow(Math.cos(latRad),2);
+  const A = Math.cos(latRad) * (lonRad - lonOrigenRad);
+
+  const M = a * (
+      (1 - eccSquared/4 - 3*Math.pow(eccSquared,2)/64 - 5*Math.pow(eccSquared,3)/256) * latRad
+    - (3*eccSquared/8 + 3*Math.pow(eccSquared,2)/32 + 45*Math.pow(eccSquared,3)/1024) * Math.sin(2*latRad)
+    + (15*Math.pow(eccSquared,2)/256 + 45*Math.pow(eccSquared,3)/1024) * Math.sin(4*latRad)
+    - (35*Math.pow(eccSquared,3)/3072) * Math.sin(6*latRad)
+  );
+
+  let easting = k0*N*(A + (1-T+C)*Math.pow(A,3)/6 + (5-18*T+T*T+72*C-58*eccPrimeSquared)*Math.pow(A,5)/120) + 500000.0;
+  let northing = k0*(M + N*Math.tan(latRad)*(A*A/2 + (5-T+9*C+4*C*C)*Math.pow(A,4)/24 + (61-58*T+T*T+600*C-330*eccPrimeSquared)*Math.pow(A,6)/720));
+
+  const hemisferio = lat >= 0 ? 'N' : 'S';
+  if(lat < 0) northing += 10000000.0;
+
+  return { este: easting, norte: northing, huso: zona, hemisferio: hemisferio };
+}
+
+// ---------- Geometria: rumbo y distancia entre dos puntos ----------
+function distanciaMetros(lat1, lon1, lat2, lon2){
+  const R = 6378137;
+  const rad = d => d*Math.PI/180;
+  const dLat = rad(lat2-lat1);
+  const dLon = rad(lon2-lon1);
+  const s = Math.sin(dLat/2)**2 + Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function calcularRumbo(lat1, lon1, lat2, lon2){
+  const rad = d => d*Math.PI/180;
+  const y = Math.sin(rad(lon2-lon1)) * Math.cos(rad(lat2));
+  const x = Math.cos(rad(lat1))*Math.sin(rad(lat2)) - Math.sin(rad(lat1))*Math.cos(rad(lat2))*Math.cos(rad(lon2-lon1));
+  return (Math.atan2(y,x) * 180/Math.PI + 360) % 360;
+}
+function centroide(puntos){
+  let sLat=0, sLon=0;
+  puntos.forEach(p => { sLat += p[0]; sLon += p[1]; });
+  return [sLat/puntos.length, sLon/puntos.length];
+}
+
+// ---------- Navegador GPS en tiempo real (brujula hacia el poligono) ----------
+let navWatchId = null;
+let navOrientHandler = null;
+let navObjetivo = null; // [lat, lon]
+let navUltimaHeadingDispositivo = null;
+
+// ---- Mapa de ruta, voz y ruteo por calles/caminos ----
+let navMapaInstancia = null;
+let navCapaSatNav = null;
+let navCapaOfflineNav = null;
+let navMarcadorYo = null;
+let navMarcadorDestino = null;
+let navCapaRuta = null;
+let navPasos = [];
+let navPasoActualIdx = 0;
+let navDistanciaTotalRuta = null;
+let navUltimoFetchRuta = 0;
+let navUltimaPosParaRuta = null;
+let navVozActiva = true;
+let navUltimoAvisoDistancia = null;
+
+function elegirObjetivoNavegacion(){
+  // Prioridad: poligono que se esta trazando en terreno > poligono previsualizado desde coordenadas > primer KML subido visible
+  if(typeof puntosCampo !== 'undefined' && puntosCampo.length >= 1){
+    return { puntos: puntosCampo, nombre: 'el polígono que estás trazando' };
+  }
+  if(typeof capaPoligono !== 'undefined' && capaPoligono){
+    const latlngs = capaPoligono.getLatLngs()[0].map(p => [p.lat, p.lng]);
+    const nombreCampo = document.getElementById('nombre').value.trim();
+    return { puntos: latlngs, nombre: nombreCampo || 'el polígono generado' };
+  }
+  if(typeof poligonosSubidos !== 'undefined' && poligonosSubidos.length > 0){
+    const primero = poligonosSubidos.find(p => p.visible) || poligonosSubidos[0];
+    return { puntos: primero.puntos, nombre: primero.nombre };
+  }
+  return null;
+}
+
+// ---- Voz (Web Speech API) ----
+function elegirVozEspanol(){
+  if(!('speechSynthesis' in window)) return null;
+  const voces = window.speechSynthesis.getVoices();
+  return voces.find(v => v.lang && v.lang.toLowerCase().startsWith('es')) || null;
+}
+function hablar(texto){
+  if(!navVozActiva || !('speechSynthesis' in window)) return;
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'es-CL';
+    const voz = elegirVozEspanol();
+    if(voz) u.voice = voz;
+    u.rate = 1.0;
+    window.speechSynthesis.speak(u);
+  }catch(e){ /* si la voz falla, seguimos solo con texto en pantalla */ }
+}
+
+// ---- Traducir maniobras de OSRM a instrucciones en español ----
+function traducirManiobra(paso){
+  const tipo = paso.maneuver.type;
+  const mod = paso.maneuver.modifier || '';
+  const calle = paso.name ? (' por ' + paso.name) : '';
+  if(tipo === 'depart') return 'Arrancá' + calle;
+  if(tipo === 'arrive') return 'Estás llegando al destino';
+  if(tipo === 'roundabout' || tipo === 'rotary') return 'Entrá a la rotonda' + calle;
+  if(mod.includes('left') && mod.includes('sharp')) return 'Doblá fuerte a la izquierda' + calle;
+  if(mod.includes('right') && mod.includes('sharp')) return 'Doblá fuerte a la derecha' + calle;
+  if(mod.includes('left')) return 'Doblá a la izquierda' + calle;
+  if(mod.includes('right')) return 'Doblá a la derecha' + calle;
+  if(mod.includes('straight')) return 'Seguí derecho' + calle;
+  return 'Continuá' + calle;
+}
+
+// ---- Pedir ruta por calles/caminos a OSRM (necesita internet) ----
+function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
+  const url = 'https://router.project-osrm.org/route/v1/driving/' +
+    lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
+    '?overview=full&geometries=geojson&steps=true';
+  return fetch(url).then(function(resp){
+    if(!resp.ok) throw new Error('Servicio de rutas no disponible (' + resp.status + ')');
+    return resp.json();
+  }).then(function(data){
+    if(data.code !== 'Ok' || !data.routes || data.routes.length === 0){
+      throw new Error('Sin ruta trazable por camino hasta ese punto');
+    }
+    const ruta = data.routes[0];
+    const coords = ruta.geometry.coordinates.map(c => [c[1], c[0]]); // lon,lat -> lat,lon
+    const pasos = [];
+    ruta.legs[0].steps.forEach(function(paso){
+      pasos.push({
+        texto: traducirManiobra(paso),
+        lat: paso.maneuver.location[1],
+        lon: paso.maneuver.location[0],
+        distancia: paso.distance
+      });
+    });
+    return { coords: coords, pasos: pasos, distanciaTotal: ruta.distance };
+  });
+}
+
+function asegurarMiniMapaNav(){
+  if(navMapaInstancia) return navMapaInstancia;
+  navMapaInstancia = L.map('navMapa', { attributionControl:false, zoomControl:true });
+  navCapaSatNav = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 });
+  navCapaOfflineNav = new CapaSinConexion({ maxZoom:19 });
+  navCapaSatNav.addTo(navMapaInstancia);
+  let fallasNav = 0;
+  navCapaSatNav.on('tileerror', function(){
+    fallasNav++;
+    if(fallasNav >= 4 && navMapaInstancia.hasLayer(navCapaSatNav)){
+      navMapaInstancia.removeLayer(navCapaSatNav);
+      const meta = buscarPlanoParaVista(navMapaInstancia);
+      if(meta){
+        mostrarPlanoOfflineEnMapa(navMapaInstancia, meta);
+      }else{
+        navCapaOfflineNav.addTo(navMapaInstancia);
+      }
+    }
+  });
+  return navMapaInstancia;
+}
+
+function trazarRutaEnMiniMapa(lat, lon){
+  const m = asegurarMiniMapaNav();
+
+  if(!navMarcadorYo){
+    navMarcadorYo = L.marker([lat, lon], {
+      icon: L.divIcon({ className:'', html:'<div class="ubicacion-dot"></div>', iconSize:[16,16] })
+    }).addTo(m);
+  }else{
+    navMarcadorYo.setLatLng([lat, lon]);
+  }
+  if(!navMarcadorDestino){
+    navMarcadorDestino = L.circleMarker([navObjetivo[0], navObjetivo[1]], {
+      radius:9, color:'#8a6d00', fillColor:'#ffc700', fillOpacity:1, weight:3
+    }).addTo(m);
+  }
+
+  const ahora = Date.now();
+  const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 35;
+  if((ahora - navUltimoFetchRuta > 20000 && necesitaRuta) || navUltimoFetchRuta === 0){
+    navUltimoFetchRuta = ahora;
+    navUltimaPosParaRuta = [lat, lon];
+    obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
+      if(navCapaRuta) m.removeLayer(navCapaRuta);
+      navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
+      m.fitBounds(navCapaRuta.getBounds(), { padding:[24,24] });
+      navPasos = res.pasos;
+      navPasoActualIdx = 0;
+      navDistanciaTotalRuta = res.distanciaTotal;
+      document.getElementById('navEstado').textContent = 'Ruta por camino encontrada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
+      if(res.pasos.length > 0) hablar(res.pasos[0].texto);
+    }).catch(function(err){
+      navPasos = [];
+      document.getElementById('navEstado').textContent = 'Sin ruta por camino disponible (' + err.message + '). Usando línea recta y brújula.';
+      m.setView([lat, lon], 15);
+    });
+  }
+}
+
+function revisarAvisosDeVoz(lat, lon, distTotalRecta){
+  // Si tenemos pasos de una ruta real, avisamos por maniobra
+  if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
+    const paso = navPasos[navPasoActualIdx];
+    const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
+    if(distAlPaso < 40){
+      navPasoActualIdx++;
+      if(navPasoActualIdx < navPasos.length){
+        hablar(navPasos[navPasoActualIdx].texto);
+      }else{
+        hablar('Estás llegando al destino');
+      }
+    }
+    return;
+  }
+  // Sin ruta por camino: avisos periodicos en linea recta
+  const hitos = [500, 200, 100, 50, 20];
+  for(const h of hitos){
+    if(distTotalRecta <= h && navUltimoAvisoDistancia !== h){
+      navUltimoAvisoDistancia = h;
+      const cardinales = ['norte','noreste','este','sureste','sur','suroeste','oeste','noroeste'];
+      hablar('Quedan ' + h + ' metros en línea recta.');
+      break;
+    }
+  }
+}
+
+function abrirNavegador(){
+  const objetivo = elegirObjetivoNavegacion();
+  const overlay = document.getElementById('overlayNav');
+  const elNombre = document.getElementById('navNombre');
+  const elDistancia = document.getElementById('navDistancia');
+  const elEstado = document.getElementById('navEstado');
+
+  if(!objetivo){
+    const statusEl = document.getElementById('status');
+    statusEl.className = 'status err';
+    statusEl.textContent = 'No hay ningún polígono activo para navegar todavía. Generá uno, trazá uno en terreno, o subí un KML primero.';
+    return;
+  }
+
+  navObjetivo = centroide(objetivo.puntos);
+  navPasos = [];
+  navPasoActualIdx = 0;
+  navUltimoFetchRuta = 0;
+  navUltimaPosParaRuta = null;
+  navUltimoAvisoDistancia = null;
+  elNombre.textContent = 'Yendo hacia: ' + objetivo.nombre;
+  elDistancia.textContent = '— m';
+  elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
+  overlay.classList.add('activo');
+  setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
+
+  hablar('Navegando hacia ' + objetivo.nombre + '.');
+
+  // Pedir permiso de orientacion en iOS (tiene que dispararse en un gesto del usuario, como este click)
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    DeviceOrientationEvent.requestPermission().then(function(resp){
+      if(resp === 'granted') activarEscuchaOrientacion();
+    }).catch(function(){ /* seguimos sin brujula de dispositivo */ });
+  }else{
+    activarEscuchaOrientacion();
+  }
+
+  if(!navigator.geolocation){
+    elEstado.textContent = 'Este navegador no soporta geolocalización.';
+    return;
+  }
+  navWatchId = navigator.geolocation.watchPosition(function(pos){
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const dist = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
+    const rumbo = calcularRumbo(lat, lon, navObjetivo[0], navObjetivo[1]);
+
+    elDistancia.textContent = dist >= 1000 ? (dist/1000).toFixed(2) + ' km' : Math.round(dist) + ' m';
+
+    let rotacion = rumbo;
+    if(navUltimaHeadingDispositivo !== null){
+      rotacion = (rumbo - navUltimaHeadingDispositivo + 360) % 360;
+    }
+    document.getElementById('navFlecha').style.transform = 'rotate(' + rotacion + 'deg)';
+
+    trazarRutaEnMiniMapa(lat, lon);
+    revisarAvisosDeVoz(lat, lon, dist);
+
+    if(dist < 8){
+      elEstado.textContent = '¡Llegaste! Estás a menos de 8 m del punto central del polígono.';
+      hablar('Llegaste al destino.');
+    }
+  }, function(err){
+    elEstado.textContent = 'No se pudo obtener tu ubicación: ' + err.message;
+  }, { enableHighAccuracy:true, maximumAge:2000, timeout:15000 });
+}
+
+function activarEscuchaOrientacion(){
+  navOrientHandler = function(e){
+    let heading = null;
+    if(typeof e.webkitCompassHeading === 'number'){
+      heading = e.webkitCompassHeading; // iOS: ya viene como rumbo real 0=Norte
+    }else if(e.alpha !== null && e.absolute){
+      heading = 360 - e.alpha; // Android con orientacion absoluta
+    }
+    if(heading !== null) navUltimaHeadingDispositivo = heading;
+  };
+  window.addEventListener('deviceorientationabsolute', navOrientHandler, true);
+  window.addEventListener('deviceorientation', navOrientHandler, true);
+}
+
+function cerrarNavegador(){
+  document.getElementById('overlayNav').classList.remove('activo');
+  if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
+  if(navOrientHandler){
+    window.removeEventListener('deviceorientationabsolute', navOrientHandler, true);
+    window.removeEventListener('deviceorientation', navOrientHandler, true);
+    navOrientHandler = null;
+  }
+  navUltimaHeadingDispositivo = null;
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+document.getElementById('btnNavegar').addEventListener('click', abrirNavegador);
+document.getElementById('btnCerrarNav').addEventListener('click', cerrarNavegador);
+document.getElementById('btnMuteNav').addEventListener('click', function(){
+  navVozActiva = !navVozActiva;
+  const btn = document.getElementById('btnMuteNav');
+  if(navVozActiva){
+    btn.textContent = '🔊';
+    btn.classList.remove('silenciado');
+  }else{
+    btn.textContent = '🔇';
+    btn.classList.add('silenciado');
+    if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+});
+
+// ---------- Camara georreferenciada (nombre + fecha/hora + UTM estampados en la foto) ----------
+let camaraStream = null;
+let camaraUltimaPosicion = null;
+let camaraWatchId = null;
+let camaraFotoActualDataUrl = null;
+let camaraCapturaPendiente = null; // {posicion, fecha} de la foto recien tomada, antes de confirmar
+let fotosSesion = []; // {id, dataUrl, nombre}
+
+function abrirCamara(){
+  const overlay = document.getElementById('overlayCamara');
+  const estado = document.getElementById('camaraEstado');
+  overlay.classList.add('activo');
+  document.getElementById('camaraVideo').style.display = 'block';
+  document.getElementById('camaraCanvas').style.display = 'none';
+  document.getElementById('camaraControlesVivo').style.display = 'flex';
+  document.getElementById('camaraControlesFoto').style.display = 'none';
+  estado.textContent = 'Buscando ubicación GPS para estampar en la foto...';
+
+  if(navigator.geolocation){
+    camaraWatchId = navigator.geolocation.watchPosition(function(pos){
+      camaraUltimaPosicion = pos.coords;
+      estado.textContent = 'Ubicación lista (precisión ~' + Math.round(pos.coords.accuracy) + ' m). Podés fotografiar.';
+    }, function(){
+      estado.textContent = 'No se pudo obtener el GPS — la foto se va a guardar sin coordenadas.';
+    }, { enableHighAccuracy:true, maximumAge:3000, timeout:15000 });
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio:false }).then(function(stream){
+    camaraStream = stream;
+    document.getElementById('camaraVideo').srcObject = stream;
+  }).catch(function(err){
+    estado.textContent = 'No se pudo acceder a la cámara: ' + err.message + '. Revisá los permisos de cámara del navegador.';
+  });
+}
+
+function cerrarCamara(){
+  document.getElementById('overlayCamara').classList.remove('activo');
+  if(camaraStream){
+    camaraStream.getTracks().forEach(t => t.stop());
+    camaraStream = null;
+  }
+  if(camaraWatchId !== null){ navigator.geolocation.clearWatch(camaraWatchId); camaraWatchId = null; }
+  camaraFotoActualDataUrl = null;
+  camaraCapturaPendiente = null;
+}
+
+function tomarFoto(){
+  const video = document.getElementById('camaraVideo');
+  const canvas = document.getElementById('camaraCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // Guardamos la posicion/hora del instante exacto de la foto, para estampar recien al confirmar
+  camaraCapturaPendiente = {
+    posicion: camaraUltimaPosicion,
+    fecha: new Date()
+  };
+
+  video.style.display = 'none';
+  canvas.style.display = 'block';
+  document.getElementById('camaraControlesVivo').style.display = 'none';
+  document.getElementById('camaraControlesFoto').style.display = 'flex';
+  const campoNombre = document.getElementById('camaraNombreAgricultor');
+  campoNombre.value = '';
+  document.getElementById('camaraEstado').textContent = 'Escribí el nombre o la situación de ESTA foto y confirmá para guardarla.';
+  setTimeout(function(){ campoNombre.focus(); }, 150);
+}
+
+function guardarFotoEnGaleria(){
+  const canvas = document.getElementById('camaraCanvas');
+  const nombreFoto = document.getElementById('camaraNombreAgricultor').value.trim();
+
+  if(!nombreFoto){
+    document.getElementById('camaraEstado').textContent = 'Escribí un nombre o descripción para esta foto antes de guardarla.';
+    return;
+  }
+
+  const captura = camaraCapturaPendiente || { posicion: camaraUltimaPosicion, fecha: new Date() };
+  const ahora = captura.fecha;
+  const fechaTexto = ahora.toLocaleDateString('es-CL') + ' ' + ahora.toLocaleTimeString('es-CL');
+  let lineaGeo = 'Sin GPS disponible';
+  if(captura.posicion){
+    const utm = latLonToUtm(captura.posicion.latitude, captura.posicion.longitude);
+    lineaGeo = 'UTM ' + Math.round(utm.este) + 'E ' + Math.round(utm.norte) + 'N · Huso ' + utm.huso + utm.hemisferio +
+               '  (' + captura.posicion.latitude.toFixed(6) + ', ' + captura.posicion.longitude.toFixed(6) + ')';
+  }
+
+  // Estampamos sobre una copia, para no acumular texto si el usuario confirma dos veces por error
+  const canvasFinal = document.createElement('canvas');
+  canvasFinal.width = canvas.width;
+  canvasFinal.height = canvas.height;
+  const ctx = canvasFinal.getContext('2d');
+  ctx.drawImage(canvas, 0, 0);
+
+  const alturaBarra = Math.max(78, canvas.height * 0.095);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, canvas.height - alturaBarra, canvas.width, alturaBarra);
+
+  const tamFuente = Math.max(14, Math.round(canvas.width / 55));
+  ctx.textBaseline = 'middle';
+
+  const y1 = canvas.height - alturaBarra*0.74;
+  const y2 = canvas.height - alturaBarra*0.44;
+  const y3 = canvas.height - alturaBarra*0.16;
+
+  ctx.fillStyle = '#ffc700';
+  ctx.font = 'bold ' + (tamFuente*1.05) + 'px sans-serif';
+  ctx.fillText(nombreFoto, 14, y1);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold ' + tamFuente + 'px sans-serif';
+  ctx.fillText(fechaTexto, 14, y2);
+  ctx.font = (tamFuente*0.85) + 'px sans-serif';
+  ctx.fillText(lineaGeo, 14, y3);
+
+  const dataUrlFinal = canvasFinal.toDataURL('image/jpeg', 0.92);
+
+  fotosSesion.push({
+    id: 'foto_' + Date.now(),
+    dataUrl: dataUrlFinal,
+    nombre: nombreFoto
+  });
+  renderizarGaleriaFotos();
+
+  camaraCapturaPendiente = null;
+  document.getElementById('camaraEstado').textContent = 'Guardada: "' + nombreFoto + '". Ya está en la galería de abajo.';
+
+  // Volvemos a la vista en vivo para la proxima foto
+  document.getElementById('camaraVideo').style.display = 'block';
+  document.getElementById('camaraCanvas').style.display = 'none';
+  document.getElementById('camaraControlesVivo').style.display = 'flex';
+  document.getElementById('camaraControlesFoto').style.display = 'none';
+}
+
+
+function nombreArchivoFoto(item){
+  const limpio = item.nombre.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  return 'foto_' + limpio + '_' + item.id.replace('foto_', '') + '.jpg';
+}
+
+function descargarFotoItem(item){
+  const a = document.createElement('a');
+  a.href = item.dataUrl;
+  a.download = nombreArchivoFoto(item);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function renderizarGaleriaFotos(){
+  const cont = document.getElementById('camaraGaleria');
+  const vacio = document.getElementById('camaraGaleriaVacio');
+  cont.innerHTML = '';
+  vacio.style.display = fotosSesion.length === 0 ? 'inline' : 'none';
+
+  fotosSesion.slice().reverse().forEach(function(item){
+    const card = document.createElement('div');
+    card.className = 'foto-item';
+
+    const img = document.createElement('img');
+    img.src = item.dataUrl;
+    img.alt = item.nombre;
+
+    const nombreEl = document.createElement('div');
+    nombreEl.className = 'foto-nombre';
+    nombreEl.textContent = item.nombre;
+    nombreEl.title = item.nombre;
+
+    const botones = document.createElement('div');
+    botones.className = 'foto-botones';
+
+    const btnDesc = document.createElement('button');
+    btnDesc.className = 'foto-btn-descargar';
+    btnDesc.textContent = '⬇️';
+    btnDesc.title = 'Descargar';
+    btnDesc.addEventListener('click', function(){ descargarFotoItem(item); });
+
+    const btnBorrar = document.createElement('button');
+    btnBorrar.className = 'foto-btn-borrar';
+    btnBorrar.textContent = '🗑️';
+    btnBorrar.title = 'Quitar de la galería';
+    btnBorrar.addEventListener('click', function(){
+      fotosSesion = fotosSesion.filter(f => f.id !== item.id);
+      renderizarGaleriaFotos();
+    });
+
+    botones.appendChild(btnDesc);
+    botones.appendChild(btnBorrar);
+    card.appendChild(img);
+    card.appendChild(nombreEl);
+    card.appendChild(botones);
+    cont.appendChild(card);
+  });
+}
+
+document.getElementById('btnCamara').addEventListener('click', abrirCamara);
+
+document.getElementById('btnCapaOffline').addEventListener('click', function(){
+  const m = obtenerMapa();
+  if(modoOfflineActivo){
+    activarCapaSatelital(m);
+  }else{
+    activarCapaOffline(m);
+  }
+});
+document.getElementById('btnCerrarCamara').addEventListener('click', cerrarCamara);
+document.getElementById('btnDisparar').addEventListener('click', tomarFoto);
+
+document.getElementById('btnNuevaFoto').addEventListener('click', function(){
+  document.getElementById('camaraVideo').style.display = 'block';
+  document.getElementById('camaraCanvas').style.display = 'none';
+  document.getElementById('camaraControlesVivo').style.display = 'flex';
+  document.getElementById('camaraControlesFoto').style.display = 'none';
+  document.getElementById('camaraNombreAgricultor').value = '';
+  document.getElementById('camaraEstado').textContent = camaraUltimaPosicion ? 'Ubicación lista. Podés fotografiar.' : 'Buscando ubicación GPS...';
+  camaraFotoActualDataUrl = null;
+  camaraCapturaPendiente = null;
+});
+
+document.getElementById('btnGuardarFotoGaleria').addEventListener('click', guardarFotoEnGaleria);
+document.getElementById('camaraNombreAgricultor').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); guardarFotoEnGaleria(); }
+});
+
 document.getElementById('btnPreview').addEventListener('click', function(){
   const statusEl = document.getElementById('status');
   statusEl.className = 'status';
@@ -1567,10 +2807,27 @@ document.getElementById('btnPreview').addEventListener('click', function(){
   }
 });
 
+function pedirNombreSiFalta(){
+  const campo = document.getElementById('nombre');
+  let nombre = campo.value.trim();
+  if(!nombre){
+    const respuesta = prompt('Escribí el nombre del polígono de salida (se usa como nombre del archivo .kml y del polígono):', '');
+    nombre = (respuesta || '').trim();
+    if(nombre) campo.value = nombre;
+  }
+  return nombre;
+}
+
 document.getElementById('btnGenerar').addEventListener('click', function(){
   const statusEl = document.getElementById('status');
   const previewEl = document.getElementById('preview');
-  let nombre = document.getElementById('nombre').value.trim() || 'Poligono';
+  const nombre = pedirNombreSiFalta();
+
+  if(!nombre){
+    statusEl.className = 'status err';
+    statusEl.textContent = 'No se generó el KML: hace falta un nombre para el polígono de salida.';
+    return;
+  }
 
   statusEl.className = 'status';
   statusEl.textContent = '';
@@ -1591,11 +2848,15 @@ document.getElementById('btnGenerar').addEventListener('click', function(){
     URL.revokeObjectURL(url);
 
     statusEl.className = 'status ok';
-    statusEl.textContent = 'Listo: se descargo "' + nombreArchivo + '" con ' + puntos.length + ' puntos.';
+    statusEl.textContent = 'Listo: se descargo "' + nombreArchivo + '" con ' + puntos.length + ' puntos. Si vas a trazar/generar otro predio distinto, escribí un nombre nuevo arriba.';
     previewEl.style.display = 'block';
     previewEl.textContent = kml;
 
     mostrarMapa(puntos);
+
+    const campoNombre = document.getElementById('nombre');
+    campoNombre.value = '';
+    campoNombre.focus();
   }catch(e){
     statusEl.className = 'status err';
     statusEl.textContent = 'Error: ' + e.message;
@@ -2157,7 +3418,8 @@ document.getElementById('btnExportarCampo').addEventListener('click', function()
   statusEl.textContent = '';
   try{
     if(puntosCampo.length < 3) throw new Error('Se necesitan al menos 3 puntos para exportar.');
-    let nombre = document.getElementById('nombre').value.trim() || 'Poligono_Campo';
+    const nombre = pedirNombreSiFalta();
+    if(!nombre) throw new Error('Hace falta un nombre para el polígono de salida.');
     const kml = construirKML(nombre, puntosCampo);
     const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
     const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
@@ -2170,7 +3432,11 @@ document.getElementById('btnExportarCampo').addEventListener('click', function()
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     statusEl.className = 'status ok';
-    statusEl.textContent = 'Listo: se descargo "' + nombreArchivo + '" con ' + puntosCampo.length + ' puntos medidos en terreno.';
+    statusEl.textContent = 'Listo: se descargo "' + nombreArchivo + '" con ' + puntosCampo.length + ' puntos medidos en terreno. Si vas a trazar otro predio distinto, escribí un nombre nuevo arriba antes de exportarlo.';
+
+    const campoNombre = document.getElementById('nombre');
+    campoNombre.value = '';
+    campoNombre.focus();
   }catch(e){
     statusEl.className = 'status err';
     statusEl.textContent = 'Error: ' + e.message;
