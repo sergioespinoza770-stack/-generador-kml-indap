@@ -1272,6 +1272,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
     padding:78px 16px 30px;
     box-sizing:border-box;
   }
+  #overlayNav.overlay-scroll{
+    padding-top:190px;
+  }
   .overlay-cerrar{
     position:absolute;
     top:16px;
@@ -1330,6 +1333,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .overlay-offline-nav.activo{
     border-color:#ffc700;
     background:rgba(255,199,0,0.18);
+  }
+  .overlay-seguir-nav{
+    position:absolute;
+    top:124px;
+    left:16px;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    border:2px solid #5a5a5a;
+    color:#ffffff;
+    font-size:19px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:10;
+  }
+  .overlay-seguir-nav.activo{
+    border-color:#1a73e8;
+    background:rgba(26,115,232,0.18);
   }
   #navMapa{
     width:min(94vw, 480px);
@@ -1564,6 +1588,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
   <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
   <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
+  <button class="overlay-seguir-nav activo" id="btnSeguirUbicacion" type="button" title="El mapa te sigue automáticamente (tocá para moverlo libremente)" aria-label="Alternar seguimiento de ubicación">🎯</button>
   <div id="navMapa"></div>
   <div id="navBrujula">
     <div id="navFlecha"></div>
@@ -2595,6 +2620,7 @@ let navMapaInstancia = null;
 let navCapaSatNav = null;
 let navCapaOfflineNav = null;
 let navMarcadorYo = null;
+let navSeguirUbicacion = true;
 let navMarcadorDestino = null;
 let navCapaRuta = null;
 let navPasos = [];
@@ -2767,6 +2793,16 @@ function asegurarMiniMapaNav(){
     }
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
+  navMapaInstancia.on('dragstart', function(){
+    if(navSeguirUbicacion){
+      navSeguirUbicacion = false;
+      const btn = document.getElementById('btnSeguirUbicacion');
+      if(btn){
+        btn.classList.remove('activo');
+        btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
+      }
+    }
+  });
   return navMapaInstancia;
 }
 
@@ -2776,13 +2812,34 @@ document.getElementById('btnCapaOfflineNav').addEventListener('click', function(
   else activarOfflineEnNav(m);
 });
 
+document.getElementById('btnSeguirUbicacion').addEventListener('click', function(){
+  navSeguirUbicacion = !navSeguirUbicacion;
+  const btn = document.getElementById('btnSeguirUbicacion');
+  if(navSeguirUbicacion){
+    btn.classList.add('activo');
+    btn.title = 'El mapa te sigue automáticamente (tocá para moverlo libremente)';
+    // Al reactivar el seguimiento, centramos ya mismo en la ultima posicion conocida
+    if(navMarcadorYo){
+      const m = asegurarMiniMapaNav();
+      m.panTo(navMarcadorYo.getLatLng(), { animate:true });
+    }
+  }else{
+    btn.classList.remove('activo');
+    btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
+  }
+});
+
 function trazarRutaEnMiniMapa(lat, lon){
   const m = asegurarMiniMapaNav();
+  const esPrimeraVez = !navMarcadorYo;
 
   if(!navMarcadorYo){
     navMarcadorYo = L.marker([lat, lon], {
-      icon: L.divIcon({ className:'', html:'<div class="ubicacion-dot"></div>', iconSize:[16,16] })
+      icon: L.divIcon({ className:'', html:'<div class="ubicacion-dot"></div>', iconSize:[16,16] }),
+      zIndexOffset: 1000
     }).addTo(m);
+    // Apenas tenemos la primera posicion, centramos ahi mismo (no esperamos a que llegue la ruta)
+    m.setView([lat, lon], 16);
   }else{
     navMarcadorYo.setLatLng([lat, lon]);
   }
@@ -2792,20 +2849,29 @@ function trazarRutaEnMiniMapa(lat, lon){
     }).addTo(m);
   }
 
+  // "Modo seguimiento": el mapa se centra en la posicion actual cada vez que llega un GPS nuevo,
+  // sin cambiar el zoom de golpe — asi el punto azul nunca se sale de la pantalla mientras te movés.
+  if(!esPrimeraVez && navSeguirUbicacion){
+    m.panTo([lat, lon], { animate: true, duration: 0.5 });
+  }
+
   const ahora = Date.now();
-  const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 35;
-  if((ahora - navUltimoFetchRuta > 20000 && necesitaRuta) || navUltimoFetchRuta === 0){
+  const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 20;
+  if((ahora - navUltimoFetchRuta > 12000 && necesitaRuta) || navUltimoFetchRuta === 0){
     navUltimoFetchRuta = ahora;
     navUltimaPosParaRuta = [lat, lon];
     obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
-      m.fitBounds(navCapaRuta.getBounds(), { padding:[24,24] });
+      // Solo la primera vez encuadramos toda la ruta; despues seguimos centrados en la posicion actual (panTo arriba)
+      if(esPrimeraVez || navPasos.length === 0){
+        m.fitBounds(navCapaRuta.getBounds(), { padding:[24,24] });
+      }
       navPasos = res.pasos;
       navPasoActualIdx = 0;
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
-      document.getElementById('navEstado').textContent = 'Ruta por camino encontrada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
+      document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
       if(res.pasos.length > 0) hablar(res.pasos[0].texto);
     }).catch(function(err){
       // Importante: si ya teniamos una ruta buena de un intento anterior, NO la borramos.
@@ -2820,7 +2886,6 @@ function trazarRutaEnMiniMapa(lat, lon){
         }else{
           document.getElementById('navEstado').textContent = 'Sin ruta por camino disponible (' + err.message + '). Usando línea recta y brújula.';
         }
-        m.setView([lat, lon], 15);
       }
     });
   }
@@ -2877,6 +2942,9 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
   navTieneRutaValida = false;
+  navSeguirUbicacion = true;
+  const btnSeguir = document.getElementById('btnSeguirUbicacion');
+  if(btnSeguir){ btnSeguir.classList.add('activo'); btnSeguir.title = 'El mapa te sigue automáticamente (tocá para moverlo libremente)'; }
   elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
