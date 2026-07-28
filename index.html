@@ -3296,6 +3296,7 @@ document.getElementById('btnPreview').addEventListener('click', function(){
   const statusEl = document.getElementById('status');
   statusEl.className = 'status';
   statusEl.textContent = '';
+  if(!document.getElementById('coords').value.trim()) return; // nada escrito todavia: no mostramos error
   try{
     const puntos = obtenerPuntos();
     mostrarMapa(puntos);
@@ -3330,6 +3331,7 @@ document.getElementById('btnGenerar').addEventListener('click', function(){
   statusEl.className = 'status';
   statusEl.textContent = '';
   previewEl.style.display = 'none';
+  if(!document.getElementById('coords').value.trim()) return; // nada escrito todavia: no mostramos error
 
   try{
     const puntos = obtenerPuntos();
@@ -3561,12 +3563,24 @@ function irAPoligonoKml(id){
     renderizarListaKml();
     guardarPoligonosEnStorage();
   }
-  m.fitBounds(capa.getBounds(), { padding: [40,40] });
+
+  const tipo = item.tipo || determinarTipoFigura(item.puntos, false);
+  if(tipo === 'punto'){
+    // Los puntos son un circleMarker: no tienen getBounds(), asi que centramos directo en sus coordenadas
+    m.setView(item.puntos[0], 17);
+  }else{
+    m.fitBounds(capa.getBounds(), { padding: [40,40] });
+  }
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
 
-  const colorOriginal = item.color;
-  capa.setStyle({ weight: 6 });
-  setTimeout(() => capa.setStyle({ weight: 3 }), 1200);
+  if(tipo === 'punto'){
+    const radioOriginal = capa.options.radius || 10;
+    capa.setRadius(radioOriginal * 1.8);
+    setTimeout(() => capa.setRadius(radioOriginal), 1200);
+  }else{
+    capa.setStyle({ weight: 6 });
+    setTimeout(() => capa.setStyle({ weight: 3 }), 1200);
+  }
 }
 
 function alternarVisibilidadKml(id, visible){
