@@ -1632,14 +1632,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </label>
     <label class="tipo-opt" id="optKml">
       <input type="radio" name="tipoCoord" value="kml">
-      Subir KML (hasta 10)
+      Subir KML
     </label>
   </div>
 
   <div class="field kml-extra" id="kmlExtra">
-    <label for="archivoKml">Seleccioná hasta 10 archivos .kml a la vez (Ctrl o Shift para elegir varios)</label>
+    <label for="archivoKml">Seleccioná los archivos .kml o .kmz que necesites (Ctrl o Shift para elegir varios)</label>
     <input type="file" id="archivoKml" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple>
-    <p class="hint">Subí hasta <strong>10 archivos .kml o .kmz</strong> a la vez (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). De cada archivo se carga el primer polígono que encuentre y se muestra fijo en el mapa, cada uno con un color distinto, como referencia. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Para trazar un polígono nuevo, tocá el lápiz ✏️ arriba del mapa — los KML/KMZ cargados quedan anclados y no se mueven.</p>
+    <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). De cada archivo se carga el primer polígono que encuentre y se muestra fijo en el mapa, cada uno con un color distinto, como referencia. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Cuando el lápiz ✏️ no está activo, tocá cualquier polígono en el mapa para ver su nombre, superficie, y navegar hacia él.</p>
     <div id="listaKmlSubidos" class="lista-kml"></div>
     <div class="btn-row" style="margin-top:10px;">
       <button type="button" class="btn-campo peligro" id="btnLimpiarKmlSubidos">Borrar todos los KML cargados</button>
@@ -2643,7 +2643,7 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
         distancia: paso.distance
       });
     });
-    return { coords: coords, pasos: pasos, distanciaTotal: ruta.distance };
+    return { coords: coords, pasos: pasos, distanciaTotal: ruta.distance, duracionSeg: ruta.duration };
   }).catch(function(err){
     clearTimeout(timeoutId);
     if(err.name === 'AbortError') throw new Error('sin respuesta a tiempo (señal muy debil)');
@@ -2779,36 +2779,39 @@ function revisarAvisosDeVoz(lat, lon, distTotalRecta){
 
 function abrirNavegador(){
   const objetivo = elegirObjetivoNavegacion();
-  const overlay = document.getElementById('overlayNav');
-  const elNombre = document.getElementById('navNombre');
-  const elDistancia = document.getElementById('navDistancia');
-  const elEstado = document.getElementById('navEstado');
-
   if(!objetivo){
     const statusEl = document.getElementById('status');
     statusEl.className = 'status err';
     statusEl.textContent = 'No hay ningún polígono activo para navegar todavía. Generá uno, trazá uno en terreno, o subí un KML primero.';
     return;
   }
+  iniciarNavegacionHacia(objetivo.puntos, objetivo.nombre);
+}
 
-  navObjetivo = centroide(objetivo.puntos);
+function iniciarNavegacionHacia(puntos, nombre){
+  const overlay = document.getElementById('overlayNav');
+  const elNombre = document.getElementById('navNombre');
+  const elDistancia = document.getElementById('navDistancia');
+  const elEstado = document.getElementById('navEstado');
+
+  navObjetivo = centroide(puntos);
   navPasos = [];
   navPasoActualIdx = 0;
   navUltimoFetchRuta = 0;
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
   navTieneRutaValida = false;
-  elNombre.textContent = 'Yendo hacia: ' + objetivo.nombre;
+  elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
   overlay.classList.add('activo');
   setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
 
-  hablar('Navegando hacia ' + objetivo.nombre + '.');
+  hablar('Navegando hacia ' + nombre + '.');
 
-  // Con conexion, guardamos un radio generoso de caminos alrededor del destino (20 km),
+  // Con conexion, guardamos un radio generoso de caminos alrededor del destino (40 km),
   // asi si mas adelante se corta la señal en el camino, ya hay cobertura para llegar.
-  cachearCallesAlrededorDePunto(navObjetivo[0], navObjetivo[1], 40, objetivo.nombre);
+  cachearCallesAlrededorDePunto(navObjetivo[0], navObjetivo[1], 40, nombre);
 
   // Pedir permiso de orientacion en iOS (tiene que dispararse en un gesto del usuario, como este click)
   if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
@@ -3203,11 +3206,76 @@ function dibujarCapaKmlSubido(item){
     dashArray: '6 5',
     fillColor: item.color,
     fillOpacity: 0.10,
-    interactive: false
+    interactive: true
   });
   capa.bindTooltip(item.nombre, { sticky: true });
+  capa.on('click', function(e){
+    if(modoMedicionActivo) return; // mientras se esta trazando, el clic no debe abrir el panel de info
+    L.DomEvent.stopPropagation(e);
+    mostrarInfoPoligonoSubido(item, e.latlng);
+  });
   capasKmlSubidos[item.id] = capa;
   if(item.visible){ capa.addTo(m); }
+}
+
+function formatearDuracion(segundos){
+  const minutos = Math.round(segundos / 60);
+  if(minutos < 60) return minutos + ' min';
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+  return horas + ' h' + (mins > 0 ? ' ' + mins + ' min' : '');
+}
+
+function mostrarInfoPoligonoSubido(item, latlngClick){
+  const m = obtenerMapa();
+  const area = calcularAreaHa(item.puntos);
+  const idInfo = 'infoDist_' + item.id;
+  const idBtn = 'infoBtnNav_' + item.id;
+
+  const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono' })
+    .setLatLng(latlngClick)
+    .setContent(
+      '<div style="font-family:var(--sans, sans-serif); min-width:200px;">' +
+        '<div style="font-weight:700; font-size:13.5px; color:#000; margin-bottom:4px;">' + item.nombre + '</div>' +
+        '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">Superficie: ~' + area.toFixed(2) + ' ha</div>' +
+        '<div id="' + idInfo + '" style="font-size:11.5px; color:#8a6d00; margin-bottom:8px;">Calculando distancia por camino...</div>' +
+        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+      '</div>'
+    );
+  popup.openOn(m);
+
+  setTimeout(function(){
+    const btn = document.getElementById(idBtn);
+    if(btn){
+      btn.addEventListener('click', function(){
+        m.closePopup();
+        iniciarNavegacionHacia(item.puntos, item.nombre);
+      });
+    }
+  }, 50);
+
+  if(!navigator.geolocation){
+    const elInfo = document.getElementById(idInfo);
+    if(elInfo) elInfo.textContent = 'Sin geolocalización disponible en este navegador.';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(function(pos){
+    const centro = centroide(item.puntos);
+    obtenerRutaOSRM(pos.coords.latitude, pos.coords.longitude, centro[0], centro[1]).then(function(res){
+      const elInfo = document.getElementById(idInfo);
+      if(!elInfo) return; // el popup ya se cerro
+      const distKm = (res.distanciaTotal / 1000).toFixed(1);
+      const tiempo = formatearDuracion(res.duracionSeg);
+      elInfo.textContent = distKm + ' km por camino · ~' + tiempo + ' de viaje';
+    }).catch(function(err){
+      const elInfo = document.getElementById(idInfo);
+      if(elInfo) elInfo.textContent = 'Sin ruta por camino disponible (' + err.message + ').';
+    });
+  }, function(){
+    const elInfo = document.getElementById(idInfo);
+    if(elInfo) elInfo.textContent = 'Activá el GPS para calcular distancia y tiempo desde tu posición.';
+  }, { enableHighAccuracy:true, maximumAge:10000, timeout:10000 });
 }
 
 function renderizarListaKml(){
@@ -3475,20 +3543,7 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
   if(archivos.length === 0) return;
 
   const statusEl = document.getElementById('status');
-  const LIMITE_TOTAL = 10;
-  const espacioDisponible = LIMITE_TOTAL - poligonosSubidos.length;
   let avisoLimite = '';
-
-  if(espacioDisponible <= 0){
-    statusEl.className = 'status err';
-    statusEl.textContent = 'Ya tenés ' + LIMITE_TOTAL + ' poligonos cargados (el maximo). Quitá alguno de la lista antes de subir otro.';
-    if(limpiarInput) limpiarInput();
-    return;
-  }
-  if(archivos.length > espacioDisponible){
-    avisoLimite = ' Se cargaron solo ' + espacioDisponible + ' porque el maximo es ' + LIMITE_TOTAL + ' poligonos a la vez — los demas no se subieron.';
-    archivos = archivos.slice(0, espacioDisponible);
-  }
 
   statusEl.className = 'status';
   statusEl.textContent = 'Leyendo ' + archivos.length + ' archivo(s)...';
