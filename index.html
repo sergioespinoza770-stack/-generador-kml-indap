@@ -1664,6 +1664,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <label for="coords" id="labelCoords">Coordenadas (formato: lat lon 0 0;lat lon 0 0;...)</label>
     <textarea id="coords" placeholder="-38.425934 -72.337282 0 0;-38.426228 -72.337276 0 0;..."></textarea>
     <p class="hint" id="hintCoords">Aceptás pegar tal cual salen de Google Earth o de un export de KoboToolbox (lat lon, con o sin el "0 0" final). No hace falta cerrar el polígono repitiendo el primer punto; se cierra solo.</p>
+    <p class="hint">📍 1 punto = ubicación puntual · 📏 2 puntos = línea recta con su medida · 🔗 3+ puntos = polígono cerrado (o línea abierta, si tildás la opción de abajo).</p>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:8px; cursor:pointer; text-transform:none; font-weight:600;">
+      <input type="checkbox" id="noCerrarFigura" style="width:16px; height:16px; margin:0;">
+      No cerrar como polígono — trazar como línea abierta (varios tramos rectos, con su medida total)
+    </label>
   </div>
 
   <div class="btn-row">
@@ -1891,24 +1896,55 @@ function obtenerPuntos(){
   }else{
     puntos = parseCoordsGeo(raw);
   }
-  if(puntos.length < 3) throw new Error('Se necesitan al menos 3 puntos para formar un poligono.');
+  if(puntos.length < 1) throw new Error('Ingresá al menos 1 punto.');
   return puntos;
 }
 
-function construirKML(nombre, puntos){
-  const primero = puntos[0];
-  const ultimo = puntos[puntos.length-1];
-  if(primero[0] !== ultimo[0] || primero[1] !== ultimo[1]){
-    puntos = puntos.concat([primero]);
+// Determina que figura corresponde segun la cantidad de puntos y si se pidio dejarla abierta:
+// 1 punto -> 'punto' | 2 puntos -> 'linea' | 3+ puntos -> 'poligono' (cerrado) o 'linea' (abierta, si se tildo la opcion)
+function determinarTipoFigura(puntos, noCerrar){
+  if(puntos.length === 1) return 'punto';
+  if(puntos.length === 2) return 'linea';
+  return noCerrar ? 'linea' : 'poligono';
+}
+
+function longitudTotalLinea(puntos){
+  let total = 0;
+  for(let i=0; i<puntos.length-1; i++){
+    total += distanciaMetros(puntos[i][0], puntos[i][1], puntos[i+1][0], puntos[i+1][1]);
   }
-  const coordLines = puntos.map(pt => '              ' + pt[1] + ',' + pt[0] + ',0').join('\n');
+  return total;
+}
+
+function construirKML(nombre, puntos, tipoForzado){
+  const tipo = tipoForzado || determinarTipoFigura(puntos, false);
   const nombreEsc = nombre.replace(/[<>&]/g, '');
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
-'<kml xmlns="http://www.opengis.net/kml/2.2">\n' +
-'  <Document>\n' +
-'    <name>' + nombreEsc + '</name>\n' +
-'    <Placemark>\n' +
-'      <name>' + nombreEsc + '</name>\n' +
+  let geometriaXml;
+
+  if(tipo === 'punto'){
+    const p = puntos[0];
+    geometriaXml =
+'      <Point>\n' +
+'        <coordinates>' + p[1] + ',' + p[0] + ',0</coordinates>\n' +
+'      </Point>\n';
+  }else if(tipo === 'linea'){
+    const coordLines = puntos.map(pt => '              ' + pt[1] + ',' + pt[0] + ',0').join('\n');
+    geometriaXml =
+'      <LineString>\n' +
+'        <tessellate>1</tessellate>\n' +
+'        <coordinates>\n' +
+coordLines + '\n' +
+'        </coordinates>\n' +
+'      </LineString>\n';
+  }else{
+    let puntosCierre = puntos;
+    const primero = puntos[0];
+    const ultimo = puntos[puntos.length-1];
+    if(primero[0] !== ultimo[0] || primero[1] !== ultimo[1]){
+      puntosCierre = puntos.concat([primero]);
+    }
+    const coordLines = puntosCierre.map(pt => '              ' + pt[1] + ',' + pt[0] + ',0').join('\n');
+    geometriaXml =
 '      <Polygon>\n' +
 '        <outerBoundaryIs>\n' +
 '          <LinearRing>\n' +
@@ -1917,7 +1953,16 @@ coordLines + '\n' +
 '            </coordinates>\n' +
 '          </LinearRing>\n' +
 '        </outerBoundaryIs>\n' +
-'      </Polygon>\n' +
+'      </Polygon>\n';
+  }
+
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+'<kml xmlns="http://www.opengis.net/kml/2.2">\n' +
+'  <Document>\n' +
+'    <name>' + nombreEsc + '</name>\n' +
+'    <Placemark>\n' +
+'      <name>' + nombreEsc + '</name>\n' +
+geometriaXml +
 '    </Placemark>\n' +
 '  </Document>\n' +
 '</kml>\n';
@@ -1926,6 +1971,7 @@ coordLines + '\n' +
 // ---------- Mapa Leaflet ----------
 let mapa = null;
 let capaPoligono = null;
+let capaPoligonoUltimosPuntos = null;
 let etiquetasMedida = [];
 
 // ---------- Capa "sin conexion": grilla dibujada localmente, cero requests de red ----------
@@ -2420,21 +2466,52 @@ function mostrarMapa(puntos){
   etiquetasMedida.forEach(x => m.removeLayer(x));
   etiquetasMedida = [];
 
-  capaPoligono = L.polygon(latlngs, {
-    color: '#ffc700',
-    weight: 3,
-    fillColor: '#ffc700',
-    fillOpacity: 0.12
-  }).addTo(m);
+  const noCerrar = document.getElementById('noCerrarFigura').checked;
+  const tipo = determinarTipoFigura(latlngs, noCerrar);
+  capaPoligonoUltimosPuntos = latlngs;
 
-  m.fitBounds(capaPoligono.getBounds(), { padding: [30,30] });
-  setTimeout(() => m.invalidateSize(), 150);
+  if(tipo === 'punto'){
+    capaPoligono = L.marker(latlngs[0], {
+      icon: L.divIcon({ className:'', html:'<div class="vertice-arrastrable" style="width:22px;height:22px;"></div>', iconSize:[22,22], iconAnchor:[11,11] })
+    }).addTo(m);
+    m.setView(latlngs[0], 16);
+    setTimeout(() => m.invalidateSize(), 150);
 
-  const area = calcularAreaHa(latlngs);
-  document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ~' + area.toFixed(2) + ' ha';
+    const utm = latLonToUtm(latlngs[0][0], latlngs[0][1]);
+    document.getElementById('mapInfo').textContent =
+      '1 punto · ' + latlngs[0][0].toFixed(6) + ', ' + latlngs[0][1].toFixed(6) +
+      ' · UTM ' + Math.round(utm.este) + 'E ' + Math.round(utm.norte) + 'N (Huso ' + utm.huso + utm.hemisferio + ')';
 
-  // Con conexion, aprovechamos para guardar los caminos de acceso alrededor de este predio (25 km de radio)
-  const centro = centroide(latlngs);
+  }else if(tipo === 'linea'){
+    capaPoligono = L.polyline(latlngs, {
+      color: '#ffc700',
+      weight: 4,
+      opacity: 0.95
+    }).addTo(m);
+    m.fitBounds(capaPoligono.getBounds(), { padding: [30,30] });
+    setTimeout(() => m.invalidateSize(), 150);
+
+    const largoM = longitudTotalLinea(latlngs);
+    const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+    document.getElementById('mapInfo').textContent = puntos.length + ' puntos · línea de ~' + largoTxt;
+
+  }else{
+    capaPoligono = L.polygon(latlngs, {
+      color: '#ffc700',
+      weight: 3,
+      fillColor: '#ffc700',
+      fillOpacity: 0.12
+    }).addTo(m);
+
+    m.fitBounds(capaPoligono.getBounds(), { padding: [30,30] });
+    setTimeout(() => m.invalidateSize(), 150);
+
+    const area = calcularAreaHa(latlngs);
+    document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ~' + area.toFixed(2) + ' ha';
+  }
+
+  // Con conexion, aprovechamos para guardar los caminos de acceso alrededor de este punto/predio (25 km de radio)
+  const centro = tipo === 'punto' ? latlngs[0] : centroide(latlngs);
   cachearCallesAlrededorDePunto(centro[0], centro[1], 25, 'este predio');
 }
 
@@ -2530,14 +2607,13 @@ let navVozActiva = true;
 let navUltimoAvisoDistancia = null;
 
 function elegirObjetivoNavegacion(){
-  // Prioridad: poligono que se esta trazando en terreno > poligono previsualizado desde coordenadas > primer KML subido visible
+  // Prioridad: poligono que se esta trazando en terreno > figura previsualizada desde coordenadas > primer KML subido visible
   if(typeof puntosCampo !== 'undefined' && puntosCampo.length >= 1){
     return { puntos: puntosCampo, nombre: 'el polígono que estás trazando' };
   }
-  if(typeof capaPoligono !== 'undefined' && capaPoligono){
-    const latlngs = capaPoligono.getLatLngs()[0].map(p => [p.lat, p.lng]);
+  if(typeof capaPoligonoUltimosPuntos !== 'undefined' && capaPoligonoUltimosPuntos){
     const nombreCampo = document.getElementById('nombre').value.trim();
-    return { puntos: latlngs, nombre: nombreCampo || 'el polígono generado' };
+    return { puntos: capaPoligonoUltimosPuntos, nombre: nombreCampo || 'el punto/polígono generado' };
   }
   if(typeof poligonosSubidos !== 'undefined' && poligonosSubidos.length > 0){
     const primero = poligonosSubidos.find(p => p.visible) || poligonosSubidos[0];
@@ -3160,7 +3236,9 @@ document.getElementById('btnGenerar').addEventListener('click', function(){
 
   try{
     const puntos = obtenerPuntos();
-    const kml = construirKML(nombre, puntos);
+    const noCerrar = document.getElementById('noCerrarFigura').checked;
+    const tipoFigura = determinarTipoFigura(puntos, noCerrar);
+    const kml = construirKML(nombre, puntos, tipoFigura);
     const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
     const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
     const url = URL.createObjectURL(blob);
@@ -3785,6 +3863,17 @@ function actualizarInfoCampo(){
     badge.style.display = 'inline-block';
     badge.textContent = '~' + area.toFixed(2) + ' ha';
     btnExportar.style.display = 'flex';
+  }else if(puntosCampo.length === 2){
+    const largoM = longitudTotalLinea(puntosCampo);
+    const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+    info += ' Línea de ~' + largoTxt + '.';
+    badge.style.display = 'inline-block';
+    badge.textContent = '~' + largoTxt;
+    btnExportar.style.display = 'flex';
+  }else if(puntosCampo.length === 1){
+    info += ' Listo para exportar como punto de ubicación.';
+    badge.style.display = 'none';
+    btnExportar.style.display = 'flex';
   }else{
     badge.style.display = 'none';
     btnExportar.style.display = 'none';
@@ -3806,10 +3895,11 @@ document.getElementById('btnExportarCampo').addEventListener('click', function()
   statusEl.className = 'status';
   statusEl.textContent = '';
   try{
-    if(puntosCampo.length < 3) throw new Error('Se necesitan al menos 3 puntos para exportar.');
+    if(puntosCampo.length < 1) throw new Error('Marcá al menos 1 punto para exportar.');
     const nombre = pedirNombreSiFalta();
     if(!nombre) throw new Error('Hace falta un nombre para el polígono de salida.');
-    const kml = construirKML(nombre, puntosCampo);
+    const tipoFiguraCampo = determinarTipoFigura(puntosCampo, false);
+    const kml = construirKML(nombre, puntosCampo, tipoFiguraCampo);
     const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
     const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
     const url = URL.createObjectURL(blob);
