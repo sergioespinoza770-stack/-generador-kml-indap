@@ -3382,11 +3382,16 @@ function formatearDuracion(segundos){
 
 function mostrarInfoPoligonoSubido(item, latlngClick){
   const m = obtenerMapa();
+
+  // Importante: cerramos cualquier popup anterior (de otro poligono) antes de mostrar el nuevo,
+  // asi la superficie/distancia nunca queda pegada con la del poligono seleccionado previamente.
+  m.closePopup();
+
   const area = calcularAreaHa(item.puntos);
   const idInfo = 'infoDist_' + item.id;
   const idBtn = 'infoBtnNav_' + item.id;
 
-  const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono' })
+  const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono', autoClose: true, closeOnClick: true })
     .setLatLng(latlngClick)
     .setContent(
       '<div style="font-family:var(--sans, sans-serif); min-width:200px;">' +
@@ -4018,6 +4023,10 @@ document.getElementById('btnCampoReset').addEventListener('click', function(){
 
 // Al abrir la pagina, intentamos recuperar poligonos KML cargados en una sesion anterior
 cargarPoligonosDesdeStorage();
+
+// Mostramos el mapa de entrada, sin esperar a que se ingresen coordenadas —
+// asi se puede tocar el lapiz y marcar un punto/linea/poligono de inmediato.
+obtenerMapa();
 
 // Si la app se abrio porque el usuario "compartio" un .kml/.kmz desde otra app
 // (ej: explorador de archivos o Gmail), el service worker lo dejo guardado en
