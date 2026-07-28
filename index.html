@@ -2195,7 +2195,7 @@ function mostrarPlanoOfflineEnMapa(mapaRef, meta){
   if(calles.length > 0){
     capaCallesOfflineActual = L.layerGroup(
       calles.map(function(tramo){
-        return L.polyline(tramo, { color:'#3a3a3a', weight:2.5, opacity:0.85 });
+        return L.polyline(tramo, { color:'#e02b2b', weight:2.5, opacity:0.9 });
       })
     ).addTo(mapaRef);
   }
@@ -2223,7 +2223,7 @@ function mostrarSoloCallesGuardadas(mapaRef){
   if(calles.length > 0){
     capaCallesOfflineActual = L.layerGroup(
       calles.map(function(tramo){
-        return L.polyline(tramo, { color:'#3a3a3a', weight:2.5, opacity:0.85 });
+        return L.polyline(tramo, { color:'#e02b2b', weight:2.5, opacity:0.9 });
       })
     ).addTo(mapaRef);
   }
