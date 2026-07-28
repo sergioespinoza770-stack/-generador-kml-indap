@@ -3208,11 +3208,17 @@ document.getElementById('btnPreview').addEventListener('click', function(){
   }
 });
 
-function pedirNombreSiFalta(){
+function pedirNombreSiFalta(tipoFigura){
   const campo = document.getElementById('nombre');
   let nombre = campo.value.trim();
   if(!nombre){
-    const respuesta = prompt('Escribí el nombre del polígono de salida (se usa como nombre del archivo .kml y del polígono):', '');
+    const textos = {
+      punto: 'Escribí el nombre del punto de salida (se usa como nombre del archivo .kml y del punto):',
+      linea: 'Escribí el nombre de la línea de salida (se usa como nombre del archivo .kml y de la línea):',
+      poligono: 'Escribí el nombre del polígono de salida (se usa como nombre del archivo .kml y del polígono):'
+    };
+    const mensaje = textos[tipoFigura] || textos.poligono;
+    const respuesta = prompt(mensaje, '');
     nombre = (respuesta || '').trim();
     if(nombre) campo.value = nombre;
   }
@@ -3222,13 +3228,6 @@ function pedirNombreSiFalta(){
 document.getElementById('btnGenerar').addEventListener('click', function(){
   const statusEl = document.getElementById('status');
   const previewEl = document.getElementById('preview');
-  const nombre = pedirNombreSiFalta();
-
-  if(!nombre){
-    statusEl.className = 'status err';
-    statusEl.textContent = 'No se generó el KML: hace falta un nombre para el polígono de salida.';
-    return;
-  }
 
   statusEl.className = 'status';
   statusEl.textContent = '';
@@ -3238,6 +3237,15 @@ document.getElementById('btnGenerar').addEventListener('click', function(){
     const puntos = obtenerPuntos();
     const noCerrar = document.getElementById('noCerrarFigura').checked;
     const tipoFigura = determinarTipoFigura(puntos, noCerrar);
+
+    const nombre = pedirNombreSiFalta(tipoFigura);
+    if(!nombre){
+      const etiquetas = { punto:'el punto', linea:'la línea', poligono:'el polígono' };
+      statusEl.className = 'status err';
+      statusEl.textContent = 'No se generó el KML: hace falta un nombre para ' + (etiquetas[tipoFigura] || 'el polígono') + ' de salida.';
+      return;
+    }
+
     const kml = construirKML(nombre, puntos, tipoFigura);
     const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
     const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
@@ -3896,9 +3904,12 @@ document.getElementById('btnExportarCampo').addEventListener('click', function()
   statusEl.textContent = '';
   try{
     if(puntosCampo.length < 1) throw new Error('Marcá al menos 1 punto para exportar.');
-    const nombre = pedirNombreSiFalta();
-    if(!nombre) throw new Error('Hace falta un nombre para el polígono de salida.');
     const tipoFiguraCampo = determinarTipoFigura(puntosCampo, false);
+    const nombre = pedirNombreSiFalta(tipoFiguraCampo);
+    if(!nombre){
+      const etiquetas = { punto:'el punto', linea:'la línea', poligono:'el polígono' };
+      throw new Error('Hace falta un nombre para ' + (etiquetas[tipoFiguraCampo] || 'el polígono') + ' de salida.');
+    }
     const kml = construirKML(nombre, puntosCampo, tipoFiguraCampo);
     const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
     const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
