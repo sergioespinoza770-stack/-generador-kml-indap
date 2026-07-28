@@ -3354,14 +3354,37 @@ function siguienteColor(){
 
 function dibujarCapaKmlSubido(item){
   const m = obtenerMapa();
-  const capa = L.polygon(item.puntos, {
-    color: item.color,
-    weight: 3,
-    dashArray: '6 5',
-    fillColor: item.color,
-    fillOpacity: 0.10,
-    interactive: true
-  });
+  const tipo = item.tipo || determinarTipoFigura(item.puntos, false);
+  let capa;
+
+  if(tipo === 'punto'){
+    capa = L.circleMarker(item.puntos[0], {
+      radius: 10,
+      color: item.color,
+      weight: 3,
+      fillColor: item.color,
+      fillOpacity: 0.6,
+      interactive: true
+    });
+  }else if(tipo === 'linea'){
+    capa = L.polyline(item.puntos, {
+      color: item.color,
+      weight: 4,
+      dashArray: '6 5',
+      opacity: 0.9,
+      interactive: true
+    });
+  }else{
+    capa = L.polygon(item.puntos, {
+      color: item.color,
+      weight: 3,
+      dashArray: '6 5',
+      fillColor: item.color,
+      fillOpacity: 0.10,
+      interactive: true
+    });
+  }
+
   capa.bindTooltip(item.nombre, { sticky: true });
   capa.on('click', function(e){
     if(modoMedicionActivo) return; // mientras se esta trazando, el clic no debe abrir el panel de info
@@ -3387,7 +3410,21 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
   // asi la superficie/distancia nunca queda pegada con la del poligono seleccionado previamente.
   m.closePopup();
 
-  const area = calcularAreaHa(item.puntos);
+  const tipo = item.tipo || determinarTipoFigura(item.puntos, false);
+  let lineaMedida;
+  if(tipo === 'punto'){
+    const utm = latLonToUtm(item.puntos[0][0], item.puntos[0][1]);
+    lineaMedida = 'Punto: ' + item.puntos[0][0].toFixed(6) + ', ' + item.puntos[0][1].toFixed(6) +
+      ' · UTM ' + Math.round(utm.este) + 'E ' + Math.round(utm.norte) + 'N (Huso ' + utm.huso + utm.hemisferio + ')';
+  }else if(tipo === 'linea'){
+    const largoM = longitudTotalLinea(item.puntos);
+    const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+    lineaMedida = 'Longitud: ~' + largoTxt;
+  }else{
+    const area = calcularAreaHa(item.puntos);
+    lineaMedida = 'Superficie: ~' + area.toFixed(2) + ' ha';
+  }
+
   const idInfo = 'infoDist_' + item.id;
   const idBtn = 'infoBtnNav_' + item.id;
 
@@ -3396,7 +3433,7 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
     .setContent(
       '<div style="font-family:var(--sans, sans-serif); min-width:200px;">' +
         '<div style="font-weight:700; font-size:13.5px; color:#000; margin-bottom:4px;">' + item.nombre + '</div>' +
-        '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">Superficie: ~' + area.toFixed(2) + ' ha</div>' +
+        '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">' + lineaMedida + '</div>' +
         '<div id="' + idInfo + '" style="font-size:11.5px; color:#8a6d00; margin-bottom:8px;">Calculando distancia por camino...</div>' +
         '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
       '</div>'
@@ -3522,11 +3559,12 @@ function quitarPoligonoKml(id){
   guardarPoligonosEnStorage();
 }
 
-function agregarPoligonoSubido(nombre, puntos){
+function agregarPoligonoSubido(nombre, puntos, tipo){
   const item = {
     id: 'kml_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     nombre: nombre,
     puntos: puntos,
+    tipo: tipo || determinarTipoFigura(puntos, false),
     color: siguienteColor(),
     visible: true
   };
@@ -3536,7 +3574,7 @@ function agregarPoligonoSubido(nombre, puntos){
   guardarPoligonosEnStorage();
 
   // Apenas tenemos los puntos, arrancamos ya mismo la descarga de caminos alrededor (no esperamos a nada mas)
-  const centro = centroide(puntos);
+  const centro = item.tipo === 'punto' ? puntos[0] : centroide(puntos);
   cachearCallesAlrededorDePunto(centro[0], centro[1], 25, nombre);
 
   return item;
@@ -3585,37 +3623,7 @@ document.getElementById('btnLimpiarKmlSubidos') && document.getElementById('btnL
   guardarPoligonosEnStorage();
 });
 
-function parsearKML(texto){
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(texto, 'text/xml');
-
-  if(xml.querySelector('parsererror')){
-    throw new Error('El archivo no es un XML/KML valido.');
-  }
-
-  const nodosCoords = xml.getElementsByTagName('coordinates');
-  if(nodosCoords.length === 0){
-    throw new Error('No se encontraron coordenadas dentro del archivo.');
-  }
-
-  // Preferimos el primer <coordinates> que este dentro de un <Polygon>
-  let textoCoords = null;
-  for(let i=0; i<nodosCoords.length; i++){
-    let nodo = nodosCoords[i].parentElement;
-    let dentroDePoligono = false;
-    while(nodo){
-      if(nodo.tagName && nodo.tagName.toLowerCase().indexOf('polygon') !== -1){
-        dentroDePoligono = true;
-        break;
-      }
-      nodo = nodo.parentElement;
-    }
-    if(dentroDePoligono){ textoCoords = nodosCoords[i].textContent; break; }
-  }
-  if(!textoCoords){
-    textoCoords = nodosCoords[0].textContent;
-  }
-
+function extraerPuntosDeCoordenadas(textoCoords){
   const tokens = textoCoords.trim().split(/\s+/).filter(t => t.length > 0);
   const puntos = [];
   for(const t of tokens){
@@ -3626,16 +3634,80 @@ function parsearKML(texto){
     if(isNaN(lat) || isNaN(lon)) continue;
     puntos.push([lat, lon]);
   }
+  return puntos;
+}
 
-  if(puntos.length < 3){
-    throw new Error('El KML no tiene un poligono valido (se necesitan al menos 3 vertices).');
+function parsearKML(texto){
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(texto, 'text/xml');
+
+  if(xml.querySelector('parsererror')){
+    throw new Error('El archivo no es un XML/KML valido.');
   }
 
-  // Si viene cerrado (primer punto = ultimo), lo abrimos para no duplicar el vertice al editar
-  const primero = puntos[0];
-  const ultimo = puntos[puntos.length - 1];
-  if(puntos.length > 3 && primero[0] === ultimo[0] && primero[1] === ultimo[1]){
-    puntos.pop();
+  // Buscamos la geometria real del archivo: Polygon, LineString o Point (en ese orden de
+  // preferencia si hubiera varias, aunque lo normal es que tenga una sola).
+  let puntos = null;
+  let tipo = null;
+
+  const poligono = xml.getElementsByTagName('Polygon')[0];
+  if(poligono){
+    const coordNodo = poligono.getElementsByTagName('coordinates')[0];
+    if(coordNodo){
+      puntos = extraerPuntosDeCoordenadas(coordNodo.textContent);
+      tipo = 'poligono';
+    }
+  }
+
+  if(!puntos || puntos.length === 0){
+    const linea = xml.getElementsByTagName('LineString')[0];
+    if(linea){
+      const coordNodo = linea.getElementsByTagName('coordinates')[0];
+      if(coordNodo){
+        puntos = extraerPuntosDeCoordenadas(coordNodo.textContent);
+        tipo = 'linea';
+      }
+    }
+  }
+
+  if(!puntos || puntos.length === 0){
+    const punto = xml.getElementsByTagName('Point')[0];
+    if(punto){
+      const coordNodo = punto.getElementsByTagName('coordinates')[0];
+      if(coordNodo){
+        puntos = extraerPuntosDeCoordenadas(coordNodo.textContent);
+        tipo = 'punto';
+      }
+    }
+  }
+
+  // Respaldo: si no encontramos ninguna etiqueta Point/LineString/Polygon explicita
+  // (archivos KML raros o mal formados), usamos el primer <coordinates> que aparezca.
+  if(!puntos || puntos.length === 0){
+    const nodosCoords = xml.getElementsByTagName('coordinates');
+    if(nodosCoords.length === 0){
+      throw new Error('No se encontraron coordenadas dentro del archivo.');
+    }
+    puntos = extraerPuntosDeCoordenadas(nodosCoords[0].textContent);
+    tipo = null; // se determina despues segun la cantidad de puntos
+  }
+
+  if(!puntos || puntos.length === 0){
+    throw new Error('No se pudieron leer coordenadas validas en el archivo.');
+  }
+
+  // Si es un poligono cerrado (primer punto = ultimo), lo abrimos para no duplicar el vertice al editar
+  if(tipo === 'poligono' || (!tipo && puntos.length > 3)){
+    const primero = puntos[0];
+    const ultimo = puntos[puntos.length - 1];
+    if(primero[0] === ultimo[0] && primero[1] === ultimo[1] && puntos.length > 1){
+      puntos.pop();
+    }
+  }
+
+  // Si no se detecto una etiqueta de geometria explicita, la inferimos por cantidad de puntos
+  if(!tipo){
+    tipo = determinarTipoFigura(puntos, false);
   }
 
   // Intentamos rescatar un nombre (Placemark o Document) para usarlo como etiqueta
@@ -3653,7 +3725,7 @@ function parsearKML(texto){
     }
   }
 
-  return { puntos, nombreDetectado };
+  return { puntos, nombreDetectado, tipo };
 }
 
 function leerArchivoComoTexto(archivo){
@@ -3726,7 +3798,7 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
       try{
         const resultado = parsearKML(texto);
         const nombreEtiqueta = resultado.nombreDetectado || archivo.name.replace(/\.(kml|kmz)$/i, '');
-        agregarPoligonoSubido(nombreEtiqueta, resultado.puntos);
+        agregarPoligonoSubido(nombreEtiqueta, resultado.puntos, resultado.tipo);
         cargados++;
       }catch(err){
         conError.push(archivo.name);
@@ -4060,7 +4132,7 @@ async function revisarArchivoCompartido(){
       }
       const resultado = parsearKML(texto);
       const nombreEtiqueta = resultado.nombreDetectado || nombreOriginal.replace(/\.(kml|kmz)$/i, '');
-      agregarPoligonoSubido(nombreEtiqueta, resultado.puntos);
+      agregarPoligonoSubido(nombreEtiqueta, resultado.puntos, resultado.tipo);
       cargados++;
 
       await cache.delete('./compartido-' + i);
