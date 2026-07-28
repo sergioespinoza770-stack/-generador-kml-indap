@@ -2782,7 +2782,8 @@ function activarSatelitalEnNav(mapaRef){
 
 function asegurarMiniMapaNav(){
   if(navMapaInstancia) return navMapaInstancia;
-  navMapaInstancia = L.map('navMapa', { attributionControl:false, zoomControl:true });
+  navMapaInstancia = L.map('navMapa', { attributionControl:false, zoomControl:false });
+  L.control.zoom({ position: 'bottomright' }).addTo(navMapaInstancia);
   navCapaSatNav = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 });
   navCapaOfflineNav = new CapaSinConexion({ maxZoom:19 });
   navCapaSatNav.addTo(navMapaInstancia);
