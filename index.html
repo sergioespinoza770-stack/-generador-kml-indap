@@ -1223,6 +1223,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       font-size:16px; /* evita zoom automatico en iOS */
     }
     #map{ height:70vh; min-height:340px; }
+    #navMapa{ height:65vh; min-height:320px; }
     .tipo-selector{ flex-direction:column; }
     .tipo-opt{ min-width:0; }
   }
@@ -1356,8 +1357,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     background:rgba(26,115,232,0.18);
   }
   #navMapa{
-    width:min(94vw, 480px);
-    height:230px;
+    width:min(94vw, 760px);
+    height:560px;
     border-radius:14px;
     border:2px solid #ffc700;
     margin-bottom:18px;
@@ -2855,6 +2856,13 @@ function trazarRutaEnMiniMapa(lat, lon){
     m.panTo([lat, lon], { animate: true, duration: 0.5 });
   }
 
+  // Verificacion proactiva: si estamos sin conexion, la ruta azul vieja no sirve de guia confiable —
+  // la ocultamos y dejamos solo el punto + brujula + distancia (que no dependen de internet).
+  if(navigator.onLine === false && navCapaRuta && m.hasLayer(navCapaRuta)){
+    m.removeLayer(navCapaRuta);
+    document.getElementById('navEstado').textContent = 'Sin conexión: se oculta la ruta calculada. Guiate por la flecha y la distancia.';
+  }
+
   const ahora = Date.now();
   const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 20;
   if((ahora - navUltimoFetchRuta > 12000 && necesitaRuta) || navUltimoFetchRuta === 0){
@@ -2874,10 +2882,17 @@ function trazarRutaEnMiniMapa(lat, lon){
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
       if(res.pasos.length > 0) hablar(res.pasos[0].texto);
     }).catch(function(err){
-      // Importante: si ya teniamos una ruta buena de un intento anterior, NO la borramos.
-      // Con mala señal es mejor seguir con la ultima ruta conocida que quedarse sin nada.
+      // Importante: si ya teniamos una ruta buena de un intento anterior, la manejamos distinto
+      // segun si es una falla pasajera (con señal) o si realmente no hay conexion.
       if(navTieneRutaValida){
-        document.getElementById('navEstado').textContent = 'Señal débil: no se pudo actualizar la ruta, seguimos con la última calculada.';
+        if(navigator.onLine === false){
+          // Sin conexion de verdad: la ruta vieja puede ya no servir, la ocultamos y dejamos
+          // solo el punto azul + brujula + distancia (que siguen funcionando sin internet).
+          if(navCapaRuta && m.hasLayer(navCapaRuta)) m.removeLayer(navCapaRuta);
+          document.getElementById('navEstado').textContent = 'Sin conexión: se oculta la ruta calculada (podría no coincidir con tu camino real). Guiate por la flecha y la distancia.';
+        }else{
+          document.getElementById('navEstado').textContent = 'Señal débil: no se pudo actualizar la ruta, seguimos con la última calculada.';
+        }
       }else{
         navPasos = [];
         const meta = buscarPlanoParaVista(m);
@@ -2890,6 +2905,21 @@ function trazarRutaEnMiniMapa(lat, lon){
     });
   }
 }
+
+// Si la conexion se corta mientras se esta navegando, ocultamos la ruta azul vieja al instante
+// (no esperamos al proximo intento de recalculo); si vuelve la señal, se recalcula y se vuelve a mostrar.
+window.addEventListener('offline', function(){
+  if(navMapaInstancia && navCapaRuta && navMapaInstancia.hasLayer(navCapaRuta)){
+    navMapaInstancia.removeLayer(navCapaRuta);
+    const estadoEl = document.getElementById('navEstado');
+    if(estadoEl) estadoEl.textContent = 'Sin conexión: se oculta la ruta calculada. Guiate por la flecha y la distancia.';
+  }
+});
+window.addEventListener('online', function(){
+  if(navMapaInstancia && navObjetivo){
+    navUltimoFetchRuta = 0; // fuerza a pedir la ruta de nuevo apenas vuelva la señal
+  }
+});
 
 function revisarAvisosDeVoz(lat, lon, distTotalRecta){
   // Si tenemos pasos de una ruta real, avisamos por maniobra
