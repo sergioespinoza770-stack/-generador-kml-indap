@@ -1073,6 +1073,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
+  .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
+    position:relative;
+    opacity:0.55;
+  }
+  .btn-icono.sin-conexion::after, .overlay-offline-nav.sin-conexion::after{
+    content:'';
+    position:absolute;
+    top:8%;
+    left:50%;
+    width:3px;
+    height:84%;
+    background:#e0332b;
+    transform:translateX(-50%) rotate(45deg);
+    border-radius:2px;
+    pointer-events:none;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.85);
+  }
   .area-flotante{
     position:absolute;
     top:12px;
@@ -1087,6 +1104,63 @@ svg.leaflet-image-layer.leaflet-interactive path {
     padding:7px 14px;
     border-radius:20px;
     box-shadow:0 3px 12px rgba(0,0,0,0.18);
+  }
+  .badge-plano-activo{
+    position:absolute;
+    top:12px;
+    left:12px;
+    right:12px;
+    z-index:600;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:12.5px;
+    line-height:1.3;
+    color:#ffffff;
+    background:#c0221a;
+    border:2px solid #ffffff;
+    padding:8px 12px;
+    border-radius:10px;
+    box-shadow:0 3px 14px rgba(0,0,0,0.35);
+    display:none;
+  }
+  .badge-plano-activo.visible{
+    display:block;
+  }
+  .badge-plano-activo strong{
+    display:block;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    opacity:0.9;
+    margin-bottom:2px;
+  }
+  .banner-conexion{
+    display:none;
+    position:sticky;
+    top:0;
+    left:0;
+    right:0;
+    z-index:5000;
+    text-align:center;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:13px;
+    padding:9px 14px;
+    color:#ffffff;
+  }
+  .banner-conexion.sin-señal{
+    display:block;
+    background:#c0221a;
+  }
+  .banner-conexion.reconectado{
+    display:block;
+    background:#2e9d5c;
+    animation: desvanecerBanner 3.2s forwards;
+  }
+  @keyframes desvanecerBanner{
+    0%{ opacity:1; }
+    75%{ opacity:1; }
+    100%{ opacity:0; }
   }
   .norte-control{
     background:rgba(255,255,255,0.92);
@@ -1363,6 +1437,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border:2px solid #ffc700;
     margin-bottom:18px;
     flex-shrink:0;
+    overflow:hidden;
+  }
+  #navMapa .leaflet-map-pane{
+    transition: transform 0.35s linear;
   }
 
   /* ---- Navegador ---- */
@@ -1581,6 +1659,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </style>
 </head>
 <body>
+<div id="bannerConexion" class="banner-conexion"></div>
 <div id="zonaArrastrar" class="zona-arrastrar">
   <div class="zona-arrastrar-caja">📂 Soltá el/los archivo(s) .kml o .kmz acá</div>
 </div>
@@ -1590,7 +1669,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
   <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
   <button class="overlay-seguir-nav activo" id="btnSeguirUbicacion" type="button" title="El mapa te sigue automáticamente (tocá para moverlo libremente)" aria-label="Alternar seguimiento de ubicación">🎯</button>
-  <div id="navMapa"></div>
+  <div class="nav-mapa-wrap" style="position:relative;">
+    <div id="navMapa"></div>
+    <div class="badge-plano-activo" id="badgePlanoActivoNav"></div>
+  </div>
   <div id="navBrujula">
     <div id="navFlecha"></div>
     <div id="navCentro"></div>
@@ -1658,7 +1740,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </label>
     <label class="tipo-opt" id="optKml">
       <input type="radio" name="tipoCoord" value="kml">
-      Subir KML
+      Subir KML o KMZ
     </label>
   </div>
 
@@ -1713,6 +1795,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
     <div class="map-wrap">
       <div id="map"></div>
+      <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
         <button type="button" class="btn-icono" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">📍</button>
         <button type="button" class="btn-icono" id="btnModoCampo" title="Medir tocando el mapa" aria-label="Medir tocando el mapa">✏️</button>
@@ -2263,6 +2346,37 @@ function buscarTodasLasCallesParaVista(mapaRef){
   return calles;
 }
 
+// Devuelve los nombres de TODOS los planos guardados que aportan algo a la vista actual
+// (imagen y/o caminos), para poder mostrarlos en el badge rojo y que quede claro cual/cuales
+// estan realmente en uso — esto es lo que evita confundirse cuando hay varios guardados.
+function nombresDePlanosParaVista(mapaRef){
+  const b = mapaRef.getBounds();
+  const vista = { north:b.getNorth(), south:b.getSouth(), east:b.getEast(), west:b.getWest() };
+  const nombres = [];
+  planosOfflineMeta.forEach(function(p){
+    if(bboxSeSuperponen(vista, p.bounds)) nombres.push(p.nombre);
+  });
+  return nombres;
+}
+
+function mostrarBadgePlanoActivo(idBadge, nombres){
+  const badge = document.getElementById(idBadge);
+  if(!badge) return;
+  if(!nombres || nombres.length === 0){
+    badge.classList.remove('visible');
+    badge.innerHTML = '';
+    return;
+  }
+  const titulo = nombres.length === 1 ? 'Plano offline activo' : ('Planos offline activos (' + nombres.length + ')');
+  badge.innerHTML = '<strong>' + titulo + '</strong>' + nombres.join(' · ');
+  badge.classList.add('visible');
+}
+
+function ocultarBadgePlanoActivo(idBadge){
+  const badge = document.getElementById(idBadge);
+  if(badge){ badge.classList.remove('visible'); badge.innerHTML = ''; }
+}
+
 let capaCallesOfflineActual = null;
 
 function mostrarPlanoOfflineEnMapa(mapaRef, meta){
@@ -2336,6 +2450,8 @@ function activarCapaOffline(mapaRef, metaForzada){
         : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
     }
   }
+
+  mostrarBadgePlanoActivo('badgePlanoActivo', nombresDePlanosParaVista(mapaRef));
 }
 
 function activarCapaSatelital(mapaRef){
@@ -2347,6 +2463,7 @@ function activarCapaSatelital(mapaRef){
   if(!mapaRef.hasLayer(capaSatelital)) capaSatelital.addTo(mapaRef);
   const btn = document.getElementById('btnCapaOffline');
   if(btn){ btn.classList.remove('activo'); btn.title = 'Cambiar entre imagen satelital y grilla sin conexión'; }
+  ocultarBadgePlanoActivo('badgePlanoActivo');
 }
 
 document.getElementById('btnGuardarPlano').addEventListener('click', guardarPlanoOffline);
@@ -2632,6 +2749,8 @@ let navUltimoFetchRuta = 0;
 let navUltimaPosParaRuta = null;
 let navVozActiva = true;
 let navUltimoAvisoDistancia = null;
+let navAviso300Hecho = false;
+let navAviso50Hecho = false;
 
 function elegirObjetivoNavegacion(){
   // Prioridad: poligono que se esta trazando en terreno > figura previsualizada desde coordenadas > primer KML subido visible
@@ -2722,10 +2841,10 @@ function traducirManiobra(paso){
 function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   const url = 'https://router.project-osrm.org/route/v1/driving/' +
     lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
-    '?overview=full&geometries=geojson&steps=true';
+    '?overview=full&geometries=geojson&steps=true&alternatives=true';
 
   const controlador = new AbortController();
-  const timeoutId = setTimeout(function(){ controlador.abort(); }, 6000); // 6s maximo: con mala señal, mejor fallar rapido y usar respaldo
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 5000); // 5s maximo: con mala señal, mejor fallar rapido y usar respaldo
 
   return fetch(url, { signal: controlador.signal }).then(function(resp){
     clearTimeout(timeoutId);
@@ -2735,7 +2854,12 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
     if(data.code !== 'Ok' || !data.routes || data.routes.length === 0){
       throw new Error('Sin ruta trazable por camino hasta ese punto');
     }
-    const ruta = data.routes[0];
+    // De las alternativas que devuelve el servicio, elegimos la de MENOR DISTANCIA total
+    // (no la mas rapida por defecto), para priorizar el camino mas corto sobre el mejor pavimentado.
+    let ruta = data.routes[0];
+    for(let i=1; i<data.routes.length; i++){
+      if(data.routes[i].distance < ruta.distance) ruta = data.routes[i];
+    }
     const coords = ruta.geometry.coordinates.map(c => [c[1], c[0]]); // lon,lat -> lat,lon
     const pasos = [];
     ruta.legs[0].steps.forEach(function(paso){
@@ -2768,6 +2892,7 @@ function activarOfflineEnNav(mapaRef){
   }
   const btn = document.getElementById('btnCapaOfflineNav');
   if(btn) btn.classList.add('activo');
+  mostrarBadgePlanoActivo('badgePlanoActivoNav', nombresDePlanosParaVista(mapaRef));
 }
 
 function activarSatelitalEnNav(mapaRef){
@@ -2778,6 +2903,7 @@ function activarSatelitalEnNav(mapaRef){
   if(!mapaRef.hasLayer(navCapaSatNav)) navCapaSatNav.addTo(mapaRef);
   const btn = document.getElementById('btnCapaOfflineNav');
   if(btn) btn.classList.remove('activo');
+  ocultarBadgePlanoActivo('badgePlanoActivoNav');
 }
 
 function asegurarMiniMapaNav(){
@@ -2803,6 +2929,7 @@ function asegurarMiniMapaNav(){
         btn.classList.remove('activo');
         btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
       }
+      aplicarTransformMapaNav(0);
     }
   });
   return navMapaInstancia;
@@ -2828,6 +2955,7 @@ document.getElementById('btnSeguirUbicacion').addEventListener('click', function
   }else{
     btn.classList.remove('activo');
     btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
+    aplicarTransformMapaNav(0);
   }
 });
 
@@ -2865,23 +2993,28 @@ function trazarRutaEnMiniMapa(lat, lon){
   }
 
   const ahora = Date.now();
-  const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 20;
-  if((ahora - navUltimoFetchRuta > 12000 && necesitaRuta) || navUltimoFetchRuta === 0){
+  const necesitaRuta = !navUltimaPosParaRuta || distanciaMetros(lat, lon, navUltimaPosParaRuta[0], navUltimaPosParaRuta[1]) > 8;
+  if((ahora - navUltimoFetchRuta > 3000 && necesitaRuta) || navUltimoFetchRuta === 0){
     navUltimoFetchRuta = ahora;
     navUltimaPosParaRuta = [lat, lon];
     obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
       // Solo la primera vez encuadramos toda la ruta; despues seguimos centrados en la posicion actual (panTo arriba)
-      if(esPrimeraVez || navPasos.length === 0){
+      const esPrimeraRutaDeLaSesion = navPasos.length === 0;
+      if(esPrimeraVez || esPrimeraRutaDeLaSesion){
         m.fitBounds(navCapaRuta.getBounds(), { padding:[24,24] });
       }
       navPasos = res.pasos;
-      navPasoActualIdx = 0;
+      // Importante: NO reiniciamos siempre a 0 — resincronizamos al primer paso que todavia
+      // no se cruzo, para no repetir por voz la misma indicacion en cada recalculo de ruta.
+      navPasoActualIdx = resincronizarPasoActual(lat, lon);
+      navAviso300Hecho = false;
+      navAviso50Hecho = false;
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
-      if(res.pasos.length > 0) hablar(res.pasos[0].texto);
+      if(esPrimeraRutaDeLaSesion && res.pasos.length > 0) hablar(res.pasos[0].texto);
     }).catch(function(err){
       // Importante: si ya teniamos una ruta buena de un intento anterior, la manejamos distinto
       // segun si es una falla pasajera (con señal) o si realmente no hay conexion.
@@ -2907,9 +3040,13 @@ function trazarRutaEnMiniMapa(lat, lon){
   }
 }
 
-// Si la conexion se corta mientras se esta navegando, ocultamos la ruta azul vieja al instante
-// (no esperamos al proximo intento de recalculo); si vuelve la señal, se recalcula y se vuelve a mostrar.
+// Si la conexion se corta mientras se esta navegando, pasamos de inmediato al respaldo offline
+// (imagen/caminos guardados o grilla) y ocultamos la ruta azul vieja — sin esperar a que fallen
+// las teselas de a poco. Si vuelve la señal, se restaura solo la vista satelital y se recalcula la ruta.
 window.addEventListener('offline', function(){
+  if(navMapaInstancia && !navModoOfflineActivo){
+    activarOfflineEnNav(navMapaInstancia);
+  }
   if(navMapaInstancia && navCapaRuta && navMapaInstancia.hasLayer(navCapaRuta)){
     navMapaInstancia.removeLayer(navCapaRuta);
     const estadoEl = document.getElementById('navEstado');
@@ -2917,21 +3054,45 @@ window.addEventListener('offline', function(){
   }
 });
 window.addEventListener('online', function(){
+  if(navMapaInstancia && navModoOfflineActivo){
+    activarSatelitalEnNav(navMapaInstancia);
+  }
   if(navMapaInstancia && navObjetivo){
     navUltimoFetchRuta = 0; // fuerza a pedir la ruta de nuevo apenas vuelva la señal
   }
 });
 
+// Busca el primer paso de la ruta que todavia no se cruzo (en vez de reiniciar siempre a 0),
+// asi al recalcular la ruta no se repite por voz la indicacion que ya se dijo.
+function resincronizarPasoActual(lat, lon){
+  if(navPasos.length === 0) return 0;
+  for(let i=0; i<navPasos.length; i++){
+    const d = distanciaMetros(lat, lon, navPasos[i].lat, navPasos[i].lon);
+    if(d > 25) return i; // el primero que todavia no cruzamos
+  }
+  return navPasos.length - 1;
+}
+
 function revisarAvisosDeVoz(lat, lon, distTotalRecta){
-  // Si tenemos pasos de una ruta real, avisamos por maniobra
+  // Si tenemos pasos de una ruta real, avisamos por maniobra: una vez a ~300 m antes,
+  // y otra vez a ~50 m antes — no en cada recalculo ni a cada rato.
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
     const paso = navPasos[navPasoActualIdx];
     const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
-    if(distAlPaso < 40){
+
+    if(!navAviso300Hecho && distAlPaso <= 300){
+      navAviso300Hecho = true;
+      hablar('En 300 metros, ' + paso.texto.charAt(0).toLowerCase() + paso.texto.slice(1));
+    }
+    if(!navAviso50Hecho && distAlPaso <= 50){
+      navAviso50Hecho = true;
+      hablar(paso.texto);
+    }
+    if(distAlPaso < 15){
       navPasoActualIdx++;
-      if(navPasoActualIdx < navPasos.length){
-        hablar(navPasos[navPasoActualIdx].texto);
-      }else{
+      navAviso300Hecho = false;
+      navAviso50Hecho = false;
+      if(navPasoActualIdx >= navPasos.length){
         hablar('Estás llegando al destino');
       }
     }
@@ -2960,6 +3121,48 @@ function abrirNavegador(){
   iniciarNavegacionHacia(objetivo.puntos, objetivo.nombre);
 }
 
+let navUltimaPosParaHeadingMov = null;
+let navUltimaRotacionMapa = 0;
+
+// Rota la vista del mapa (solo las teselas/capas, no los botones ni el control de zoom)
+// para que "arriba" sea siempre hacia donde te estas moviendo, no el norte fijo.
+function actualizarRotacionMapaNav(pos){
+  if(!navSeguirUbicacion){
+    // Con el seguimiento apagado (mapa libre), dejamos el norte arriba para que sea facil de leer
+    aplicarTransformMapaNav(0);
+    return;
+  }
+
+  const lat = pos.coords.latitude, lon = pos.coords.longitude;
+  let heading = null;
+
+  // Preferimos el rumbo real que entrega el GPS (mas estable en auto/caminando en linea recta)
+  if(typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) &&
+     (pos.coords.speed === null || pos.coords.speed > 0.4)){
+    heading = pos.coords.heading;
+  }else if(navUltimaPosParaHeadingMov){
+    const dMov = distanciaMetros(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
+    if(dMov > 4){ // solo recalculamos si nos movimos lo suficiente, para no tener saltos por ruido del GPS
+      heading = calcularRumbo(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
+    }
+  }
+
+  if(heading !== null){
+    navUltimaRotacionMapa = heading;
+    aplicarTransformMapaNav(heading);
+  }
+  navUltimaPosParaHeadingMov = [lat, lon];
+}
+
+function aplicarTransformMapaNav(headingGrados){
+  const contenedor = document.getElementById('navMapa');
+  if(!contenedor) return;
+  const pane = contenedor.querySelector('.leaflet-map-pane');
+  if(!pane) return;
+  pane.style.transformOrigin = '50% 50%';
+  pane.style.transform = 'rotate(' + (-headingGrados) + 'deg)';
+}
+
 function iniciarNavegacionHacia(puntos, nombre){
   const overlay = document.getElementById('overlayNav');
   const elNombre = document.getElementById('navNombre');
@@ -2972,6 +3175,10 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimoFetchRuta = 0;
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
+  navAviso300Hecho = false;
+  navAviso50Hecho = false;
+  navUltimaPosParaHeadingMov = null;
+  navUltimaRotacionMapa = 0;
   navTieneRutaValida = false;
   navSeguirUbicacion = true;
   const btnSeguir = document.getElementById('btnSeguirUbicacion');
@@ -2983,6 +3190,7 @@ function iniciarNavegacionHacia(puntos, nombre){
   setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
 
   hablar('Navegando hacia ' + nombre + '.');
+  actualizarIndicadoresDeConexion();
 
   // Con conexion, guardamos un radio generoso de caminos alrededor del destino (40 km),
   // asi si mas adelante se corta la señal en el camino, ya hay cobertura para llegar.
@@ -3014,6 +3222,10 @@ function iniciarNavegacionHacia(puntos, nombre){
       rotacion = (rumbo - navUltimaHeadingDispositivo + 360) % 360;
     }
     document.getElementById('navFlecha').style.transform = 'rotate(' + rotacion + 'deg)';
+
+    // Rotar la PANTALLA del mapa segun hacia donde te estas moviendo realmente (no el norte fijo),
+    // asi "arriba" siempre es "adelante" mientras avanzas — como en Waze/Google Maps.
+    actualizarRotacionMapaNav(pos);
 
     trazarRutaEnMiniMapa(lat, lon);
     revisarAvisosDeVoz(lat, lon, dist);
@@ -3051,6 +3263,12 @@ function cerrarNavegador(){
   }
   navUltimaHeadingDispositivo = null;
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+  // Si habia una actualizacion de la app esperando para aplicarse (se difirio mientras
+  // navegabas, para no interrumpirte), la aplicamos recien ahora que es un momento seguro.
+  if(typeof actualizacionPendiente !== 'undefined' && actualizacionPendiente){
+    window.location.reload();
+  }
 }
 
 document.getElementById('btnNavegar').addEventListener('click', abrirNavegador);
@@ -3986,6 +4204,16 @@ function crearMarcadorVertice(lat, lon){
   return marcador;
 }
 
+function guardarPuntosCampoEnStorage(){
+  try{
+    if(puntosCampo.length > 0){
+      localStorage.setItem('generadorKml_puntosCampo', JSON.stringify(puntosCampo));
+    }else{
+      localStorage.removeItem('generadorKml_puntosCampo');
+    }
+  }catch(e){ /* sin espacio disponible: seguimos igual, solo no queda respaldo */ }
+}
+
 function agregarPuntoCampo(lat, lon){
   const m = obtenerMapa();
   puntosCampo.push([lat, lon]);
@@ -3998,6 +4226,7 @@ function agregarPuntoCampo(lat, lon){
   redibujarPoligonoCampo(m);
   actualizarInfoCampo();
   actualizarTextareaDesdeCampo();
+  guardarPuntosCampoEnStorage();
 
   // Apenas el trazado toma forma de poligono (3+ puntos), ya arrancamos la descarga de caminos
   // alrededor — no hace falta esperar a terminar de trazar ni a exportar.
@@ -4043,6 +4272,7 @@ document.getElementById('btnCampoDeshacer').addEventListener('click', function()
   redibujarPoligonoCampo(m);
   actualizarInfoCampo();
   actualizarTextareaDesdeCampo();
+  guardarPuntosCampoEnStorage();
 
   if(puntosCampo.length === 0){
     document.getElementById('btnCampoReset').style.display = 'none';
@@ -4136,7 +4366,28 @@ document.getElementById('btnCampoReset').addEventListener('click', function(){
   document.getElementById('coords').value = '';
   document.getElementById('btnCampoReset').style.display = 'none';
   document.getElementById('btnCampoDeshacer').style.display = 'none';
+  guardarPuntosCampoEnStorage();
 });
+
+// Al abrir la pagina, restauramos el trazado de modo campo si habia uno sin exportar
+// (por ejemplo, si la app se recargo sola por quedarse sin señal en terreno) — asi nunca
+// se pierden los puntos marcados a mano y la navegacion entre ellos sigue disponible.
+function restaurarPuntosCampoDesdeStorage(){
+  try{
+    const crudo = localStorage.getItem('generadorKml_puntosCampo');
+    if(!crudo) return;
+    const puntos = JSON.parse(crudo);
+    if(Array.isArray(puntos) && puntos.length > 0){
+      cargarPuntosEnModoCampo(puntos);
+      const statusEl = document.getElementById('status');
+      if(statusEl){
+        statusEl.className = 'status ok';
+        statusEl.textContent = 'Se recuperó un trazado de terreno que había quedado sin exportar (' + puntos.length + ' puntos).';
+      }
+    }
+  }catch(e){ /* nada que recuperar */ }
+}
+restaurarPuntosCampoDesdeStorage();
 
 // Al abrir la pagina, intentamos recuperar poligonos KML cargados en una sesion anterior
 cargarPoligonosDesdeStorage();
@@ -4144,6 +4395,74 @@ cargarPoligonosDesdeStorage();
 // Mostramos el mapa de entrada, sin esperar a que se ingresen coordenadas —
 // asi se puede tocar el lapiz y marcar un punto/linea/poligono de inmediato.
 obtenerMapa();
+
+// ---------- Indicadores visuales automaticos de "sin conexion" en los iconos que la necesitan ----------
+// Marca con una linea diagonal los botones cuya funcion requiere internet en el momento
+// (guardar plano trae imagen nueva; navegar calcula ruta nueva por camino), para que se note
+// de un vistazo que van a funcionar en modo reducido mientras no haya señal.
+let ultimoEstadoConexionConocido = null; // null = todavia no lo revisamos ninguna vez
+
+function actualizarIndicadoresDeConexion(){
+  const conectado = navigator.onLine !== false;
+  const idsQueNecesitanInternet = ['btnGuardarPlano', 'btnNavegar', 'btnCapaOfflineNav'];
+  idsQueNecesitanInternet.forEach(function(id){
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    // El boton de capa offline (dentro del navegador) es el propio interruptor manual,
+    // asi que no lo tachamos a el mismo — solo guardar plano y navegar reciben la marca.
+    if(id === 'btnCapaOfflineNav') return;
+    if(conectado){
+      btn.classList.remove('sin-conexion');
+    }else{
+      btn.classList.add('sin-conexion');
+    }
+  });
+
+  if(!conectado){
+    const btnG = document.getElementById('btnGuardarPlano');
+    if(btnG) btnG.title = 'Sin conexión: no se puede guardar una imagen nueva ahora mismo';
+    const btnN = document.getElementById('btnNavegar');
+    if(btnN) btnN.title = 'Sin conexión: el navegador va a arrancar en modo brújula/línea recta (sin ruta por camino nueva)';
+  }else{
+    const btnG = document.getElementById('btnGuardarPlano');
+    if(btnG) btnG.title = 'Guardar esta vista como plano fijo (para navegar sin conexión)';
+    const btnN = document.getElementById('btnNavegar');
+    if(btnN) btnN.title = 'Navegar hasta el polígono';
+  }
+
+  // Banner global, visible en toda la app, sin que el usuario tenga que tocar nada:
+  // aparece en rojo apenas se pierde la señal, y en verde un momento cuando se recupera.
+  const banner = document.getElementById('bannerConexion');
+  if(banner && ultimoEstadoConexionConocido !== conectado){
+    banner.classList.remove('reconectado');
+    if(!conectado){
+      banner.textContent = '📴 Sin conexión — usando respaldo offline (imagen/caminos guardados)';
+      banner.className = 'banner-conexion sin-señal';
+    }else if(ultimoEstadoConexionConocido === false){
+      // Solo mostramos el aviso de "reconectado" si antes SI estabamos marcados como sin señal
+      banner.textContent = '✅ Conexión recuperada — actualizando al estado actual';
+      banner.className = 'banner-conexion reconectado';
+    }else{
+      banner.className = 'banner-conexion';
+    }
+    ultimoEstadoConexionConocido = conectado;
+  }
+}
+
+// Se actualiza al toque: apenas se conecta o se desconecta la señal...
+window.addEventListener('online', actualizarIndicadoresDeConexion);
+window.addEventListener('offline', actualizarIndicadoresDeConexion);
+// ...y ademas revisamos cada 15 segundos como respaldo, porque estos eventos del navegador
+// a veces no se disparan de forma confiable en todos los celulares.
+setInterval(actualizarIndicadoresDeConexion, 15000);
+actualizarIndicadoresDeConexion();
+
+// Cuando termina la animacion de "reconectado", ocultamos el banner del todo (no solo opacidad 0)
+document.getElementById('bannerConexion').addEventListener('animationend', function(){
+  if(this.classList.contains('reconectado')){
+    this.className = 'banner-conexion';
+  }
+});
 
 // Si la app se abrio porque el usuario "compartio" un .kml/.kmz desde otra app
 // (ej: explorador de archivos o Gmail), el service worker lo dejo guardado en
@@ -4204,6 +4523,20 @@ revisarArchivoCompartido();
 // Registro del Service Worker (solo funciona sobre HTTPS o localhost, no sobre file://)
 // Con auto-actualizacion: si aparece una version nueva, se recarga sola para aplicarla,
 // sin que el usuario tenga que borrar datos de navegacion nunca mas.
+// Importante: si en ese momento estas usando el navegador con voz (en terreno), NO recargamos
+// de golpe (cortaria el GPS/voz a mitad de camino) — se difiere hasta que cierres el navegador.
+let actualizacionPendiente = false;
+
+function intentarRecargarSiEsSeguro(){
+  const overlayNavEl = document.getElementById('overlayNav');
+  const navegandoActivo = overlayNavEl && overlayNavEl.classList.contains('activo');
+  if(navegandoActivo){
+    actualizacionPendiente = true;
+    return;
+  }
+  window.location.reload();
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).then(function(registro){
@@ -4218,7 +4551,7 @@ if('serviceWorker' in navigator){
         nuevoWorker.addEventListener('statechange', function(){
           // "installed" + ya habia un controlador previo = es una actualizacion real (no la primera instalacion)
           if(nuevoWorker.state === 'installed' && navigator.serviceWorker.controller){
-            window.location.reload();
+            intentarRecargarSiEsSeguro();
           }
         });
       });
@@ -4227,10 +4560,17 @@ if('serviceWorker' in navigator){
     });
 
     // Si el nuevo Service Worker toma el control mientras la pagina esta abierta, recargamos
-    // (evita quedarse con una pestaña usando JS viejo mientras el SW ya cambio).
+    // (evita quedarse con una pestaña usando JS viejo mientras el SW ya cambio) — salvo que
+    // estes navegando activamente, en cuyo caso se difiere.
     let yaRecargoPorControllerChange = false;
     navigator.serviceWorker.addEventListener('controllerchange', function(){
       if(yaRecargoPorControllerChange) return;
+      const overlayNavEl = document.getElementById('overlayNav');
+      const navegandoActivo = overlayNavEl && overlayNavEl.classList.contains('activo');
+      if(navegandoActivo){
+        actualizacionPendiente = true;
+        return;
+      }
       yaRecargoPorControllerChange = true;
       window.location.reload();
     });
