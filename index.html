@@ -3187,6 +3187,11 @@ function trazarRutaEnMiniMapa(lat, lon){
     navMarcadorDestino = L.circleMarker([navObjetivo[0], navObjetivo[1]], {
       radius:9, color:'#8a6d00', fillColor:'#ffc700', fillOpacity:1, weight:3
     }).addTo(m);
+  }else{
+    // Importante: si ya existia de una navegacion anterior, lo movemos al destino actual
+    // (antes se quedaba pegado en el destino viejo si navegabas a otro lugar despues).
+    navMarcadorDestino.setLatLng([navObjetivo[0], navObjetivo[1]]);
+    if(!m.hasLayer(navMarcadorDestino)) navMarcadorDestino.addTo(m);
   }
 
   // "Modo seguimiento": el mapa se centra en la posicion actual cada vez que llega un GPS nuevo,
