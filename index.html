@@ -1047,6 +1047,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
     justify-content:space-between;
     align-items:center;
   }
+  .buscar-ciudad-wrap{
+    background:#fffdf0;
+    border:2px solid #ffc700;
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:14px;
+  }
+  .buscar-ciudad-wrap label{
+    font-family:var(--sans);
+    font-weight:800;
+    font-size:13px;
+    color:var(--text);
+    margin:0 0 8px 0;
+  }
+  .buscar-ciudad-wrap input[type="text"]{
+    padding:10px 12px;
+    border-radius:8px;
+    border:1.5px solid #ddd;
+    font-family:var(--sans);
+    font-size:14px;
+  }
   #map{
     width:100%;
     height:560px;
@@ -1904,6 +1925,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <span>Previsualización — imagen satelital (Esri World Imagery)</span>
       <span id="mapInfo" style="font-size:16px; font-weight:800; color:var(--accent-text);"></span>
     </div>
+
+    <div class="buscar-ciudad-wrap">
+      <label for="buscarCiudadInput" style="margin-bottom:6px;">🏙️ Navegar directo a una ciudad</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="buscarCiudadInput" placeholder="Ej: Temuco, Lautaro, Perquenco, Santiago..." style="flex:1;">
+        <button type="button" id="btnBuscarCiudad" class="secundario" style="width:auto; padding:0 18px;">Buscar</button>
+      </div>
+      <div id="resultadosCiudad" style="display:none; margin-top:8px;"></div>
+    </div>
+
     <div class="map-wrap">
       <div id="map"></div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
@@ -2809,6 +2840,31 @@ function obtenerMapa(){
   return mapa;
 }
 
+function agregarClicParaNavegar(capa, latlngs){
+  capa.on('click', function(e){
+    if(modoMedicionActivo) return; // mientras se traza, el clic sigue sirviendo para eso
+    const m = obtenerMapa();
+    m.closePopup();
+    const nombre = (document.getElementById('nombre').value.trim()) || 'este predio';
+    const idBtn = 'btnNavPreview_' + Date.now();
+    L.popup({ maxWidth: 240 })
+      .setLatLng(e.latlng)
+      .setContent(
+        '<div style="font-family:var(--sans, sans-serif);">' +
+          '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
+          '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+        '</div>'
+      ).openOn(m);
+    setTimeout(function(){
+      const btn = document.getElementById(idBtn);
+      if(btn) btn.addEventListener('click', function(){
+        m.closePopup();
+        iniciarNavegacionHacia(latlngs, nombre);
+      });
+    }, 50);
+  });
+}
+
 function mostrarMapa(puntos){
   const m = obtenerMapa();
   const latlngs = puntos.map(p => [p[0], p[1]]);
@@ -2834,6 +2890,7 @@ function mostrarMapa(puntos){
     document.getElementById('mapInfo').textContent =
       '1 punto · ' + latlngs[0][0].toFixed(6) + ', ' + latlngs[0][1].toFixed(6) +
       ' · UTM ' + Math.round(utm.este) + 'E ' + Math.round(utm.norte) + 'N (Huso ' + utm.huso + utm.hemisferio + ')';
+    agregarClicParaNavegar(capaPoligono, latlngs);
 
   }else if(tipo === 'linea'){
     capaPoligono = L.polyline(latlngs, {
@@ -2847,6 +2904,7 @@ function mostrarMapa(puntos){
     const largoM = longitudTotalLinea(latlngs);
     const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
     document.getElementById('mapInfo').textContent = puntos.length + ' puntos · línea de ~' + largoTxt;
+    agregarClicParaNavegar(capaPoligono, latlngs);
 
   }else{
     capaPoligono = L.polygon(latlngs, {
@@ -2861,6 +2919,7 @@ function mostrarMapa(puntos){
 
     const area = calcularAreaHa(latlngs);
     document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ~' + area.toFixed(2) + ' ha';
+    agregarClicParaNavegar(capaPoligono, latlngs);
   }
 
   // Con conexion, aprovechamos para guardar los caminos de acceso alrededor de este punto/predio (25 km de radio)
@@ -4504,6 +4563,64 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 // Apenas se encuentra la posicion, avisa por voz. Intenta averiguar un nombre de lugar cercano
 // (sector/localidad) usando un servicio externo; si no hay conexion o tarda demasiado, avisa
 // igual sin el nombre del lugar en vez de quedarse callado.
+// ---------- Buscar y navegar directo a una ciudad (sin necesitar coordenadas) ----------
+function buscarCiudad(){
+  const input = document.getElementById('buscarCiudadInput');
+  const q = input.value.trim();
+  const cont = document.getElementById('resultadosCiudad');
+  if(!q){ cont.style.display = 'none'; cont.innerHTML = ''; return; }
+
+  cont.style.display = 'block';
+  cont.innerHTML = '<p class="hint">Buscando...</p>';
+
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 7000);
+
+  fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&countrycodes=cl&format=json&limit=6&addressdetails=1', { signal: controlador.signal })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      clearTimeout(timeoutId);
+      if(!data || data.length === 0){
+        cont.innerHTML = '<p class="hint">No se encontró ninguna ciudad o localidad con ese nombre en Chile.</p>';
+        return;
+      }
+      cont.innerHTML = '';
+      data.forEach(function(res){
+        const nombreCorto = res.display_name.split(',').slice(0, 3).join(',').trim();
+        const fila = document.createElement('div');
+        fila.className = 'item-kml';
+
+        const nombreSpan = document.createElement('span');
+        nombreSpan.className = 'nombre-kml';
+        nombreSpan.textContent = nombreCorto;
+        nombreSpan.title = res.display_name;
+
+        const btnIr = document.createElement('button');
+        btnIr.type = 'button';
+        btnIr.className = 'btn-ir';
+        btnIr.textContent = 'Navegar';
+        btnIr.addEventListener('click', function(){
+          const lat = parseFloat(res.lat), lon = parseFloat(res.lon);
+          cont.style.display = 'none';
+          cont.innerHTML = '';
+          input.value = '';
+          iniciarNavegacionHacia([[lat, lon]], nombreCorto);
+        });
+
+        fila.appendChild(nombreSpan);
+        fila.appendChild(btnIr);
+        cont.appendChild(fila);
+      });
+    }).catch(function(){
+      clearTimeout(timeoutId);
+      cont.innerHTML = '<p class="hint">No se pudo buscar la ciudad (revisá tu conexión) — intentá de nuevo.</p>';
+    });
+}
+document.getElementById('btnBuscarCiudad').addEventListener('click', buscarCiudad);
+document.getElementById('buscarCiudadInput').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad(); }
+});
+
 function anunciarUbicacionEncontrada(lat, lon){
   hablar('Ubicación encontrada.');
   if(navigator.onLine === false){
