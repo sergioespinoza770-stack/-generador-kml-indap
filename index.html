@@ -731,6 +731,55 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .field{
     margin-bottom:18px;
   }
+  .boton-modo-simple{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:#ffffff;
+    border:2.5px solid #ffc700;
+    border-radius:14px;
+    padding:16px 18px;
+    margin-bottom:20px;
+    cursor:pointer;
+    text-align:left;
+    box-shadow:0 3px 14px rgba(0,0,0,0.06);
+    transition:transform 0.12s;
+  }
+  .boton-modo-simple:hover{
+    transform:translateY(-1px);
+  }
+  .boton-modo-icono{
+    font-size:28px;
+    flex-shrink:0;
+  }
+  .boton-modo-texto{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .boton-modo-titulo{
+    font-family:var(--sans);
+    font-weight:800;
+    font-size:16px;
+    color:var(--text);
+  }
+  .boton-modo-sub{
+    font-family:var(--sans);
+    font-weight:500;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .boton-modo-flecha{
+    font-size:14px;
+    color:var(--accent-dark);
+    flex-shrink:0;
+    transition:transform 0.15s;
+  }
+  .boton-modo-flecha.abierta{
+    transform:rotate(180deg);
+  }
   label{
     display:block;
     font-family:var(--sans);
@@ -1027,25 +1076,38 @@ svg.leaflet-image-layer.leaflet-interactive path {
     z-index:500;
     display:flex;
     flex-direction:column;
-    gap:10px;
+    gap:8px;
   }
   .btn-icono{
-    width:50px;
-    height:50px;
-    border-radius:50%;
-    background:rgba(255,255,255,0.95);
+    width:74px;
+    height:62px;
+    border-radius:14px;
+    background:rgba(255,255,255,0.97);
     border:2px solid #ffc700;
-    font-size:22px;
     display:flex;
+    flex-direction:column;
     align-items:center;
     justify-content:center;
+    gap:2px;
     cursor:pointer;
     box-shadow:0 3px 12px rgba(0,0,0,0.18);
     transition:transform 0.12s, background 0.12s;
-    padding:0;
+    padding:4px 2px;
+  }
+  .btn-icono .emoji-boton{
+    font-size:21px;
+    line-height:1;
+  }
+  .btn-icono .texto-boton{
+    font-family:var(--sans);
+    font-size:9.5px;
+    font-weight:700;
+    line-height:1.05;
+    color:var(--text);
+    text-align:center;
   }
   .btn-icono:hover{
-    transform:scale(1.06);
+    transform:scale(1.05);
   }
   .btn-icono:active{
     transform:scale(0.94);
@@ -1133,6 +1195,41 @@ svg.leaflet-image-layer.leaflet-interactive path {
     letter-spacing:0.06em;
     opacity:0.9;
     margin-bottom:2px;
+  }
+  .indicador-señal{
+    position:absolute;
+    bottom:12px;
+    left:12px;
+    z-index:600;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    background:rgba(255,255,255,0.96);
+    border:2px solid #e0e0e0;
+    border-radius:20px;
+    padding:6px 13px 6px 9px;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:12px;
+    color:#1a1a1a;
+    box-shadow:0 3px 10px rgba(0,0,0,0.15);
+  }
+  .indicador-señal-nav{
+    position:static;
+    margin:8px auto 0;
+    width:fit-content;
+  }
+  .punto-señal{
+    width:11px;
+    height:11px;
+    border-radius:50%;
+    background:#2e9d5c;
+    box-shadow:0 0 0 3px rgba(46,157,92,0.28);
+    flex-shrink:0;
+  }
+  .punto-señal.sin-conexion{
+    background:#c0221a;
+    box-shadow:0 0 0 3px rgba(192,34,26,0.28);
   }
   .banner-conexion{
     display:none;
@@ -1681,6 +1778,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="nav-distancia" id="navDistancia">— m</div>
     <div class="nav-nombre" id="navNombre">Buscando ubicación...</div>
   </div>
+  <div class="indicador-señal indicador-señal-nav" id="indicadorSeñalNav"><span class="punto-señal" id="puntoSeñalNav"></span><span id="textoSeñalNav">En línea</span></div>
   <div class="nav-estado" id="navEstado"></div>
 </div>
 
@@ -1717,6 +1815,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <p class="eyebrow">INDAP · Lautaro</p>
   <h1>NavActiva</h1>
   <p class="sub">Navegación activa hacia tus predios, con o sin señal — generá el KML pegando coordenadas (geográficas, UTM o del SIRSD-S), ponele el nombre del agricultor, previsualizá sobre imagen satelital y navegá hasta el lugar.</p>
+
+  <button type="button" id="btnAbrirOficina" class="boton-modo-simple">
+    <span class="boton-modo-icono">✏️</span>
+    <span class="boton-modo-texto">
+      <span class="boton-modo-titulo">Escribir o subir coordenadas</span>
+      <span class="boton-modo-sub">Para armar un KML nuevo desde la oficina</span>
+    </span>
+    <span class="boton-modo-flecha" id="flechaOficina">▼</span>
+  </button>
+
+  <div id="bloqueOficina" style="display:none;">
 
   <div class="field">
     <label for="nombre">Nombre archivo de salida</label>
@@ -1785,6 +1894,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
   <div class="status" id="status"></div>
 
+  </div><!-- /#bloqueOficina -->
+
   <div id="mapPanel">
     <div class="banner-trazar">
       ✏️ ¿Vas a trazar un polígono nuevo? Tocá el lápiz en el mapa y marcá cada vértice caminando el potrero o mirando la imagen satelital.
@@ -1797,16 +1908,32 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div id="map"></div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
-        <button type="button" class="btn-icono" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">📍</button>
-        <button type="button" class="btn-icono" id="btnModoCampo" title="Medir tocando el mapa" aria-label="Medir tocando el mapa">✏️</button>
-        <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">↩️</button>
-        <button type="button" class="btn-icono peligro" id="btnCampoReset" style="display:none;" title="Borrar puntos" aria-label="Borrar puntos">🗑️</button>
-        <button type="button" class="btn-icono exportar" id="btnExportarCampo" style="display:none;" title="Exportar este polígono como KML" aria-label="Exportar KML">⬇️</button>
-        <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">🧭</button>
-        <button type="button" class="btn-icono camara" id="btnCamara" title="Cámara georreferenciada" aria-label="Cámara georreferenciada">📷</button>
-        <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">🛰️</button>
-        <button type="button" class="btn-icono guardarplano" id="btnGuardarPlano" title="Guardar esta vista como plano fijo (para navegar sin conexión)" aria-label="Guardar plano offline">💾</button>
+        <button type="button" class="btn-icono" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">
+          <span class="emoji-boton">📍</span><span class="texto-boton">Mi<br>ubicación</span>
+        </button>
+        <button type="button" class="btn-icono" id="btnModoCampo" title="Medir tocando el mapa" aria-label="Medir tocando el mapa">
+          <span class="emoji-boton">✏️</span><span class="texto-boton">Marcar<br>aquí</span>
+        </button>
+        <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">
+          <span class="emoji-boton">↩️</span><span class="texto-boton">Deshacer</span>
+        </button>
+        <button type="button" class="btn-icono peligro" id="btnCampoReset" style="display:none;" title="Borrar puntos" aria-label="Borrar puntos">
+          <span class="emoji-boton">🗑️</span><span class="texto-boton">Borrar</span>
+        </button>
+        <button type="button" class="btn-icono exportar" id="btnExportarCampo" style="display:none;" title="Exportar este polígono como KML" aria-label="Exportar KML">
+          <span class="emoji-boton">⬇️</span><span class="texto-boton">Descargar</span>
+        </button>
+        <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">
+          <span class="emoji-boton">🧭</span><span class="texto-boton">Llevarme<br>ahí</span>
+        </button>
+        <button type="button" class="btn-icono camara" id="btnCamara" title="Cámara georreferenciada" aria-label="Cámara georreferenciada">
+          <span class="emoji-boton">📷</span><span class="texto-boton">Sacar<br>foto</span>
+        </button>
+        <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
+          <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
+        </button>
       </div>
+      <div class="indicador-señal" id="indicadorSeñal"><span class="punto-señal" id="puntoSeñal"></span><span id="textoSeñal">En línea</span></div>
       <div id="campoAreaBadge" class="area-flotante" style="display:none;"></div>
     </div>
     <p class="hint" id="campoInfo" style="margin-top:8px;"></p>
@@ -1814,10 +1941,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="planos-offline">
       <div class="planos-offline-header">
-        <strong>💾 Planos guardados para navegar sin conexión</strong>
+        <strong>💾 Zonas guardadas para navegar sin conexión</strong>
         <span id="planosOfflineEstado" class="hint" style="margin:0;"></span>
       </div>
-      <p class="hint">Mientras tengas señal, encuadrá el mapa en la zona que te interesa y tocá 💾. Queda guardada la imagen real de esa zona en este celular — cuando te falte señal en terreno, se usa esa imagen fija en vez de la grilla genérica. Además, los caminos de cualquier zona que mires con conexión se van guardando solos, sin tocar nada.</p>
+      <p class="hint">Esto es totalmente automático — no hace falta guardar nada a mano. Mientras tengas señal, la app va guardando sola la imagen y los caminos alrededor de cada punto que subís, generás o hacia el que navegás, y también alrededor de tu propia posición mientras te movés. Cuando cambiás de zona (te alejás lo suficiente), lo viejo se borra solo, así esta lista nunca queda llena de lugares antiguos.</p>
       <div id="listaPlanosOffline" class="lista-kml"></div>
     </div>
   </div>
@@ -2130,6 +2257,11 @@ function guardarMetaPlanosOffline(){
 }
 
 function lon2tileX(lon, z){ return Math.floor((lon+180)/360 * Math.pow(2,z)); }
+function tileX2lon(x, z){ return x / Math.pow(2,z) * 360 - 180; }
+function tileY2lat(y, z){
+  const n = Math.PI - 2 * Math.PI * y / Math.pow(2,z);
+  return 180/Math.PI * Math.atan(0.5*(Math.exp(n)-Math.exp(-n)));
+}
 function lat2tileY(lat, z){
   const r = lat*Math.PI/180;
   return Math.floor((1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * Math.pow(2,z));
@@ -2186,9 +2318,87 @@ function obtenerCallesOverpass(bounds){
 
 function guardarPlanoOffline(){
   const m = obtenerMapa();
-  const estado = document.getElementById('planosOfflineEstado');
   const bounds = m.getBounds();
   const zoom = Math.min(18, Math.round(m.getZoom()));
+  ejecutarGuardadoDePlano(bounds, zoom, null, { silencioso:false });
+}
+
+// Guarda automaticamente, en segundo plano y sin pedir nada al usuario, una imagen fija
+// alrededor del punto/poligono hacia el que se empieza a navegar — el mismo mecanismo que
+// el boton manual "Guardar plano", pero disparado solo, con nombre automatico y sin molestar
+// si algo falla (con mala señal, por ejemplo, simplemente no se guarda nada, sin mostrar error).
+// Borra los planos guardados automaticamente que quedaron lejos del punto donde se esta
+// trabajando ahora — asi la lista no se llena de zonas viejas de otras salidas a terreno.
+// Los planos guardados manualmente (si hubiera alguno de una version anterior) no se tocan.
+function limpiarPlanosAutomaticosLejanos(lat, lon, radioKm){
+  if(!planosOfflineMeta || planosOfflineMeta.length === 0) return;
+  const restantes = [];
+  const idsABorrar = [];
+  planosOfflineMeta.forEach(function(meta){
+    const centroLat = (meta.bounds.north + meta.bounds.south) / 2;
+    const centroLon = (meta.bounds.east + meta.bounds.west) / 2;
+    const distKm = distanciaMetros(lat, lon, centroLat, centroLon) / 1000;
+    if(meta.automatico && distKm > radioKm){
+      idsABorrar.push(meta.id);
+    }else{
+      restantes.push(meta);
+    }
+  });
+  if(idsABorrar.length === 0) return;
+  planosOfflineMeta = restantes;
+  guardarMetaPlanosOffline();
+  renderizarListaPlanosOffline();
+  if('caches' in window){
+    caches.open('generador-kml-planos').then(function(cache){
+      idsABorrar.forEach(function(id){ cache.delete('./' + id); });
+    });
+  }
+}
+
+let ultimaZonaAutoGuardada = null; // {lat, lon} — para no repetir el guardado cada movimiento minimo
+
+// Punto central de todo el respaldo automatico: se llama cada vez que aparece un punto/poligono
+// nuevo (subido, generado, trazado) o cuando se mueve la posicion del usuario. Ajusta la zona
+// guardada (imagen + caminos) a lo que hace falta en cada momento, y borra lo que quedo lejos.
+function actualizarZonaAutomatica(lat, lon, etiqueta, radioCallesKm){
+  radioCallesKm = radioCallesKm || 25;
+  if(ultimaZonaAutoGuardada){
+    const distDesdeUltima = distanciaMetros(lat, lon, ultimaZonaAutoGuardada.lat, ultimaZonaAutoGuardada.lon) / 1000;
+    if(distDesdeUltima < 3) return; // todavia estamos en la misma zona, no hace falta repetir
+  }
+  ultimaZonaAutoGuardada = { lat: lat, lon: lon };
+
+  limpiarPlanosAutomaticosLejanos(lat, lon, 15);
+  cachearCallesAlrededorDePunto(lat, lon, radioCallesKm, etiqueta);
+  guardarPlanoAutomaticoAlrededorDePunto(lat, lon, etiqueta);
+}
+
+function guardarPlanoAutomaticoAlrededorDePunto(lat, lon, nombreDestino){
+  if(navigator.onLine === false) return; // sin conexion no hay nada que descargar, ni lo intentamos
+
+  const zoom = 16;
+  const cx = lon2tileX(lon, zoom);
+  const cy = lat2tileY(lat, zoom);
+  const radioTeselas = 2; // grilla de 5x5 teselas (~2-3 km de lado), bien por debajo del limite de 100
+  const minX = cx - radioTeselas, maxX = cx + radioTeselas;
+  const minY = cy - radioTeselas, maxY = cy + radioTeselas;
+
+  const bounds = {
+    getNorth: () => tileY2lat(minY, zoom),
+    getSouth: () => tileY2lat(maxY+1, zoom),
+    getWest:  () => tileX2lon(minX, zoom),
+    getEast:  () => tileX2lon(maxX+1, zoom),
+  };
+  const nombre = 'Hacia ' + nombreDestino + ' (automático, ' + new Date().toLocaleDateString('es-CL') + ')';
+  ejecutarGuardadoDePlano(bounds, zoom, nombre, { silencioso:true });
+}
+
+function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
+  opciones = opciones || {};
+  const estado = document.getElementById('planosOfflineEstado');
+  const reportar = function(texto){
+    if(!opciones.silencioso && estado) estado.textContent = texto;
+  };
 
   const minX = lon2tileX(bounds.getWest(), zoom);
   const maxX = lon2tileX(bounds.getEast(), zoom);
@@ -2199,11 +2409,11 @@ function guardarPlanoOffline(){
   const totalTiles = tilesX * tilesY;
 
   if(totalTiles > 100){
-    estado.textContent = 'La zona visible es muy grande para guardar (' + totalTiles + ' teselas, máximo 100). Acercá el zoom sobre el predio y probá de nuevo.';
+    reportar('La zona visible es muy grande para guardar (' + totalTiles + ' teselas, máximo 100). Acercá el zoom sobre el predio y probá de nuevo.');
     return;
   }
 
-  estado.textContent = 'Descargando ' + totalTiles + ' teselas y el trazado de caminos de esta zona...';
+  reportar('Descargando ' + totalTiles + ' teselas y el trazado de caminos de esta zona...');
 
   const canvas = document.createElement('canvas');
   canvas.width = tilesX * 256;
@@ -2229,7 +2439,7 @@ function guardarPlanoOffline(){
   Promise.all(promesas).then(function(resultados){
     const okCount = resultados.filter(Boolean).length;
     if(okCount === 0){
-      estado.textContent = 'No se pudo descargar ninguna tesela (revisá tu conexión).';
+      reportar('No se pudo descargar ninguna tesela (revisá tu conexión).');
       return;
     }
 
@@ -2237,14 +2447,14 @@ function guardarPlanoOffline(){
       try{
         canvas.toBlob(function(blobResultante){
           if(!blobResultante){
-            estado.textContent = 'No se pudo generar la imagen del plano.';
+            reportar('No se pudo generar la imagen del plano.');
             return;
           }
           const id = 'plano_' + Date.now();
-          const nombre = prompt('Nombre para este plano guardado:', 'Zona ' + new Date().toLocaleDateString('es-CL')) || ('Plano ' + new Date().toLocaleDateString('es-CL'));
+          const nombre = nombreForzado || (prompt('Nombre para este plano guardado:', 'Zona ' + new Date().toLocaleDateString('es-CL')) || ('Plano ' + new Date().toLocaleDateString('es-CL')));
 
           if(!('caches' in window)){
-            estado.textContent = 'Este navegador no soporta guardar planos offline (falta Cache Storage).';
+            reportar('Este navegador no soporta guardar planos offline (falta Cache Storage).');
             return;
           }
           caches.open('generador-kml-planos').then(function(cache){
@@ -2255,18 +2465,19 @@ function guardarPlanoOffline(){
               nombre: nombre,
               bounds: { north: bounds.getNorth(), south: bounds.getSouth(), east: bounds.getEast(), west: bounds.getWest() },
               fecha: new Date().toLocaleString('es-CL'),
-              calles: calles
+              calles: calles,
+              automatico: !!(opciones && opciones.silencioso)
             });
             guardarMetaPlanosOffline();
             renderizarListaPlanosOffline();
             const avisoCalles = calles.length > 0 ? (' + ' + calles.length + ' tramos de camino.') : ' (sin caminos mapeados en OpenStreetMap para esta zona).';
-            estado.textContent = 'Plano "' + nombre + '" guardado (' + okCount + '/' + totalTiles + ' teselas)' + avisoCalles + ' Se va a usar solo cuando estés sin conexión en esta zona, o tocando "Usar ahora".';
+            reportar('Plano "' + nombre + '" guardado (' + okCount + '/' + totalTiles + ' teselas)' + avisoCalles + ' Se va a usar solo cuando estés sin conexión en esta zona, o tocando "Usar ahora".');
           }).catch(function(err){
-            estado.textContent = 'No se pudo guardar el plano: ' + err.message;
+            reportar('No se pudo guardar el plano: ' + err.message);
           });
         }, 'image/jpeg', 0.78);
       }catch(err){
-        estado.textContent = 'No se pudo generar la imagen (el proveedor de mapas pudo haber bloqueado la exportación): ' + err.message;
+        reportar('No se pudo generar la imagen (el proveedor de mapas pudo haber bloqueado la exportación): ' + err.message);
       }
     });
   });
@@ -2466,7 +2677,6 @@ function activarCapaSatelital(mapaRef){
   ocultarBadgePlanoActivo('badgePlanoActivo');
 }
 
-document.getElementById('btnGuardarPlano').addEventListener('click', guardarPlanoOffline);
 cargarMetaPlanosOffline();
 renderizarListaPlanosOffline();
 
@@ -2655,7 +2865,7 @@ function mostrarMapa(puntos){
 
   // Con conexion, aprovechamos para guardar los caminos de acceso alrededor de este punto/predio (25 km de radio)
   const centro = tipo === 'punto' ? latlngs[0] : centroide(latlngs);
-  cachearCallesAlrededorDePunto(centro[0], centro[1], 25, 'este predio');
+  actualizarZonaAutomatica(centro[0], centro[1], 'este predio');
 }
 
 // Area aproximada (formula del area esferica, suficiente para previsualizacion)
@@ -3194,7 +3404,7 @@ function iniciarNavegacionHacia(puntos, nombre){
 
   // Con conexion, guardamos un radio generoso de caminos alrededor del destino (40 km),
   // asi si mas adelante se corta la señal en el camino, ya hay cobertura para llegar.
-  cachearCallesAlrededorDePunto(navObjetivo[0], navObjetivo[1], 40, nombre);
+  actualizarZonaAutomatica(navObjetivo[0], navObjetivo[1], nombre, 40);
 
   // Pedir permiso de orientacion en iOS (tiene que dispararse en un gesto del usuario, como este click)
   if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
@@ -3483,6 +3693,17 @@ function renderizarGaleriaFotos(){
 }
 
 document.getElementById('btnCamara').addEventListener('click', abrirCamara);
+
+document.getElementById('btnAbrirOficina').addEventListener('click', function(){
+  const bloque = document.getElementById('bloqueOficina');
+  const flecha = document.getElementById('flechaOficina');
+  const abierto = bloque.style.display !== 'none';
+  bloque.style.display = abierto ? 'none' : 'block';
+  flecha.classList.toggle('abierta', !abierto);
+  if(!abierto){
+    setTimeout(function(){ bloque.scrollIntoView({ behavior:'smooth', block:'start' }); }, 80);
+  }
+});
 
 document.getElementById('btnCapaOffline').addEventListener('click', function(){
   const m = obtenerMapa();
@@ -3838,7 +4059,7 @@ function agregarPoligonoSubido(nombre, puntos, tipo){
 
   // Apenas tenemos los puntos, arrancamos ya mismo la descarga de caminos alrededor (no esperamos a nada mas)
   const centro = item.tipo === 'punto' ? puntos[0] : centroide(puntos);
-  cachearCallesAlrededorDePunto(centro[0], centro[1], 25, nombre);
+  actualizarZonaAutomatica(centro[0], centro[1], nombre);
 
   return item;
 }
@@ -4115,6 +4336,8 @@ window.addEventListener('drop', function(e){
   // Nos aseguramos de estar en la pestaña "Subir KML" para que se vea la lista
   document.querySelector('input[name=tipoCoord][value=kml]').checked = true;
   actualizarModo();
+  document.getElementById('bloqueOficina').style.display = 'block';
+  document.getElementById('flechaOficina').classList.add('abierta');
 
   procesarArchivosKml(archivos, null);
 });
@@ -4152,6 +4375,7 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
       marcadorUbicacion.setLatLng([lat, lon]);
     }
     document.getElementById('campoInfo').textContent = 'Tu ubicacion: ' + lat.toFixed(6) + ', ' + lon.toFixed(6) + ' (precision ~' + precision + ' m)';
+    actualizarZonaAutomatica(lat, lon, 'tu ubicación');
   }, function(err){
     document.getElementById('campoInfo').textContent = 'No se pudo obtener la ubicacion: ' + err.message + '. Revisa que el navegador tenga permiso de GPS.';
   }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
@@ -4232,7 +4456,7 @@ function agregarPuntoCampo(lat, lon){
   // alrededor — no hace falta esperar a terminar de trazar ni a exportar.
   if(puntosCampo.length === 3){
     const centro = centroide(puntosCampo);
-    cachearCallesAlrededorDePunto(centro[0], centro[1], 25, 'el polígono que estás trazando');
+    actualizarZonaAutomatica(centro[0], centro[1], 'el polígono que estás trazando');
   }
 }
 
@@ -4397,38 +4621,31 @@ cargarPoligonosDesdeStorage();
 obtenerMapa();
 
 // ---------- Indicadores visuales automaticos de "sin conexion" en los iconos que la necesitan ----------
-// Marca con una linea diagonal los botones cuya funcion requiere internet en el momento
-// (guardar plano trae imagen nueva; navegar calcula ruta nueva por camino), para que se note
-// de un vistazo que van a funcionar en modo reducido mientras no haya señal.
 let ultimoEstadoConexionConocido = null; // null = todavia no lo revisamos ninguna vez
 
 function actualizarIndicadoresDeConexion(){
   const conectado = navigator.onLine !== false;
-  const idsQueNecesitanInternet = ['btnGuardarPlano', 'btnNavegar', 'btnCapaOfflineNav'];
-  idsQueNecesitanInternet.forEach(function(id){
-    const btn = document.getElementById(id);
-    if(!btn) return;
-    // El boton de capa offline (dentro del navegador) es el propio interruptor manual,
-    // asi que no lo tachamos a el mismo — solo guardar plano y navegar reciben la marca.
-    if(id === 'btnCapaOfflineNav') return;
+  const btnN = document.getElementById('btnNavegar');
+  if(btnN){
     if(conectado){
-      btn.classList.remove('sin-conexion');
+      btnN.classList.remove('sin-conexion');
+      btnN.title = 'Navegar hasta el polígono';
     }else{
-      btn.classList.add('sin-conexion');
+      btnN.classList.add('sin-conexion');
+      btnN.title = 'Sin conexión: el navegador va a arrancar en modo brújula/línea recta (sin ruta por camino nueva)';
     }
-  });
-
-  if(!conectado){
-    const btnG = document.getElementById('btnGuardarPlano');
-    if(btnG) btnG.title = 'Sin conexión: no se puede guardar una imagen nueva ahora mismo';
-    const btnN = document.getElementById('btnNavegar');
-    if(btnN) btnN.title = 'Sin conexión: el navegador va a arrancar en modo brújula/línea recta (sin ruta por camino nueva)';
-  }else{
-    const btnG = document.getElementById('btnGuardarPlano');
-    if(btnG) btnG.title = 'Guardar esta vista como plano fijo (para navegar sin conexión)';
-    const btnN = document.getElementById('btnNavegar');
-    if(btnN) btnN.title = 'Navegar hasta el polígono';
   }
+
+  // Icono de señal persistente (verde = en linea / rojo = navegacion offline), en el mapa principal y en el navegador
+  [
+    { punto:'puntoSeñal', texto:'textoSeñal' },
+    { punto:'puntoSeñalNav', texto:'textoSeñalNav' },
+  ].forEach(function(par){
+    const punto = document.getElementById(par.punto);
+    const texto = document.getElementById(par.texto);
+    if(punto) punto.className = 'punto-señal' + (conectado ? '' : ' sin-conexion');
+    if(texto) texto.textContent = conectado ? 'En línea' : 'Navegación offline';
+  });
 
   // Banner global, visible en toda la app, sin que el usuario tenga que tocar nada:
   // aparece en rojo apenas se pierde la señal, y en verde un momento cuando se recupera.
