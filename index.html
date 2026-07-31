@@ -4471,6 +4471,10 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 
   if(watchIdUbicacion !== null) navigator.geolocation.clearWatch(watchIdUbicacion);
 
+  // Cada vez que se toca el boton, la PROXIMA posicion que llegue hace zoom y anuncia por voz
+  // (antes esto solo pasaba la primerisima vez de toda la sesion, no cada vez que se apretaba).
+  let esPrimeraPosicionDeEstePresionar = true;
+
   watchIdUbicacion = navigator.geolocation.watchPosition(function(pos){
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
@@ -4480,16 +4484,49 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
       marcadorUbicacion = L.marker([lat, lon], {
         icon: L.divIcon({ className:'', html:'<div class="ubicacion-dot"></div>', iconSize:[16,16] })
       }).addTo(m);
-      m.setView([lat, lon], 18);
     }else{
       marcadorUbicacion.setLatLng([lat, lon]);
     }
+
+    if(esPrimeraPosicionDeEstePresionar){
+      esPrimeraPosicionDeEstePresionar = false;
+      m.setView([lat, lon], 18);
+      anunciarUbicacionEncontrada(lat, lon);
+    }
+
     document.getElementById('campoInfo').textContent = 'Tu ubicacion: ' + lat.toFixed(6) + ', ' + lon.toFixed(6) + ' (precision ~' + precision + ' m)';
     actualizarZonaAutomatica(lat, lon, 'tu ubicación');
   }, function(err){
     document.getElementById('campoInfo').textContent = 'No se pudo obtener la ubicacion: ' + err.message + '. Revisa que el navegador tenga permiso de GPS.';
   }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
 });
+
+// Apenas se encuentra la posicion, avisa por voz. Intenta averiguar un nombre de lugar cercano
+// (sector/localidad) usando un servicio externo; si no hay conexion o tarda demasiado, avisa
+// igual sin el nombre del lugar en vez de quedarse callado.
+function anunciarUbicacionEncontrada(lat, lon){
+  hablar('Ubicación encontrada.');
+  if(navigator.onLine === false){
+    hablar('Elegí hacia dónde querés navegar, tocando un punto o generando un polígono.');
+    return;
+  }
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 4000);
+  fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=14&addressdetails=0', { signal: controlador.signal })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      clearTimeout(timeoutId);
+      const lugar = data && data.display_name ? data.display_name.split(',').slice(0, 2).join(',').trim() : null;
+      if(lugar){
+        hablar('Estás cerca de ' + lugar + '. Elegí hacia dónde querés navegar.');
+      }else{
+        hablar('Elegí hacia dónde querés navegar, tocando un punto o generando un polígono.');
+      }
+    }).catch(function(){
+      clearTimeout(timeoutId);
+      hablar('Elegí hacia dónde querés navegar, tocando un punto o generando un polígono.');
+    });
+}
 
 document.getElementById('btnModoCampo').addEventListener('click', function(){
   obtenerMapa();
