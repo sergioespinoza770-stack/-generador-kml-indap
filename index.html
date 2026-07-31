@@ -4667,7 +4667,39 @@ function redibujarPoligonoCampo(m){
     capaPoligonoCampo = L.polygon(puntosCampo, {
       color:'#ffc700', weight:3, fillColor:'#ffc700', fillOpacity:0.15
     }).addTo(m);
+    capaPoligonoCampo.on('click', function(e){
+      if(modoMedicionActivo) return;
+      L.DomEvent.stopPropagation(e);
+      mostrarPopupNavegarCampo(e.latlng);
+    });
   }
+}
+
+// Popup simple con boton de navegar, para el punto/linea/poligono que se esta trazando
+// en modo campo — usa siempre los puntosCampo actuales (no una foto vieja), asi funciona
+// bien aunque se sigan agregando o moviendo vertices despues.
+function mostrarPopupNavegarCampo(latlng){
+  if(puntosCampo.length === 0) return;
+  const m = obtenerMapa();
+  m.closePopup();
+  const nombreCampo = document.getElementById('nombre').value.trim();
+  const nombre = nombreCampo || 'el polígono que estás trazando';
+  const idBtn = 'btnNavCampo_' + Date.now();
+  L.popup({ maxWidth: 240 })
+    .setLatLng(latlng)
+    .setContent(
+      '<div style="font-family:var(--sans, sans-serif);">' +
+        '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
+        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+      '</div>'
+    ).openOn(m);
+  setTimeout(function(){
+    const btn = document.getElementById(idBtn);
+    if(btn) btn.addEventListener('click', function(){
+      m.closePopup();
+      iniciarNavegacionHacia(puntosCampo, nombre);
+    });
+  }, 50);
 }
 
 function crearMarcadorVertice(lat, lon){
@@ -4687,6 +4719,11 @@ function crearMarcadorVertice(lat, lon){
   marcador.on('dragend', function(){
     actualizarInfoCampo();
     actualizarTextareaDesdeCampo();
+  });
+  marcador.on('click', function(e){
+    if(modoMedicionActivo) return; // con el lapiz activo, el toque sigue sirviendo para trazar
+    L.DomEvent.stopPropagation(e);
+    mostrarPopupNavegarCampo(e.latlng);
   });
 
   return marcador;

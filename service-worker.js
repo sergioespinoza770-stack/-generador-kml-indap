@@ -1,4 +1,4 @@
-const CACHE_NAME = 'generador-kml-v5';
+const CACHE_NAME = 'generador-kml-v6';
 const CACHE_COMPARTIDOS = 'generador-kml-compartidos';
 const ARCHIVOS_APP = [
   './index.html',
