@@ -2931,6 +2931,11 @@ function calcularRumbo(lat1, lon1, lat2, lon2){
   const x = Math.cos(rad(lat1))*Math.sin(rad(lat2)) - Math.sin(rad(lat1))*Math.cos(rad(lat2))*Math.cos(rad(lon2-lon1));
   return (Math.atan2(y,x) * 180/Math.PI + 360) % 360;
 }
+function nombreCardinal(rumboGrados){
+  const cardinales = ['norte','noreste','este','sureste','sur','suroeste','oeste','noroeste'];
+  const idx = Math.round(((rumboGrados % 360) + 360) % 360 / 45) % 8;
+  return cardinales[idx];
+}
 function centroide(puntos){
   let sLat=0, sLon=0;
   puntos.forEach(p => { sLat += p[0]; sLon += p[1]; });
@@ -3173,6 +3178,19 @@ function trazarRutaEnMiniMapa(lat, lon){
   const m = asegurarMiniMapaNav();
   const esPrimeraVez = !navMarcadorYo;
 
+  // Primer anuncio por voz: nombre del destino, direccion cardinal y distancia en linea recta.
+  // Se dice apenas se tiene la primera posicion GPS, sin esperar a que llegue la ruta por camino.
+  if(!navAnuncioInicialHecho && navObjetivo){
+    navAnuncioInicialHecho = true;
+    const rumboInicial = calcularRumbo(lat, lon, navObjetivo[0], navObjetivo[1]);
+    const dirCardinal = nombreCardinal(rumboInicial);
+    const distRectaKm = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]) / 1000;
+    const distTxt = distRectaKm >= 1
+      ? distRectaKm.toFixed(1).replace('.', ',') + ' kilómetros'
+      : Math.round(distRectaKm*1000) + ' metros';
+    hablar('Arrancando navegación hacia ' + navNombreDestino + '. Está hacia el ' + dirCardinal + ', a ' + distTxt + ' en línea recta. Calculando la ruta por camino...');
+  }
+
   if(!navMarcadorYo){
     navMarcadorYo = L.marker([lat, lon], {
       icon: L.divIcon({ className:'', html:'<div class="ubicacion-dot"></div>', iconSize:[16,16] }),
@@ -3229,7 +3247,17 @@ function trazarRutaEnMiniMapa(lat, lon){
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
-      if(esPrimeraRutaDeLaSesion && res.pasos.length > 0) hablar(res.pasos[0].texto);
+      if(!navAnuncioRutaHecho){
+        navAnuncioRutaHecho = true;
+        const distKm = res.distanciaTotal / 1000;
+        const distTxt = distKm >= 1
+          ? distKm.toFixed(1).replace('.', ',') + ' kilómetros'
+          : Math.round(res.distanciaTotal) + ' metros';
+        const tiempoTxt = formatearDuracion(res.duracionSeg);
+        hablar('Ruta por camino encontrada: ' + distTxt + '. Tiempo estimado: ' + tiempoTxt + '.');
+      }else if(esPrimeraRutaDeLaSesion && res.pasos.length > 0){
+        hablar(res.pasos[0].texto);
+      }
     }).catch(function(err){
       // Importante: si ya teniamos una ruta buena de un intento anterior, la manejamos distinto
       // segun si es una falla pasajera (con señal) o si realmente no hay conexion.
@@ -3337,6 +3365,9 @@ function abrirNavegador(){
 }
 
 let navUltimaPosParaHeadingMov = null;
+let navNombreDestino = '';
+let navAnuncioInicialHecho = false;
+let navAnuncioRutaHecho = false;
 let navUltimaRotacionMapa = 0;
 
 // Rota la vista del mapa (solo las teselas/capas, no los botones ni el control de zoom)
@@ -3396,6 +3427,9 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimaRotacionMapa = 0;
   navTieneRutaValida = false;
   navSeguirUbicacion = true;
+  navNombreDestino = nombre;
+  navAnuncioInicialHecho = false;
+  navAnuncioRutaHecho = false;
   const btnSeguir = document.getElementById('btnSeguirUbicacion');
   if(btnSeguir){ btnSeguir.classList.add('activo'); btnSeguir.title = 'El mapa te sigue automáticamente (tocá para moverlo libremente)'; }
   elNombre.textContent = 'Yendo hacia: ' + nombre;
@@ -3404,7 +3438,8 @@ function iniciarNavegacionHacia(puntos, nombre){
   overlay.classList.add('activo');
   setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
 
-  hablar('Navegando hacia ' + nombre + '.');
+  // El anuncio por voz completo (nombre, direccion, distancia, tiempo) se dice apenas
+  // llega la primera posicion GPS — ver anunciarInicioSiCorresponde() en trazarRutaEnMiniMapa.
   actualizarIndicadoresDeConexion();
 
   // Con conexion, guardamos un radio generoso de caminos alrededor del destino (40 km),
@@ -3880,6 +3915,54 @@ function formatearDuracion(segundos){
   return horas + ' h' + (mins > 0 ? ' ' + mins + ' min' : '');
 }
 
+let itemEnEdicionMover = null;
+let handlerMoverClickMapa = null;
+
+// Activa el "modo mover": el proximo toque en el mapa reubica toda la figura ahi,
+// manteniendo su forma (se traslada el punto, la linea o el poligono entero, no se deforma).
+function activarModoMoverPoligono(item){
+  const m = obtenerMapa();
+  itemEnEdicionMover = item;
+  const statusEl = document.getElementById('status');
+  if(statusEl){
+    statusEl.className = 'status';
+    statusEl.textContent = '📍 Tocá el mapa en el lugar donde querés mover "' + item.nombre + '". Tocá el mapa de arriba (el que dice "Previsualización" o el principal, según donde estés viendo esto).';
+  }
+  document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
+
+  if(handlerMoverClickMapa) m.off('click', handlerMoverClickMapa);
+  handlerMoverClickMapa = function(e){
+    if(modoMedicionActivo) return; // si estas trazando, dejamos que el toque siga sirviendo para eso
+    if(!itemEnEdicionMover) return;
+    moverPoligonoSubidoA(itemEnEdicionMover, e.latlng.lat, e.latlng.lng);
+    m.off('click', handlerMoverClickMapa);
+    handlerMoverClickMapa = null;
+    itemEnEdicionMover = null;
+  };
+  m.on('click', handlerMoverClickMapa);
+}
+
+function moverPoligonoSubidoA(item, nuevaLat, nuevaLon){
+  const m = obtenerMapa();
+  const centro = item.tipo === 'punto' ? item.puntos[0] : centroide(item.puntos);
+  const deltaLat = nuevaLat - centro[0];
+  const deltaLon = nuevaLon - centro[1];
+  item.puntos = item.puntos.map(function(p){ return [p[0] + deltaLat, p[1] + deltaLon]; });
+
+  if(capasKmlSubidos[item.id]){
+    m.removeLayer(capasKmlSubidos[item.id]);
+    delete capasKmlSubidos[item.id];
+  }
+  dibujarCapaKmlSubido(item);
+  guardarPoligonosEnStorage();
+
+  const statusEl = document.getElementById('status');
+  if(statusEl){
+    statusEl.className = 'status ok';
+    statusEl.textContent = '✅ "' + item.nombre + '" se movió al nuevo lugar.';
+  }
+}
+
 function mostrarInfoPoligonoSubido(item, latlngClick){
   const m = obtenerMapa();
 
@@ -3904,6 +3987,8 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
 
   const idInfo = 'infoDist_' + item.id;
   const idBtn = 'infoBtnNav_' + item.id;
+  const idBtnMover = 'infoBtnMover_' + item.id;
+  const idBtnBorrar = 'infoBtnBorrar_' + item.id;
 
   const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono', autoClose: true, closeOnClick: true })
     .setLatLng(latlngClick)
@@ -3912,7 +3997,11 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
         '<div style="font-weight:700; font-size:13.5px; color:#000; margin-bottom:4px;">' + item.nombre + '</div>' +
         '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">' + lineaMedida + '</div>' +
         '<div id="' + idInfo + '" style="font-size:11.5px; color:#8a6d00; margin-bottom:8px;">Calculando distancia por camino...</div>' +
-        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+        '<div style="display:flex; gap:6px;">' +
+          '<button id="' + idBtnMover + '" style="flex:1; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Mover</button>' +
+          '<button id="' + idBtnBorrar + '" style="flex:1; background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">🗑️ Eliminar</button>' +
+        '</div>' +
       '</div>'
     );
   popup.openOn(m);
@@ -3923,6 +4012,22 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
       btn.addEventListener('click', function(){
         m.closePopup();
         iniciarNavegacionHacia(item.puntos, item.nombre);
+      });
+    }
+    const btnMover = document.getElementById(idBtnMover);
+    if(btnMover){
+      btnMover.addEventListener('click', function(){
+        m.closePopup();
+        activarModoMoverPoligono(item);
+      });
+    }
+    const btnBorrar = document.getElementById(idBtnBorrar);
+    if(btnBorrar){
+      btnBorrar.addEventListener('click', function(){
+        m.closePopup();
+        if(confirm('¿Eliminar "' + item.nombre + '"? No se puede deshacer.')){
+          quitarPoligonoKml(item.id);
+        }
       });
     }
   }, 50);
