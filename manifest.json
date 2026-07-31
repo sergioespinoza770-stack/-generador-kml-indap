@@ -1,7 +1,7 @@
 {
-  "name": "Generador KML - INDAP Lautaro",
-  "short_name": "Generador KML",
-  "description": "Genera, visualiza y mide poligonos KML para supervision agricola. INDAP - Area Lautaro.",
+  "name": "NavActiva - INDAP Lautaro",
+  "short_name": "NavActiva",
+  "description": "Navegacion activa, medicion y documentacion de predios agricolas, con o sin conexion. INDAP - Area Lautaro.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
