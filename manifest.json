@@ -1,7 +1,7 @@
 {
-  "name": "Navegación Interactiva",
-  "short_name": "Nav. Interactiva",
-  "description": "Navegacion activa, medicion y documentacion de predios agricolas, con o sin conexion.",
+  "name": "Registro Terreno",
+  "short_name": "Registro Terreno",
+  "description": "Integra crear tu punto o poligono de visita, navegar hasta el lugar con o sin señal, y tomar fotografias georreferenciadas.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

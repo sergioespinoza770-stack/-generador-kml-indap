@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Navegación Interactiva - Poligonos</title>
+<title>Registro Terreno - Poligonos</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ffc700">
 <link rel="icon" href="icons/icon-192.png?v=2">
@@ -730,6 +730,59 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .field{
     margin-bottom:18px;
+  }
+  .inicio-simple{
+    background:linear-gradient(135deg, #fffdf0, #fff9e0);
+    border:3px solid #ffc700;
+    border-radius:18px;
+    padding:22px 20px;
+    margin-bottom:20px;
+  }
+  .inicio-simple-titulo{
+    font-family:var(--sans);
+    font-weight:800;
+    font-size:18px;
+    color:var(--text);
+    margin:0 0 14px 0;
+    text-align:center;
+  }
+  .opciones-simples{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:12px;
+  }
+  .opcion-simple{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    background:#ffffff;
+    border:2.5px solid #ffc700;
+    border-radius:14px;
+    padding:20px 8px;
+    cursor:pointer;
+    transition:transform 0.12s, background 0.12s;
+    min-height:88px;
+  }
+  .opcion-simple:hover, .opcion-simple:active{
+    background:#fff6d6;
+    transform:translateY(-2px);
+  }
+  .opcion-simple .opcion-icono{
+    font-size:32px;
+    line-height:1;
+  }
+  .opcion-simple .opcion-texto{
+    font-family:var(--sans);
+    font-weight:800;
+    font-size:14px;
+    color:var(--text);
+    text-align:center;
+  }
+  @media (max-width:520px){
+    .opciones-simples{ grid-template-columns:1fr; }
+    .opcion-simple{ flex-direction:row; min-height:0; padding:16px; }
   }
   .boton-modo-simple{
     width:100%;
@@ -1833,14 +1886,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 
 <div class="wrap">
-  <h1>Navegación Interactiva</h1>
-  <p class="sub">Navegación activa hacia tus predios, con o sin señal — generá el KML pegando coordenadas (geográficas, UTM o del SIRSD-S), ponele el nombre del agricultor, previsualizá sobre imagen satelital y navegá hasta el lugar.</p>
+  <h1>Registro Terreno</h1>
+  <p class="sub">Una sola app que integra: crear tu punto o polígono de visita, navegar hasta el lugar con o sin señal, y tomar fotografías georreferenciadas — todo junto, sin depender de conexión.</p>
+
+  <div class="inicio-simple">
+    <p class="inicio-simple-titulo">¿Qué necesitás hacer?</p>
+    <div class="opciones-simples">
+      <button type="button" id="btnInicioNavegar" class="opcion-simple">
+        <span class="opcion-icono">🧭</span>
+        <span class="opcion-texto">Ir a un lugar</span>
+      </button>
+      <button type="button" id="btnInicioMarcar" class="opcion-simple">
+        <span class="opcion-icono">📍</span>
+        <span class="opcion-texto">Marcar aquí</span>
+      </button>
+      <button type="button" id="btnInicioFoto" class="opcion-simple">
+        <span class="opcion-icono">📷</span>
+        <span class="opcion-texto">Sacar foto</span>
+      </button>
+    </div>
+    <div id="panelIrLugar" style="display:none;">
+      <p class="hint" style="margin-top:14px;">Escribí el nombre de una ciudad, o elegí uno de los lugares que ya tenés guardados más abajo en el mapa.</p>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="text" id="inicioBuscarCiudadInput" placeholder="Ej: Temuco, Lautaro, Perquenco..." style="flex:1; padding:12px; border-radius:8px; border:1.5px solid #ddd; font-family:var(--sans); font-size:15px;">
+        <button type="button" id="btnInicioBuscarCiudad" style="width:auto; padding:0 20px;">Buscar</button>
+      </div>
+      <div id="inicioResultadosCiudad" style="display:none; margin-top:8px;"></div>
+    </div>
+  </div>
 
   <button type="button" id="btnAbrirOficina" class="boton-modo-simple">
-    <span class="boton-modo-icono">✏️</span>
+    <span class="boton-modo-icono">🔧</span>
     <span class="boton-modo-texto">
-      <span class="boton-modo-titulo">Escribir o subir coordenadas</span>
-      <span class="boton-modo-sub">Para armar un KML nuevo desde la oficina</span>
+      <span class="boton-modo-titulo">Herramientas avanzadas</span>
+      <span class="boton-modo-sub">Coordenadas UTM/SIRSD-S, subir archivos — para trabajo de oficina</span>
     </span>
     <span class="boton-modo-flecha" id="flechaOficina">▼</span>
   </button>
@@ -4563,10 +4642,12 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 // (sector/localidad) usando un servicio externo; si no hay conexion o tarda demasiado, avisa
 // igual sin el nombre del lugar en vez de quedarse callado.
 // ---------- Buscar y navegar directo a una ciudad (sin necesitar coordenadas) ----------
-function buscarCiudad(){
-  const input = document.getElementById('buscarCiudadInput');
+function buscarCiudad(idInput, idResultados){
+  idInput = idInput || 'buscarCiudadInput';
+  idResultados = idResultados || 'resultadosCiudad';
+  const input = document.getElementById(idInput);
   const q = input.value.trim();
-  const cont = document.getElementById('resultadosCiudad');
+  const cont = document.getElementById(idResultados);
   if(!q){ cont.style.display = 'none'; cont.innerHTML = ''; return; }
 
   cont.style.display = 'block';
@@ -4615,9 +4696,33 @@ function buscarCiudad(){
       cont.innerHTML = '<p class="hint">No se pudo buscar la ciudad (revisá tu conexión) — intentá de nuevo.</p>';
     });
 }
-document.getElementById('btnBuscarCiudad').addEventListener('click', buscarCiudad);
+document.getElementById('btnBuscarCiudad').addEventListener('click', function(){ buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); });
 document.getElementById('buscarCiudadInput').addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad(); }
+  if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); }
+});
+
+// ---------- Pantalla de inicio simple: 3 botones grandes ----------
+document.getElementById('btnInicioNavegar').addEventListener('click', function(){
+  const panel = document.getElementById('panelIrLugar');
+  const abierto = panel.style.display !== 'none';
+  panel.style.display = abierto ? 'none' : 'block';
+  if(!abierto){
+    setTimeout(function(){ document.getElementById('inicioBuscarCiudadInput').focus(); }, 100);
+  }
+});
+document.getElementById('btnInicioBuscarCiudad').addEventListener('click', function(){
+  buscarCiudad('inicioBuscarCiudadInput', 'inicioResultadosCiudad');
+});
+document.getElementById('inicioBuscarCiudadInput').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad('inicioBuscarCiudadInput', 'inicioResultadosCiudad'); }
+});
+document.getElementById('btnInicioMarcar').addEventListener('click', function(){
+  document.getElementById('panelIrLugar').style.display = 'none';
+  document.getElementById('btnModoCampo').click();
+});
+document.getElementById('btnInicioFoto').addEventListener('click', function(){
+  document.getElementById('panelIrLugar').style.display = 'none';
+  abrirCamara();
 });
 
 function anunciarUbicacionEncontrada(lat, lon){
