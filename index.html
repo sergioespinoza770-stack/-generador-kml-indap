@@ -2846,12 +2846,14 @@ function agregarClicParaNavegar(capa, latlngs){
     m.closePopup();
     const nombre = (document.getElementById('nombre').value.trim()) || 'este predio';
     const idBtn = 'btnNavPreview_' + Date.now();
+    const idBtnDescargar = 'btnDescargarPreview_' + Date.now();
     L.popup({ maxWidth: 240 })
       .setLatLng(e.latlng)
       .setContent(
         '<div style="font-family:var(--sans, sans-serif);">' +
           '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
-          '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+          '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+          '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">⬇️ Descargar KML</button>' +
         '</div>'
       ).openOn(m);
     setTimeout(function(){
@@ -2859,6 +2861,11 @@ function agregarClicParaNavegar(capa, latlngs){
       if(btn) btn.addEventListener('click', function(){
         m.closePopup();
         iniciarNavegacionHacia(latlngs, nombre);
+      });
+      const btnDescargar = document.getElementById(idBtnDescargar);
+      if(btnDescargar) btnDescargar.addEventListener('click', function(){
+        m.closePopup();
+        descargarKmlDeItem(nombre, latlngs);
       });
     }, 50);
   });
@@ -4021,6 +4028,20 @@ function moverPoligonoSubidoA(item, nuevaLat, nuevaLon){
   }
 }
 
+function descargarKmlDeItem(nombre, puntos, tipo){
+  const kml = construirKML(nombre, puntos, tipo || determinarTipoFigura(puntos, false));
+  const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
+  const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function mostrarInfoPoligonoSubido(item, latlngClick){
   const m = obtenerMapa();
 
@@ -4047,6 +4068,7 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
   const idBtn = 'infoBtnNav_' + item.id;
   const idBtnMover = 'infoBtnMover_' + item.id;
   const idBtnBorrar = 'infoBtnBorrar_' + item.id;
+  const idBtnDescargar = 'infoBtnDescargar_' + item.id;
 
   const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono', autoClose: true, closeOnClick: true })
     .setLatLng(latlngClick)
@@ -4056,6 +4078,7 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
         '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">' + lineaMedida + '</div>' +
         '<div id="' + idInfo + '" style="font-size:11.5px; color:#8a6d00; margin-bottom:8px;">Calculando distancia por camino...</div>' +
         '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+        '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
         '<div style="display:flex; gap:6px;">' +
           '<button id="' + idBtnMover + '" style="flex:1; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Mover</button>' +
           '<button id="' + idBtnBorrar + '" style="flex:1; background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">🗑️ Eliminar</button>' +
@@ -4070,6 +4093,13 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
       btn.addEventListener('click', function(){
         m.closePopup();
         iniciarNavegacionHacia(item.puntos, item.nombre);
+      });
+    }
+    const btnDescargar = document.getElementById(idBtnDescargar);
+    if(btnDescargar){
+      btnDescargar.addEventListener('click', function(){
+        m.closePopup();
+        descargarKmlDeItem(item.nombre, item.puntos, item.tipo);
       });
     }
     const btnMover = document.getElementById(idBtnMover);
@@ -4686,12 +4716,20 @@ function mostrarPopupNavegarCampo(latlng){
   const nombreCampo = document.getElementById('nombre').value.trim();
   const nombre = nombreCampo || 'el polígono que estás trazando';
   const idBtn = 'btnNavCampo_' + Date.now();
-  L.popup({ maxWidth: 240 })
+  const idBtnMover = 'btnMoverCampo_' + Date.now();
+  const idBtnBorrar = 'btnBorrarCampo_' + Date.now();
+  const idBtnDescargar = 'btnDescargarCampo_' + Date.now();
+  L.popup({ maxWidth: 250 })
     .setLatLng(latlng)
     .setContent(
       '<div style="font-family:var(--sans, sans-serif);">' +
         '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
-        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%;">🧭 Navegar hacia aquí</button>' +
+        '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+        '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
+        '<div style="display:flex; gap:6px;">' +
+          '<button id="' + idBtnMover + '" style="flex:1; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Mover</button>' +
+          '<button id="' + idBtnBorrar + '" style="flex:1; background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">🗑️ Borrar</button>' +
+        '</div>' +
       '</div>'
     ).openOn(m);
   setTimeout(function(){
@@ -4700,7 +4738,64 @@ function mostrarPopupNavegarCampo(latlng){
       m.closePopup();
       iniciarNavegacionHacia(puntosCampo, nombre);
     });
+    const btnDescargar = document.getElementById(idBtnDescargar);
+    if(btnDescargar) btnDescargar.addEventListener('click', function(){
+      m.closePopup();
+      document.getElementById('btnExportarCampo').click();
+    });
+    const btnMover = document.getElementById(idBtnMover);
+    if(btnMover) btnMover.addEventListener('click', function(){
+      m.closePopup();
+      activarModoMoverCampo();
+    });
+    const btnBorrar = document.getElementById(idBtnBorrar);
+    if(btnBorrar) btnBorrar.addEventListener('click', function(){
+      m.closePopup();
+      if(confirm('¿Borrar "' + nombre + '"? No se puede deshacer.')){
+        document.getElementById('btnCampoReset').click();
+      }
+    });
   }, 50);
+}
+
+let handlerMoverCampoClick = null;
+
+// Igual que "mover" para los subidos: el proximo toque en el mapa traslada todo el trazado
+// de modo campo (manteniendo su forma) al lugar nuevo.
+function activarModoMoverCampo(){
+  const m = obtenerMapa();
+  const statusEl = document.getElementById('status');
+  if(statusEl){
+    statusEl.className = 'status';
+    statusEl.textContent = '📍 Tocá el mapa en el lugar donde querés mover el trazado.';
+  }
+  document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
+
+  if(handlerMoverCampoClick) m.off('click', handlerMoverCampoClick);
+  handlerMoverCampoClick = function(e){
+    if(modoMedicionActivo) return;
+    if(puntosCampo.length === 0) return;
+    const centro = centroide(puntosCampo);
+    const deltaLat = e.latlng.lat - centro[0];
+    const deltaLon = e.latlng.lng - centro[1];
+    puntosCampo = puntosCampo.map(function(p){ return [p[0] + deltaLat, p[1] + deltaLon]; });
+
+    marcadoresVerticesCampo.forEach(function(mk, idx){ mk.setLatLng(puntosCampo[idx]); });
+    redibujarPoligonoCampo(m);
+    actualizarInfoCampo();
+    actualizarTextareaDesdeCampo();
+    guardarPuntosCampoEnStorage();
+
+    m.off('click', handlerMoverCampoClick);
+    handlerMoverCampoClick = null;
+
+    const statusEl = document.getElementById('status');
+    if(statusEl){
+      statusEl.className = 'status ok';
+      statusEl.textContent = '✅ El trazado se movió al nuevo lugar.';
+    }
+  };
+  m.on('click', handlerMoverCampoClick);
 }
 
 function crearMarcadorVertice(lat, lon){
