@@ -1,6 +1,6 @@
 {
-  "name": "NavActiva - INDAP Lautaro",
-  "short_name": "NavActiva",
+  "name": "Navegación Interactiva - INDAP Lautaro",
+  "short_name": "Nav. Interactiva",
   "description": "Navegacion activa, medicion y documentacion de predios agricolas, con o sin conexion. INDAP - Area Lautaro.",
   "start_url": "./index.html",
   "scope": "./",
