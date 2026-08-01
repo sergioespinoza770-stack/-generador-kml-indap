@@ -1,10 +1,10 @@
-const CACHE_NAME = 'generador-kml-v6';
+const CACHE_NAME = 'generador-kml-v7';
 const CACHE_COMPARTIDOS = 'generador-kml-compartidos';
 const ARCHIVOS_APP = [
   './index.html',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-192.png?v=2',
+  './icons/icon-512.png?v=2'
 ];
 
 self.addEventListener('install', function(event){
