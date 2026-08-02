@@ -1,6 +1,6 @@
 {
-  "name": "Registro Terreno",
-  "short_name": "Registro Terreno",
+  "name": "Navegador Terreno",
+  "short_name": "Navegador Terreno",
   "description": "Integra crear tu punto o poligono de visita, navegar hasta el lugar con o sin señal, y tomar fotografias georreferenciadas.",
   "start_url": "./index.html",
   "scope": "./",
