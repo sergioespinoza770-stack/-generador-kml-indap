@@ -1,6 +1,6 @@
 {
-  "name": "Navegador Terreno",
-  "short_name": "Navegador Terreno",
+  "name": "Navegación Terreno",
+  "short_name": "Navegación Terreno",
   "description": "Integra crear tu punto o poligono de visita, navegar hasta el lugar con o sin señal, y tomar fotografias georreferenciadas.",
   "start_url": "./index.html",
   "scope": "./",

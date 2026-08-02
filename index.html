@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Registro Terreno - Poligonos</title>
+<title>Navegación Terreno - Poligonos</title>
 <link rel="manifest" href="manifest.json?v=2">
 <meta name="theme-color" content="#ffc700">
 <link rel="icon" href="icons/icon-192.png?v=2">
@@ -1190,24 +1190,32 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .badge-plano-activo{
     position:absolute;
-    top:12px;
+    top:126px;
     left:12px;
-    right:12px;
+    max-width:170px;
     z-index:600;
     font-family:var(--sans);
     font-weight:700;
-    font-size:12.5px;
-    line-height:1.3;
+    font-size:11px;
+    line-height:1.25;
     color:#ffffff;
     background:#c0221a;
     border:2px solid #ffffff;
-    padding:8px 12px;
+    padding:6px 9px;
     border-radius:10px;
     box-shadow:0 3px 14px rgba(0,0,0,0.35);
     display:none;
+    max-height:70px;
+    overflow:hidden;
+    cursor:pointer;
   }
   .badge-plano-activo.visible{
     display:block;
+  }
+  .badge-plano-activo.expandido{
+    max-width:260px;
+    max-height:220px;
+    overflow-y:auto;
   }
   .badge-plano-activo strong{
     display:block;
@@ -1237,8 +1245,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .indicador-señal-nav{
     position:static;
-    margin:8px auto 0;
+    margin:10px auto 0;
     width:fit-content;
+    font-size:14px;
+    padding:8px 16px 8px 10px;
+    border-width:2px;
+    box-shadow:0 3px 12px rgba(0,0,0,0.25);
   }
   .punto-señal{
     width:11px;
@@ -1786,7 +1798,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
   <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
   <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
-  <button class="overlay-seguir-nav activo" id="btnSeguirUbicacion" type="button" title="El mapa te sigue automáticamente (tocá para moverlo libremente)" aria-label="Alternar seguimiento de ubicación">🎯</button>
   <div class="nav-mapa-wrap" style="position:relative;">
     <div id="navMapa"></div>
     <div class="badge-plano-activo" id="badgePlanoActivoNav"></div>
@@ -1833,7 +1844,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 
 <div class="wrap">
-  <h1>Registro Terreno</h1>
+  <h1>Navegación Terreno</h1>
   <p class="sub">Una sola app que integra: crear tu punto o polígono de visita, navegar hasta el lugar con o sin señal, y tomar fotografías georreferenciadas — todo junto, sin depender de conexión.</p>
 
   <button type="button" id="btnAbrirOficina" class="boton-modo-simple">
@@ -1927,8 +1938,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="buscar-ciudad-wrap">
       <label for="buscarCiudadInput" style="margin-bottom:6px;">🏙️ Navegar directo a una ciudad</label>
+      <div id="destinoGuardadoWrap" style="display:none; align-items:center; gap:8px; background:#fff; border:1.5px solid #ffc700; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+        <span style="flex:1; font-size:13px; font-weight:700;">📍 Último destino: <span id="destinoGuardadoNombre"></span></span>
+        <button type="button" id="btnUsarDestinoGuardado" class="secundario" style="width:auto; padding:6px 12px; font-size:12px;">Ir</button>
+        <button type="button" id="btnBorrarDestinoGuardado" style="width:auto; padding:6px 12px; font-size:12px; background:#fdeceb; color:#a3291c; box-shadow:none;">Borrar</button>
+      </div>
       <div style="display:flex; gap:8px;">
-        <input type="text" id="buscarCiudadInput" placeholder="Ej: Temuco, Lautaro, Perquenco, Santiago..." style="flex:1;">
+        <input type="text" id="buscarCiudadInput" list="listaCiudadesSugeridas" placeholder="Ej: Temuco, Lautaro, Perquenco, Santiago..." style="flex:1;" autocomplete="off">
+        <datalist id="listaCiudadesSugeridas"></datalist>
         <button type="button" id="btnBuscarCiudad" class="secundario" style="width:auto; padding:0 18px;">Buscar</button>
       </div>
       <div id="resultadosCiudad" style="display:none; margin-top:8px;"></div>
@@ -2392,6 +2409,16 @@ let ultimaZonaAutoGuardada = null; // {lat, lon} — para no repetir el guardado
 // guardada (imagen + caminos) a lo que hace falta en cada momento, y borra lo que quedo lejos.
 function actualizarZonaAutomatica(lat, lon, etiqueta, radioCallesKm){
   radioCallesKm = radioCallesKm || 25;
+
+  // Revisamos contra TODAS las zonas ya guardadas (no solo la ultima de esta sesion en memoria) —
+  // asi, si la pagina se recargo sola en el medio, no se genera una zona duplicada del mismo lugar.
+  const yaHayZonaCerca = (planosOfflineMeta || []).some(function(meta){
+    const centroLat = (meta.bounds.north + meta.bounds.south) / 2;
+    const centroLon = (meta.bounds.east + meta.bounds.west) / 2;
+    return distanciaMetros(lat, lon, centroLat, centroLon) / 1000 < 3;
+  });
+  if(yaHayZonaCerca) return;
+
   if(ultimaZonaAutoGuardada){
     const distDesdeUltima = distanciaMetros(lat, lon, ultimaZonaAutoGuardada.lat, ultimaZonaAutoGuardada.lon) / 1000;
     if(distDesdeUltima < 3) return; // todavia estamos en la misma zona, no hace falta repetir
@@ -2605,17 +2632,27 @@ function mostrarBadgePlanoActivo(idBadge, nombres){
   if(!badge) return;
   if(!nombres || nombres.length === 0){
     badge.classList.remove('visible');
+    badge.classList.remove('expandido');
     badge.innerHTML = '';
     return;
   }
-  const titulo = nombres.length === 1 ? 'Plano offline activo' : ('Planos offline activos (' + nombres.length + ')');
-  badge.innerHTML = '<strong>' + titulo + '</strong>' + nombres.join(' · ');
+  const titulo = nombres.length === 1 ? '📡 Zona offline' : ('📡 ' + nombres.length + ' zonas offline');
+  badge.innerHTML = '<strong>' + titulo + '</strong>' + (nombres.length === 1 ? nombres[0] : 'Tocá para ver cuáles');
   badge.classList.add('visible');
+  badge.onclick = function(){
+    if(badge.classList.contains('expandido')){
+      badge.classList.remove('expandido');
+      badge.innerHTML = '<strong>' + titulo + '</strong>' + (nombres.length === 1 ? nombres[0] : 'Tocá para ver cuáles');
+    }else{
+      badge.classList.add('expandido');
+      badge.innerHTML = '<strong>' + titulo + '</strong>' + nombres.map(function(n){ return '• ' + n; }).join('<br>');
+    }
+  };
 }
 
 function ocultarBadgePlanoActivo(idBadge){
   const badge = document.getElementById(idBadge);
-  if(badge){ badge.classList.remove('visible'); badge.innerHTML = ''; }
+  if(badge){ badge.classList.remove('visible'); badge.classList.remove('expandido'); badge.innerHTML = ''; badge.onclick = null; }
 }
 
 let capaCallesOfflineActual = null;
@@ -3019,6 +3056,7 @@ let navCapaSatNav = null;
 let navCapaOfflineNav = null;
 let navMarcadorYo = null;
 let navSeguirUbicacion = true;
+let navUltimoAjusteVista = 0;
 let navMarcadorDestino = null;
 let navCapaRuta = null;
 let navPasos = [];
@@ -3029,8 +3067,7 @@ let navUltimoFetchRuta = 0;
 let navUltimaPosParaRuta = null;
 let navVozActiva = true;
 let navUltimoAvisoDistancia = null;
-let navAviso300Hecho = false;
-let navAviso50Hecho = false;
+let navAviso200Hecho = false;
 
 function elegirObjetivoNavegacion(){
   // Prioridad: poligono que se esta trazando en terreno > figura previsualizada desde coordenadas > primer KML subido visible
@@ -3147,7 +3184,9 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
         texto: traducirManiobra(paso),
         lat: paso.maneuver.location[1],
         lon: paso.maneuver.location[0],
-        distancia: paso.distance
+        distancia: paso.distance,
+        nombreVia: paso.name || '',
+        ref: (paso.ref || '')
       });
     });
     return { coords: coords, pasos: pasos, distanciaTotal: ruta.distance, duracionSeg: ruta.duration };
@@ -3201,17 +3240,6 @@ function asegurarMiniMapaNav(){
     }
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
-  navMapaInstancia.on('dragstart', function(){
-    if(navSeguirUbicacion){
-      navSeguirUbicacion = false;
-      const btn = document.getElementById('btnSeguirUbicacion');
-      if(btn){
-        btn.classList.remove('activo');
-        btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
-      }
-      aplicarTransformMapaNav(0);
-    }
-  });
   return navMapaInstancia;
 }
 
@@ -3219,24 +3247,6 @@ document.getElementById('btnCapaOfflineNav').addEventListener('click', function(
   const m = asegurarMiniMapaNav();
   if(navModoOfflineActivo) activarSatelitalEnNav(m);
   else activarOfflineEnNav(m);
-});
-
-document.getElementById('btnSeguirUbicacion').addEventListener('click', function(){
-  navSeguirUbicacion = !navSeguirUbicacion;
-  const btn = document.getElementById('btnSeguirUbicacion');
-  if(navSeguirUbicacion){
-    btn.classList.add('activo');
-    btn.title = 'El mapa te sigue automáticamente (tocá para moverlo libremente)';
-    // Al reactivar el seguimiento, centramos ya mismo en la ultima posicion conocida
-    if(navMarcadorYo){
-      const m = asegurarMiniMapaNav();
-      m.panTo(navMarcadorYo.getLatLng(), { animate:true });
-    }
-  }else{
-    btn.classList.remove('activo');
-    btn.title = 'Mapa libre (tocá para que vuelva a seguir tu ubicación)';
-    aplicarTransformMapaNav(0);
-  }
 });
 
 function trazarRutaEnMiniMapa(lat, lon){
@@ -3266,6 +3276,11 @@ function trazarRutaEnMiniMapa(lat, lon){
   }else{
     navMarcadorYo.setLatLng([lat, lon]);
   }
+
+  // Importante: mientras se avanza navegando, seguimos capturando zonas nuevas alrededor de
+  // TU posicion actual (no solo del destino) — asi la cobertura offline se va extendiendo a
+  // medida que te movés, en vez de quedar fija solo en el punto de partida.
+  actualizarZonaAutomatica(lat, lon, navNombreDestino, 40);
   if(!navMarcadorDestino){
     navMarcadorDestino = L.circleMarker([navObjetivo[0], navObjetivo[1]], {
       radius:9, color:'#8a6d00', fillColor:'#ffc700', fillOpacity:1, weight:3
@@ -3277,10 +3292,15 @@ function trazarRutaEnMiniMapa(lat, lon){
     if(!m.hasLayer(navMarcadorDestino)) navMarcadorDestino.addTo(m);
   }
 
-  // "Modo seguimiento": el mapa se centra en la posicion actual cada vez que llega un GPS nuevo,
-  // sin cambiar el zoom de golpe — asi el punto azul nunca se sale de la pantalla mientras te movés.
-  if(!esPrimeraVez && navSeguirUbicacion){
-    m.panTo([lat, lon], { animate: true, duration: 0.5 });
+  // "Modo seguimiento": el mapa se ajusta para mostrar SIEMPRE tu posicion actual y el destino
+  // juntos en pantalla (no un zoom fijo) — a medida que te acercas, se va acercando el zoom solo.
+  if(!esPrimeraVez && navSeguirUbicacion && navObjetivo){
+    const ahora = Date.now();
+    if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 2000){
+      navUltimoAjusteVista = ahora;
+      const bounds = L.latLngBounds([[lat, lon], [navObjetivo[0], navObjetivo[1]]]);
+      m.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true });
+    }
   }
 
   // Verificacion proactiva: si estamos sin conexion, la ruta azul vieja no sirve de guia confiable —
@@ -3298,17 +3318,17 @@ function trazarRutaEnMiniMapa(lat, lon){
     obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
-      // Solo la primera vez encuadramos toda la ruta; despues seguimos centrados en la posicion actual (panTo arriba)
+      // Reencuadramos SIEMPRE a la ruta nueva (no solo la primera vez) — asi, si te desviaste y
+      // se recalculo un camino distinto, se nota al toque en la pantalla, no solo por voz.
       const esPrimeraRutaDeLaSesion = navPasos.length === 0;
-      if(esPrimeraVez || esPrimeraRutaDeLaSesion){
-        m.fitBounds(navCapaRuta.getBounds(), { padding:[24,24] });
-      }
+      const boundsCombinados = navCapaRuta.getBounds().extend([lat, lon]).extend([navObjetivo[0], navObjetivo[1]]);
+      m.fitBounds(boundsCombinados, { padding:[40,40], maxZoom:17, animate:true });
+      navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
       navPasos = res.pasos;
       // Importante: NO reiniciamos siempre a 0 — resincronizamos al primer paso que todavia
       // no se cruzo, para no repetir por voz la misma indicacion en cada recalculo de ruta.
       navPasoActualIdx = resincronizarPasoActual(lat, lon);
-      navAviso300Hecho = false;
-      navAviso50Hecho = false;
+      navAviso200Hecho = false;
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
@@ -3381,27 +3401,42 @@ function resincronizarPasoActual(lat, lon){
   return navPasos.length - 1;
 }
 
+// Heuristica para distinguir una ruta/camino principal de una calle de ciudad, a partir
+// del nombre que entrega el servicio de rutas. No es 100% exacto (los datos de mapas abiertos
+// no siempre marcan esto de forma explicita), pero cubre bien los casos tipicos en Chile:
+// "Ruta 5", "Ruta S-40", "Camino a...", "Panamericana", numeros de ruta, etc.
+function pareceRuta(nombreVia){
+  if(!nombreVia) return false;
+  const n = nombreVia.toLowerCase();
+  if(/\bruta\b/.test(n)) return true;
+  if(/\bcamino\s+a\b|\bcamino\s+internacional\b|\bcamino\s+p[uú]blico\b/.test(n)) return true;
+  if(/\bpanamericana\b|\bautopista\b|\bcarretera\b/.test(n)) return true;
+  if(/^[a-z]-?\d{1,3}\b/.test(n)) return true; // ej: "S-40", "R-5", "CH-5"
+  return false;
+}
+
 function revisarAvisosDeVoz(lat, lon, distTotalRecta){
-  // Si tenemos pasos de una ruta real, avisamos por maniobra: una vez a ~300 m antes,
-  // y otra vez a ~50 m antes — no en cada recalculo ni a cada rato.
+  // Si tenemos pasos de una ruta real, avisamos UNA sola vez por maniobra, a ~200 m antes —
+  // y solo si es una ruta/camino principal, no una calle dentro de una ciudad (ahi las
+  // maniobras son muy seguidas y avisar en cada una se vuelve repetitivo e innecesario).
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
     const paso = navPasos[navPasoActualIdx];
     const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
+    const esRutaPrincipal = pareceRuta(paso.nombreVia);
 
-    if(!navAviso300Hecho && distAlPaso <= 300){
-      navAviso300Hecho = true;
-      hablar('En 300 metros, ' + paso.texto.charAt(0).toLowerCase() + paso.texto.slice(1));
-    }
-    if(!navAviso50Hecho && distAlPaso <= 50){
-      navAviso50Hecho = true;
-      hablar(paso.texto);
+    if(esRutaPrincipal && !navAviso200Hecho && distAlPaso <= 200){
+      navAviso200Hecho = true;
+      hablar('En 200 metros, ' + paso.texto.charAt(0).toLowerCase() + paso.texto.slice(1));
     }
     if(distAlPaso < 15){
       navPasoActualIdx++;
-      navAviso300Hecho = false;
-      navAviso50Hecho = false;
+      navAviso200Hecho = false;
       if(navPasoActualIdx >= navPasos.length){
         hablar('Estás llegando al destino');
+      }else if(!pareceRuta(navPasos[navPasoActualIdx].nombreVia)){
+        // Calle de ciudad: no esperamos a los 200m (las cuadras son cortas), avisamos ya mismo una vez
+        navAviso200Hecho = true;
+        hablar(navPasos[navPasoActualIdx].texto);
       }
     }
     return;
@@ -3411,7 +3446,6 @@ function revisarAvisosDeVoz(lat, lon, distTotalRecta){
   for(const h of hitos){
     if(distTotalRecta <= h && navUltimoAvisoDistancia !== h){
       navUltimoAvisoDistancia = h;
-      const cardinales = ['norte','noreste','este','sureste','sur','suroeste','oeste','noroeste'];
       hablar('Quedan ' + h + ' metros en línea recta.');
       break;
     }
@@ -3471,7 +3505,10 @@ function aplicarTransformMapaNav(headingGrados){
   const pane = contenedor.querySelector('.leaflet-map-pane');
   if(!pane) return;
   pane.style.transformOrigin = '50% 50%';
-  pane.style.transform = 'rotate(' + (-headingGrados) + 'deg)';
+  // La escala 1.5 compensa las esquinas que quedarian en blanco al rotar un rectangulo
+  // (la diagonal de un rectangulo es mas larga que sus lados) — asi el mapa sigue tapando
+  // toda la pantalla sin importar el angulo de rotacion.
+  pane.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(1.5)';
 }
 
 function iniciarNavegacionHacia(puntos, nombre){
@@ -3486,17 +3523,15 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimoFetchRuta = 0;
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
-  navAviso300Hecho = false;
-  navAviso50Hecho = false;
+  navAviso200Hecho = false;
   navUltimaPosParaHeadingMov = null;
   navUltimaRotacionMapa = 0;
   navTieneRutaValida = false;
   navSeguirUbicacion = true;
+  navUltimoAjusteVista = 0;
   navNombreDestino = nombre;
   navAnuncioInicialHecho = false;
   navAnuncioRutaHecho = false;
-  const btnSeguir = document.getElementById('btnSeguirUbicacion');
-  if(btnSeguir){ btnSeguir.classList.add('activo'); btnSeguir.title = 'El mapa te sigue automáticamente (tocá para moverlo libremente)'; }
   elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
@@ -4580,6 +4615,10 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
       esPrimeraPosicionDeEstePresionar = false;
       m.setView([lat, lon], 18);
       anunciarUbicacionEncontrada(lat, lon);
+    }else{
+      // Igual que en la pantalla de navegación: seguimos centrando el mapa en tu posición
+      // cada vez que se mueve, sin cambiar el zoom de golpe.
+      m.panTo([lat, lon], { animate: true, duration: 0.5 });
     }
 
     document.getElementById('campoInfo').textContent = 'Tu ubicacion: ' + lat.toFixed(6) + ', ' + lon.toFixed(6) + ' (precision ~' + precision + ' m)';
@@ -4635,6 +4674,7 @@ function buscarCiudad(idInput, idResultados){
           cont.style.display = 'none';
           cont.innerHTML = '';
           input.value = '';
+          guardarDestinoElegido(nombreCorto, lat, lon);
           iniciarNavegacionHacia([[lat, lon]], nombreCorto);
         });
 
@@ -4651,6 +4691,57 @@ document.getElementById('btnBuscarCiudad').addEventListener('click', function(){
 document.getElementById('buscarCiudadInput').addEventListener('keydown', function(e){
   if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); }
 });
+
+// ---------- Autocompletar mientras se escribe (desde 3 letras) ----------
+let temporizadorAutocompletar = null;
+document.getElementById('buscarCiudadInput').addEventListener('input', function(){
+  const q = this.value.trim();
+  if(temporizadorAutocompletar) clearTimeout(temporizadorAutocompletar);
+  if(q.length < 3) return;
+  temporizadorAutocompletar = setTimeout(function(){
+    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&countrycodes=cl&format=json&limit=6&addressdetails=1')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        const lista = document.getElementById('listaCiudadesSugeridas');
+        lista.innerHTML = '';
+        (data || []).forEach(function(res){
+          const nombreCorto = res.display_name.split(',').slice(0, 3).join(',').trim();
+          const opt = document.createElement('option');
+          opt.value = nombreCorto;
+          lista.appendChild(opt);
+        });
+      }).catch(function(){ /* sin conexion: el autocompletar simplemente no sugiere nada */ });
+  }, 400);
+});
+
+// ---------- Recordar el ultimo destino elegido, con boton para borrarlo ----------
+function guardarDestinoElegido(nombre, lat, lon){
+  try{
+    localStorage.setItem('generadorKml_ultimoDestino', JSON.stringify({ nombre: nombre, lat: lat, lon: lon }));
+  }catch(e){ /* sin espacio disponible: no pasa nada grave */ }
+  mostrarDestinoGuardado();
+}
+function mostrarDestinoGuardado(){
+  const wrap = document.getElementById('destinoGuardadoWrap');
+  try{
+    const crudo = localStorage.getItem('generadorKml_ultimoDestino');
+    if(!crudo){ wrap.style.display = 'none'; return; }
+    const d = JSON.parse(crudo);
+    document.getElementById('destinoGuardadoNombre').textContent = d.nombre;
+    wrap.style.display = 'flex';
+  }catch(e){ wrap.style.display = 'none'; }
+}
+document.getElementById('btnUsarDestinoGuardado').addEventListener('click', function(){
+  try{
+    const d = JSON.parse(localStorage.getItem('generadorKml_ultimoDestino'));
+    if(d) iniciarNavegacionHacia([[d.lat, d.lon]], d.nombre);
+  }catch(e){}
+});
+document.getElementById('btnBorrarDestinoGuardado').addEventListener('click', function(){
+  localStorage.removeItem('generadorKml_ultimoDestino');
+  mostrarDestinoGuardado();
+});
+mostrarDestinoGuardado();
 
 function anunciarUbicacionEncontrada(lat, lon){
   hablar('Ubicación encontrada.');
