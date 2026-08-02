@@ -2830,6 +2830,33 @@ function cachearCallesAlrededorDePunto(lat, lon, radioKm, etiqueta){
   }).catch(function(){ /* si falla, seguimos sin esos caminos extra */ });
 }
 
+// ---------- Pausa el seguimiento automatico cuando el usuario toca el mapa con la mano ----------
+// Se aplica igual en el mapa principal y en el de navegacion: mientras el usuario arrastra o hace
+// zoom manualmente, el seguimiento automatico se pausa; recien 10 segundos despues del ultimo
+// toque, vuelve a centrar/encuadrar solo. Los movimientos que hace la APP (panTo/fitBounds/setView
+// programaticos) no cuentan como "toque manual" gracias a esta bandera.
+let banderaMovimientoProgramatico = false;
+let ultimaInteraccionManualPrincipal = 0;
+let ultimaInteraccionManualNav = 0;
+const PAUSA_SEGUIMIENTO_MS = 10000;
+
+function moverMapaProgramatico(fn){
+  banderaMovimientoProgramatico = true;
+  fn();
+  setTimeout(function(){ banderaMovimientoProgramatico = false; }, 120);
+}
+
+function registrarInteraccionManual(cualMapa){
+  if(banderaMovimientoProgramatico) return;
+  if(cualMapa === 'principal') ultimaInteraccionManualPrincipal = Date.now();
+  else ultimaInteraccionManualNav = Date.now();
+}
+
+function siguiendoPausadoPorToque(cualMapa){
+  const ultima = cualMapa === 'principal' ? ultimaInteraccionManualPrincipal : ultimaInteraccionManualNav;
+  return (Date.now() - ultima) < PAUSA_SEGUIMIENTO_MS;
+}
+
 function obtenerMapa(){
   if(!mapa){
     mapa = L.map('map', { attributionControl: true });
@@ -2868,6 +2895,7 @@ function obtenerMapa(){
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
+    mapa.on('dragstart zoomstart', function(){ registrarInteraccionManual('principal'); });
   }
   document.getElementById('mapPanel').style.display = 'block';
   setTimeout(() => mapa.invalidateSize(), 150);
@@ -3240,6 +3268,7 @@ function asegurarMiniMapaNav(){
     }
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
+  navMapaInstancia.on('dragstart zoomstart', function(){ registrarInteraccionManual('nav'); });
   return navMapaInstancia;
 }
 
@@ -3272,7 +3301,7 @@ function trazarRutaEnMiniMapa(lat, lon){
       zIndexOffset: 1000
     }).addTo(m);
     // Apenas tenemos la primera posicion, centramos ahi mismo (no esperamos a que llegue la ruta)
-    m.setView([lat, lon], 16);
+    moverMapaProgramatico(function(){ m.setView([lat, lon], 16); });
   }else{
     navMarcadorYo.setLatLng([lat, lon]);
   }
@@ -3294,12 +3323,14 @@ function trazarRutaEnMiniMapa(lat, lon){
 
   // "Modo seguimiento": el mapa se ajusta para mostrar SIEMPRE tu posicion actual y el destino
   // juntos en pantalla (no un zoom fijo) — a medida que te acercas, se va acercando el zoom solo.
-  if(!esPrimeraVez && navSeguirUbicacion && navObjetivo){
+  // Si tocaste el mapa con la mano hace menos de 10 segundos, lo dejamos quieto para que puedas
+  // mirar libremente donde quieras — el seguimiento automatico vuelve solo despues de esos 10s.
+  if(!esPrimeraVez && navSeguirUbicacion && navObjetivo && !siguiendoPausadoPorToque('nav')){
     const ahora = Date.now();
     if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 2000){
       navUltimoAjusteVista = ahora;
       const bounds = L.latLngBounds([[lat, lon], [navObjetivo[0], navObjetivo[1]]]);
-      m.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true });
+      moverMapaProgramatico(function(){ m.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true }); });
     }
   }
 
@@ -3320,10 +3351,13 @@ function trazarRutaEnMiniMapa(lat, lon){
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
       // Reencuadramos SIEMPRE a la ruta nueva (no solo la primera vez) — asi, si te desviaste y
       // se recalculo un camino distinto, se nota al toque en la pantalla, no solo por voz.
+      // Salvo que estes mirando el mapa a tu manera (tocado hace menos de 10s): ahi no lo movemos.
       const esPrimeraRutaDeLaSesion = navPasos.length === 0;
-      const boundsCombinados = navCapaRuta.getBounds().extend([lat, lon]).extend([navObjetivo[0], navObjetivo[1]]);
-      m.fitBounds(boundsCombinados, { padding:[40,40], maxZoom:17, animate:true });
-      navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
+      if(!siguiendoPausadoPorToque('nav')){
+        const boundsCombinados = navCapaRuta.getBounds().extend([lat, lon]).extend([navObjetivo[0], navObjetivo[1]]);
+        moverMapaProgramatico(function(){ m.fitBounds(boundsCombinados, { padding:[40,40], maxZoom:17, animate:true }); });
+        navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
+      }
       navPasos = res.pasos;
       // Importante: NO reiniciamos siempre a 0 — resincronizamos al primer paso que todavia
       // no se cruzo, para no repetir por voz la misma indicacion en cada recalculo de ruta.
@@ -4613,12 +4647,13 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 
     if(esPrimeraPosicionDeEstePresionar){
       esPrimeraPosicionDeEstePresionar = false;
-      m.setView([lat, lon], 18);
+      moverMapaProgramatico(function(){ m.setView([lat, lon], 18); });
       anunciarUbicacionEncontrada(lat, lon);
-    }else{
+    }else if(!siguiendoPausadoPorToque('principal')){
       // Igual que en la pantalla de navegación: seguimos centrando el mapa en tu posición
-      // cada vez que se mueve, sin cambiar el zoom de golpe.
-      m.panTo([lat, lon], { animate: true, duration: 0.5 });
+      // cada vez que se mueve, sin cambiar el zoom de golpe — salvo que lo hayas tocado con
+      // la mano hace menos de 10 segundos, en cuyo caso te dejamos mirar libre por un rato.
+      moverMapaProgramatico(function(){ m.panTo([lat, lon], { animate: true, duration: 0.5 }); });
     }
 
     document.getElementById('campoInfo').textContent = 'Tu ubicacion: ' + lat.toFixed(6) + ', ' + lon.toFixed(6) + ' (precision ~' + precision + ' m)';
