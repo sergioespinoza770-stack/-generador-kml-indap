@@ -1047,6 +1047,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
     justify-content:space-between;
     align-items:center;
   }
+  .autocompletar-lista{
+    position:absolute;
+    top:calc(100% + 4px);
+    left:0;
+    right:96px;
+    z-index:900;
+    background:#ffffff;
+    border:1.5px solid #ffc700;
+    border-radius:10px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.18);
+    max-height:240px;
+    overflow-y:auto;
+  }
+  .autocompletar-item{
+    padding:11px 14px;
+    font-family:var(--sans);
+    font-size:13.5px;
+    color:var(--text);
+    cursor:pointer;
+    border-bottom:1px solid #f2f2f2;
+  }
+  .autocompletar-item:last-child{ border-bottom:none; }
+  .autocompletar-item:hover, .autocompletar-item.resaltado{
+    background:#fff6d6;
+  }
   .buscar-ciudad-wrap{
     background:#fffdf0;
     border:2px solid #ffc700;
@@ -1937,18 +1962,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <div class="buscar-ciudad-wrap">
-      <label for="buscarCiudadInput" style="margin-bottom:6px;">🏙️ Navegar directo a una ciudad</label>
+      <label for="buscarCiudadInput" style="margin-bottom:6px;">🏙️ Navegar a una ciudad o una dirección</label>
       <div id="destinoGuardadoWrap" style="display:none; align-items:center; gap:8px; background:#fff; border:1.5px solid #ffc700; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
         <span style="flex:1; font-size:13px; font-weight:700;">📍 Último destino: <span id="destinoGuardadoNombre"></span></span>
         <button type="button" id="btnUsarDestinoGuardado" class="secundario" style="width:auto; padding:6px 12px; font-size:12px;">Ir</button>
         <button type="button" id="btnBorrarDestinoGuardado" style="width:auto; padding:6px 12px; font-size:12px; background:#fdeceb; color:#a3291c; box-shadow:none;">Borrar</button>
       </div>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="buscarCiudadInput" list="listaCiudadesSugeridas" placeholder="Ej: Temuco, Lautaro, Perquenco, Santiago..." style="flex:1;" autocomplete="off">
-        <datalist id="listaCiudadesSugeridas"></datalist>
+      <div style="display:flex; gap:8px; position:relative;">
+        <input type="text" id="buscarCiudadInput" placeholder="Ej: Temuco, o Av. Alemania 671 Temuco..." style="flex:1;" autocomplete="off">
+        <div id="autocompletarCiudad" class="autocompletar-lista" style="display:none;"></div>
         <button type="button" id="btnBuscarCiudad" class="secundario" style="width:auto; padding:0 18px;">Buscar</button>
       </div>
       <div id="resultadosCiudad" style="display:none; margin-top:8px;"></div>
+      <p class="hint" style="margin-top:6px;">Podés escribir solo el nombre de una ciudad/pueblo, o una dirección completa con calle, número y comuna (ej: "Manuel Montt 500, Lautaro").</p>
     </div>
 
     <div class="map-wrap">
@@ -4817,31 +4843,85 @@ function buscarCiudad(idInput, idResultados){
       cont.innerHTML = '<p class="hint">No se pudo buscar la ciudad (revisá tu conexión) — intentá de nuevo.</p>';
     });
 }
-document.getElementById('btnBuscarCiudad').addEventListener('click', function(){ buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); });
-document.getElementById('buscarCiudadInput').addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); }
-});
-
-// ---------- Autocompletar mientras se escribe (desde 3 letras) ----------
+document.getElementById('btnBuscarCiudad').addEventListener('click', function(){ ocultarAutocompletar(); buscarCiudad('buscarCiudadInput', 'resultadosCiudad'); });
+// ---------- Autocompletar mientras se escribe (desde 2 letras) — menu propio, no el nativo del navegador ----------
 let temporizadorAutocompletar = null;
+let sugerenciasActuales = [];
+let indiceResaltado = -1;
+
+function ocultarAutocompletar(){
+  const cont = document.getElementById('autocompletarCiudad');
+  cont.style.display = 'none';
+  cont.innerHTML = '';
+  sugerenciasActuales = [];
+  indiceResaltado = -1;
+}
+
+function elegirSugerencia(res){
+  const input = document.getElementById('buscarCiudadInput');
+  const nombreCorto = res.display_name.split(',').slice(0, 4).join(',').trim();
+  input.value = nombreCorto;
+  ocultarAutocompletar();
+  buscarCiudad('buscarCiudadInput', 'resultadosCiudad');
+}
+
+function pintarAutocompletar(){
+  const cont = document.getElementById('autocompletarCiudad');
+  if(sugerenciasActuales.length === 0){ ocultarAutocompletar(); return; }
+  cont.innerHTML = '';
+  sugerenciasActuales.forEach(function(res, i){
+    const nombreCorto = res.display_name.split(',').slice(0, 4).join(',').trim();
+    const item = document.createElement('div');
+    item.className = 'autocompletar-item' + (i === indiceResaltado ? ' resaltado' : '');
+    item.textContent = nombreCorto;
+    item.addEventListener('click', function(){ elegirSugerencia(res); });
+    cont.appendChild(item);
+  });
+  cont.style.display = 'block';
+}
+
 document.getElementById('buscarCiudadInput').addEventListener('input', function(){
   const q = this.value.trim();
   if(temporizadorAutocompletar) clearTimeout(temporizadorAutocompletar);
-  if(q.length < 3) return;
+  if(q.length < 2){ ocultarAutocompletar(); return; }
   temporizadorAutocompletar = setTimeout(function(){
+    // "addressdetails" + sin restringir por tipo de lugar: esto permite que ademas de
+    // ciudades/pueblos tambien aparezcan sugerencias de calles y direcciones completas.
     fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&countrycodes=cl&format=json&limit=6&addressdetails=1')
       .then(function(r){ return r.json(); })
       .then(function(data){
-        const lista = document.getElementById('listaCiudadesSugeridas');
-        lista.innerHTML = '';
-        (data || []).forEach(function(res){
-          const nombreCorto = res.display_name.split(',').slice(0, 3).join(',').trim();
-          const opt = document.createElement('option');
-          opt.value = nombreCorto;
-          lista.appendChild(opt);
-        });
-      }).catch(function(){ /* sin conexion: el autocompletar simplemente no sugiere nada */ });
-  }, 400);
+        sugerenciasActuales = data || [];
+        indiceResaltado = -1;
+        pintarAutocompletar();
+      }).catch(function(){ ocultarAutocompletar(); /* sin conexion: no se puede sugerir nada */ });
+  }, 350);
+});
+
+document.getElementById('buscarCiudadInput').addEventListener('keydown', function(e){
+  if(sugerenciasActuales.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){
+    e.preventDefault();
+    if(e.key === 'ArrowDown') indiceResaltado = Math.min(indiceResaltado + 1, sugerenciasActuales.length - 1);
+    else indiceResaltado = Math.max(indiceResaltado - 1, 0);
+    pintarAutocompletar();
+    return;
+  }
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    if(indiceResaltado >= 0 && sugerenciasActuales[indiceResaltado]){
+      elegirSugerencia(sugerenciasActuales[indiceResaltado]);
+    }else{
+      ocultarAutocompletar();
+      buscarCiudad('buscarCiudadInput', 'resultadosCiudad');
+    }
+  }
+  if(e.key === 'Escape') ocultarAutocompletar();
+});
+
+// Si se toca en cualquier otro lado de la pantalla, cerramos el menu de sugerencias
+document.addEventListener('click', function(e){
+  const cont = document.getElementById('autocompletarCiudad');
+  const input = document.getElementById('buscarCiudadInput');
+  if(e.target !== input && !cont.contains(e.target)) ocultarAutocompletar();
 });
 
 // ---------- Recordar el ultimo destino elegido, con boton para borrarlo ----------
