@@ -1986,7 +1986,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <p class="hint" id="campoInfo" style="margin-top:8px;"></p>
     <p class="campo-lista" id="campoLista"></p>
 
-    <div class="planos-offline">
+    <!-- El respaldo offline es 100% automatico: se guarda y se usa solo, sin pedirte nada.
+         Esta lista queda oculta a proposito para no confundir con nombres tecnicos —
+         los elementos siguen existiendo para que el resto del codigo funcione igual. -->
+    <div class="planos-offline" style="display:none;">
       <div class="planos-offline-header">
         <strong>💾 Zonas guardadas para navegar sin conexión</strong>
         <span id="planosOfflineEstado" class="hint" style="margin:0;"></span>
@@ -2340,6 +2343,50 @@ function obtenerCallesOverpass(bounds){
   });
 }
 
+// Trae, en una sola consulta liviana, lagos/rios y localidades con nombre (ciudades, pueblos)
+// de la zona — para poder armar un "mapa base" de referencia sin necesitar imagen satelital,
+// cuando no hay señal por muchos kilometros y no queda ninguna foto guardada para esa vista.
+// No trae limites administrativos completos (esos poligonos son muy pesados y lentos de bajar
+// para una consulta que tiene que funcionar rapido en el celular) — el nombre de la localidad
+// mas cercana ya cubre buena parte de esa necesidad de ubicarse.
+function obtenerDatosBaseOverpass(bounds){
+  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  const consulta = '[out:json][timeout:90];(' +
+    'way["natural"="water"](' + bbox + ');' +
+    'relation["natural"="water"](' + bbox + ');' +
+    'way["waterway"="river"](' + bbox + ');' +
+    'node["place"~"^(city|town|village)$"](' + bbox + ');' +
+    ');out geom;';
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
+
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 80000);
+
+  return fetch(url, { signal: controlador.signal }).then(function(resp){
+    clearTimeout(timeoutId);
+    if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
+    return resp.json();
+  }).then(function(data){
+    const agua = [];
+    const lugares = [];
+    (data.elements || []).slice(0, 1500).forEach(function(el){
+      if(el.type === 'node' && el.tags && el.tags.place && el.tags.name){
+        lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name, tipo: el.tags.place });
+      }else if((el.type === 'way' || el.type === 'relation') && el.geometry){
+        agua.push(el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
+      }else if(el.type === 'relation' && el.members){
+        el.members.forEach(function(m){
+          if(m.geometry) agua.push(m.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
+        });
+      }
+    });
+    return { agua: agua, lugares: lugares };
+  }).catch(function(){
+    clearTimeout(timeoutId);
+    return { agua: [], lugares: [] };
+  });
+}
+
 // ---------- Limpieza de datos viejos de "red vial por region" (funcion descontinuada) ----------
 // Si en una version anterior se llego a descargar alguna region, la borramos sola para no
 // dejar datos guardados sin usar. Los caminos automaticos (los que se guardan solos al
@@ -2408,7 +2455,7 @@ let ultimaZonaAutoGuardada = null; // {lat, lon} — para no repetir el guardado
 // nuevo (subido, generado, trazado) o cuando se mueve la posicion del usuario. Ajusta la zona
 // guardada (imagen + caminos) a lo que hace falta en cada momento, y borra lo que quedo lejos.
 function actualizarZonaAutomatica(lat, lon, etiqueta, radioCallesKm){
-  radioCallesKm = radioCallesKm || 25;
+  radioCallesKm = radioCallesKm || 100;
 
   // Revisamos contra TODAS las zonas ya guardadas (no solo la ultima de esta sesion en memoria) —
   // asi, si la pagina se recargo sola en el medio, no se genera una zona duplicada del mismo lugar.
@@ -2425,7 +2472,7 @@ function actualizarZonaAutomatica(lat, lon, etiqueta, radioCallesKm){
   }
   ultimaZonaAutoGuardada = { lat: lat, lon: lon };
 
-  limpiarPlanosAutomaticosLejanos(lat, lon, 15);
+  limpiarPlanosAutomaticosLejanos(lat, lon, 150);
   cachearCallesAlrededorDePunto(lat, lon, radioCallesKm, etiqueta);
   guardarPlanoAutomaticoAlrededorDePunto(lat, lon, etiqueta);
 }
@@ -2614,6 +2661,25 @@ function buscarTodasLasCallesParaVista(mapaRef){
   return calles;
 }
 
+// Recopila el agua (lagos/rios) y las localidades con nombre guardadas que caen dentro de
+// la vista actual — el "mapa base" liviano que se usa cuando no hay imagen satelital.
+function buscarDatosBaseParaVista(mapaRef){
+  const b = mapaRef.getBounds();
+  const vista = { north:b.getNorth(), south:b.getSouth(), east:b.getEast(), west:b.getWest() };
+  let agua = [];
+  const lugaresVistos = {};
+  const lugares = [];
+  planosOfflineMeta.forEach(function(p){
+    if(!bboxSeSuperponen(vista, p.bounds)) return;
+    if(p.agua && p.agua.length > 0) agua = agua.concat(p.agua);
+    if(p.lugares) p.lugares.forEach(function(l){
+      const clave = l.nombre + '_' + l.lat.toFixed(3) + '_' + l.lon.toFixed(3);
+      if(!lugaresVistos[clave]){ lugaresVistos[clave] = true; lugares.push(l); }
+    });
+  });
+  return { agua: agua, lugares: lugares };
+}
+
 // Devuelve los nombres de TODOS los planos guardados que aportan algo a la vista actual
 // (imagen y/o caminos), para poder mostrarlos en el badge rojo y que quede claro cual/cuales
 // estan realmente en uso — esto es lo que evita confundirse cuando hay varios guardados.
@@ -2660,13 +2726,9 @@ let capaCallesOfflineActual = null;
 function mostrarPlanoOfflineEnMapa(mapaRef, meta){
   if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
   const calles = buscarTodasLasCallesParaVista(mapaRef);
-  if(calles.length > 0){
-    capaCallesOfflineActual = L.layerGroup(
-      calles.map(function(tramo){
-        return L.polyline(tramo, { color:'#e02b2b', weight:2.5, opacity:0.9 });
-      })
-    ).addTo(mapaRef);
-  }
+  const datosBase = buscarDatosBaseParaVista(mapaRef);
+  const capas = dibujarCapasDeMapaBase(calles, datosBase);
+  if(capas.length > 0) capaCallesOfflineActual = L.layerGroup(capas).addTo(mapaRef);
 
   if(!('caches' in window)) return;
   caches.open('generador-kml-planos').then(function(cache){
@@ -2683,18 +2745,44 @@ function mostrarPlanoOfflineEnMapa(mapaRef, meta){
   });
 }
 
-// Muestra SOLO las calles guardadas (sin imagen), por ejemplo encima de la grilla
-// cuando no hay ninguna imagen guardada que coincida con la vista actual.
+// Arma las capas de agua + caminos + nombres de localidades para el "mapa base" liviano
+// que reemplaza a la imagen satelital cuando no hay señal por muchos kilometros.
+function dibujarCapasDeMapaBase(calles, datosBase){
+  const capas = [];
+  (datosBase.agua || []).forEach(function(forma){
+    if(forma.length < 3) return;
+    capas.push(L.polygon(forma, { color:'#3f7fbf', weight:1, fillColor:'#8fc4f0', fillOpacity:0.55, interactive:false }));
+  });
+  calles.forEach(function(tramo){
+    capas.push(L.polyline(tramo, { color:'#e02b2b', weight:2.5, opacity:0.9 }));
+  });
+  (datosBase.lugares || []).forEach(function(lugar){
+    const esCiudad = lugar.tipo === 'city';
+    capas.push(L.circleMarker([lugar.lat, lugar.lon], {
+      radius: esCiudad ? 6 : 4, color:'#3a3a3a', weight:1.5, fillColor:'#ffffff', fillOpacity:1, interactive:false
+    }));
+    capas.push(L.marker([lugar.lat, lugar.lon], {
+      icon: L.divIcon({
+        className:'',
+        html:'<div style="font-family:var(--sans,sans-serif); font-size:' + (esCiudad ? '13px' : '11px') + '; font-weight:' + (esCiudad ? '800' : '600') + '; color:#1a1a1a; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; white-space:nowrap; transform:translate(8px,-6px);">' + lugar.nombre + '</div>',
+        iconSize:[0,0]
+      }),
+      interactive:false
+    }));
+  });
+  return capas;
+}
+
+// Muestra SOLO el mapa base guardado (caminos + agua + localidades, sin imagen), por ejemplo
+// encima de la grilla cuando no hay ninguna imagen satelital guardada para la vista actual —
+// asi, aunque no haya foto, igual se ve por donde pasan los caminos, donde hay lagos/rios y
+// que pueblo o ciudad queda cerca, en vez de una pantalla vacia.
 function mostrarSoloCallesGuardadas(mapaRef){
   if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
   const calles = buscarTodasLasCallesParaVista(mapaRef);
-  if(calles.length > 0){
-    capaCallesOfflineActual = L.layerGroup(
-      calles.map(function(tramo){
-        return L.polyline(tramo, { color:'#e02b2b', weight:2.5, opacity:0.9 });
-      })
-    ).addTo(mapaRef);
-  }
+  const datosBase = buscarDatosBaseParaVista(mapaRef);
+  const capas = dibujarCapasDeMapaBase(calles, datosBase);
+  if(capas.length > 0) capaCallesOfflineActual = L.layerGroup(capas).addTo(mapaRef);
   return calles.length;
 }
 
@@ -2815,19 +2903,26 @@ function cachearCallesAlrededorDePunto(lat, lon, radioKm, etiqueta){
     getEast: function(){ return vista.east; }
   };
 
-  obtenerCallesOverpass(boundsFalso).then(function(calles){
-    if(calles.length === 0) return;
+  Promise.all([
+    obtenerCallesOverpass(boundsFalso),
+    obtenerDatosBaseOverpass(boundsFalso)
+  ]).then(function(resultados){
+    const calles = resultados[0];
+    const datosBase = resultados[1];
+    if(calles.length === 0 && datosBase.agua.length === 0 && datosBase.lugares.length === 0) return;
     planosOfflineMeta.push({
       id: 'auto_' + Date.now(),
       nombre: 'Caminos hacia ' + (etiqueta || 'el destino'),
       bounds: vista,
       fecha: new Date().toLocaleString('es-CL'),
       calles: calles,
+      agua: datosBase.agua,
+      lugares: datosBase.lugares,
       automatico: true
     });
     guardarMetaPlanosOffline();
     renderizarListaPlanosOffline();
-  }).catch(function(){ /* si falla, seguimos sin esos caminos extra */ });
+  }).catch(function(){ /* si falla, seguimos sin esos datos extra */ });
 }
 
 // ---------- Pausa el seguimiento automatico cuando el usuario toca el mapa con la mano ----------
@@ -3309,7 +3404,7 @@ function trazarRutaEnMiniMapa(lat, lon){
   // Importante: mientras se avanza navegando, seguimos capturando zonas nuevas alrededor de
   // TU posicion actual (no solo del destino) — asi la cobertura offline se va extendiendo a
   // medida que te movés, en vez de quedar fija solo en el punto de partida.
-  actualizarZonaAutomatica(lat, lon, navNombreDestino, 40);
+  actualizarZonaAutomatica(lat, lon, navNombreDestino, 100);
   if(!navMarcadorDestino){
     navMarcadorDestino = L.circleMarker([navObjetivo[0], navObjetivo[1]], {
       radius:9, color:'#8a6d00', fillColor:'#ffc700', fillOpacity:1, weight:3
@@ -3578,7 +3673,7 @@ function iniciarNavegacionHacia(puntos, nombre){
 
   // Con conexion, guardamos un radio generoso de caminos alrededor del destino (40 km),
   // asi si mas adelante se corta la señal en el camino, ya hay cobertura para llegar.
-  actualizarZonaAutomatica(navObjetivo[0], navObjetivo[1], nombre, 40);
+  actualizarZonaAutomatica(navObjetivo[0], navObjetivo[1], nombre, 100);
 
   // Pedir permiso de orientacion en iOS (tiene que dispararse en un gesto del usuario, como este click)
   if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
