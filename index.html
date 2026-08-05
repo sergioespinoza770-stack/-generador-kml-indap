@@ -3422,7 +3422,10 @@ function trazarRutaEnMiniMapa(lat, lon){
       zIndexOffset: 1000
     }).addTo(m);
     // Apenas tenemos la primera posicion, centramos ahi mismo (no esperamos a que llegue la ruta)
-    moverMapaProgramatico(function(){ m.setView([lat, lon], 16); });
+    moverMapaProgramatico(function(){
+      const zoomInicial = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
+      m.setView([lat, lon], zoomInicial);
+    });
   }else{
     navMarcadorYo.setLatLng([lat, lon]);
   }
@@ -3442,16 +3445,17 @@ function trazarRutaEnMiniMapa(lat, lon){
     if(!m.hasLayer(navMarcadorDestino)) navMarcadorDestino.addTo(m);
   }
 
-  // "Modo seguimiento": el mapa se ajusta para mostrar SIEMPRE tu posicion actual y el destino
-  // juntos en pantalla (no un zoom fijo) — a medida que te acercas, se va acercando el zoom solo.
-  // Si tocaste el mapa con la mano hace menos de 10 segundos, lo dejamos quieto para que puedas
-  // mirar libremente donde quieras — el seguimiento automatico vuelve solo despues de esos 10s.
-  if(!esPrimeraVez && navSeguirUbicacion && navObjetivo && !siguiendoPausadoPorToque('nav')){
+  // "Modo seguimiento": el mapa se queda SIEMPRE concentrado en tu posicion actual, con un
+  // zoom cercano fijo (una franja de ~500 m de ancho) para poder ir viendo bien el camino
+  // mientras avanzas — no se abre para mostrar el destino lejano, eso solo confunde la vista
+  // de cerca. Si tocaste el mapa con la mano hace menos de 10 segundos, lo dejamos quieto
+  // para que puedas mirar libremente donde quieras — el seguimiento vuelve solo despues de eso.
+  if(!esPrimeraVez && navSeguirUbicacion && !siguiendoPausadoPorToque('nav')){
     const ahora = Date.now();
-    if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 2000){
+    if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 1200){
       navUltimoAjusteVista = ahora;
-      const bounds = L.latLngBounds([[lat, lon], [navObjetivo[0], navObjetivo[1]]]);
-      moverMapaProgramatico(function(){ m.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true }); });
+      const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
+      moverMapaProgramatico(function(){ m.setView([lat, lon], zoomParaMediaKm, { animate: true }); });
     }
   }
 
@@ -3470,13 +3474,13 @@ function trazarRutaEnMiniMapa(lat, lon){
     obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
-      // Reencuadramos SIEMPRE a la ruta nueva (no solo la primera vez) — asi, si te desviaste y
-      // se recalculo un camino distinto, se nota al toque en la pantalla, no solo por voz.
+      // Recentramos en tu posicion actual con el mismo zoom cercano de siempre — la ruta nueva
+      // arranca siempre desde donde estas parado, asi que se ve igual en esa vista de cerca.
       // Salvo que estes mirando el mapa a tu manera (tocado hace menos de 10s): ahi no lo movemos.
       const esPrimeraRutaDeLaSesion = navPasos.length === 0;
       if(!siguiendoPausadoPorToque('nav')){
-        const boundsCombinados = navCapaRuta.getBounds().extend([lat, lon]).extend([navObjetivo[0], navObjetivo[1]]);
-        moverMapaProgramatico(function(){ m.fitBounds(boundsCombinados, { padding:[40,40], maxZoom:17, animate:true }); });
+        const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
+        moverMapaProgramatico(function(){ m.setView([lat, lon], zoomParaMediaKm, { animate:true }); });
         navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
       }
       navPasos = res.pasos;
