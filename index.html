@@ -1595,7 +1595,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     overflow:hidden;
   }
   #navMapa .leaflet-map-pane{
-    transition: transform 0.35s linear;
+    transition: transform 0.6s ease-out;
   }
 
   /* ---- Navegador ---- */
@@ -3622,36 +3622,47 @@ let navUltimaPosParaHeadingMov = null;
 let navNombreDestino = '';
 let navAnuncioInicialHecho = false;
 let navAnuncioRutaHecho = false;
-let navUltimaRotacionMapa = 0;
+let navUltimaRotacionMapa = null;
 
 // Rota la vista del mapa (solo las teselas/capas, no los botones ni el control de zoom)
 // para que "arriba" sea siempre hacia donde te estas moviendo, no el norte fijo.
+// Promedia angularmente el rumbo viejo con el nuevo, respetando el "cruce" de 360°/0°
+// (sin esto, promediar 350° con 10° daria 180°, que esta mal — tiene que dar 0°).
+// El "factor" chico hace que cada lectura nueva mueva la rotacion solo un poco, en vez de
+// saltar de golpe — asi el vaiven del GPS (sobre todo caminando o yendo lento) no se nota.
+function suavizarHeading(headingViejo, headingNuevo, factor){
+  if(headingViejo === null) return headingNuevo;
+  let diferencia = ((headingNuevo - headingViejo + 540) % 360) - 180;
+  return (headingViejo + diferencia * factor + 360) % 360;
+}
+
 function actualizarRotacionMapaNav(pos){
-  if(!navSeguirUbicacion){
-    // Con el seguimiento apagado (mapa libre), dejamos el norte arriba para que sea facil de leer
-    aplicarTransformMapaNav(0);
-    return;
+  if(!navSeguirUbicacion || siguiendoPausadoPorToque('nav')){
+    return; // con el mapa libre (por toque manual reciente) no lo giramos, para no pelear con tu mano
   }
 
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
-  let heading = null;
+  let headingCrudo = null;
 
-  // Preferimos el rumbo real que entrega el GPS (mas estable en auto/caminando en linea recta)
+  // Preferimos el rumbo real que entrega el GPS, pero solo si vas a una velocidad razonable —
+  // a velocidad muy baja (parado, o caminando muy despacio) ese dato es puro ruido.
   if(typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) &&
-     (pos.coords.speed === null || pos.coords.speed > 0.4)){
-    heading = pos.coords.heading;
+     typeof pos.coords.speed === 'number' && pos.coords.speed > 0.8){
+    headingCrudo = pos.coords.heading;
   }else if(navUltimaPosParaHeadingMov){
     const dMov = distanciaMetros(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
-    if(dMov > 4){ // solo recalculamos si nos movimos lo suficiente, para no tener saltos por ruido del GPS
-      heading = calcularRumbo(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
+    if(dMov > 8){ // umbral mas exigente que antes: menos saltos por el ruido normal del GPS
+      headingCrudo = calcularRumbo(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
     }
   }
 
-  if(heading !== null){
-    navUltimaRotacionMapa = heading;
-    aplicarTransformMapaNav(heading);
+  if(headingCrudo !== null){
+    navUltimaRotacionMapa = suavizarHeading(navUltimaRotacionMapa, headingCrudo, 0.28);
+    aplicarTransformMapaNav(navUltimaRotacionMapa);
+    navUltimaPosParaHeadingMov = [lat, lon];
   }
-  navUltimaPosParaHeadingMov = [lat, lon];
+  // Si no hay una lectura confiable esta vez, dejamos la rotacion como estaba
+  // (mejor quieta que saltando a un valor de mala calidad).
 }
 
 function aplicarTransformMapaNav(headingGrados){
@@ -3663,7 +3674,7 @@ function aplicarTransformMapaNav(headingGrados){
   // La escala 1.5 compensa las esquinas que quedarian en blanco al rotar un rectangulo
   // (la diagonal de un rectangulo es mas larga que sus lados) — asi el mapa sigue tapando
   // toda la pantalla sin importar el angulo de rotacion.
-  pane.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(1.5)';
+  pane.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(2.0)';
 }
 
 function iniciarNavegacionHacia(puntos, nombre){
@@ -3680,7 +3691,7 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimoAvisoDistancia = null;
   navAviso200Hecho = false;
   navUltimaPosParaHeadingMov = null;
-  navUltimaRotacionMapa = 0;
+  navUltimaRotacionMapa = null;
   navTieneRutaValida = false;
   navSeguirUbicacion = true;
   navUltimoAjusteVista = 0;
