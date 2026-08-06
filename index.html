@@ -1828,7 +1828,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
   <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
   <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
-  <div class="nav-mapa-wrap" style="position:relative;">
+  <div class="nav-mapa-wrap" id="navMapaWrap" style="position:relative;">
     <div id="navMapa"></div>
     <div class="badge-plano-activo" id="badgePlanoActivoNav"></div>
   </div>
@@ -1982,7 +1982,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <p class="hint" style="margin-top:6px;">Podés escribir solo el nombre de una ciudad/pueblo, o una dirección completa con calle, número y comuna (ej: "Manuel Montt 500, Lautaro").</p>
     </div>
 
-    <div class="map-wrap">
+    <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
@@ -3056,10 +3056,10 @@ function obtenerMapa(){
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
     mapa.on('zoomstart', function(){ registrarZoomManual('principal'); });
-    habilitarArrastreConRotacion(mapa, 'map', function(){ return rotacionTactilPrincipal; }, function(){
+    habilitarArrastreConRotacion(mapa, 'mapWrap', function(){ return rotacionTactilPrincipal; }, function(){
       registrarInteraccionManual('principal');
     });
-    habilitarGiroTactil('map', function(){
+    habilitarGiroTactil('mapWrap', function(){
       registrarInteraccionManual('principal');
       return rotacionTactilPrincipal;
     }, function(nuevaRotacion){
@@ -3641,12 +3641,12 @@ function asegurarMiniMapaNav(){
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
   navMapaInstancia.on('zoomstart', function(){ registrarZoomManual('nav'); });
-  habilitarArrastreConRotacion(navMapaInstancia, 'navMapa', function(){
+  habilitarArrastreConRotacion(navMapaInstancia, 'navMapaWrap', function(){
     return navUltimaRotacionMapa === null ? 0 : -navUltimaRotacionMapa;
   }, function(){
     registrarInteraccionManual('nav');
   });
-  habilitarGiroTactil('navMapa', function(){
+  habilitarGiroTactil('navMapaWrap', function(){
     registrarInteraccionManual('nav');
     // Convertimos el "heading" guardado a la rotacion directa que ya tiene aplicada el
     // contenedor ahora mismo (aplicarTransformMapaNav usa rotate(-heading)), para que el
@@ -3971,8 +3971,12 @@ function actualizarRotacionMapaNav(pos){
 // Leaflet y lo reemplazamos por uno propio, que SI tiene en cuenta cuanto esta girado el mapa
 // en ese momento, así el contenido siempre se mueve para el mismo lado que arrastra el dedo,
 // sin importar el angulo de rotacion.
-function habilitarArrastreConRotacion(mapaLeaflet, idContenedor, obtenerRotacionActualGrados, alEmpezarArrastre){
-  const contenedor = document.getElementById(idContenedor);
+function habilitarArrastreConRotacion(mapaLeaflet, idContenedorEscucha, obtenerRotacionActualGrados, alEmpezarArrastre){
+  // Importante: escuchamos desde el CONTENEDOR PADRE del mapa, no del mapa mismo — la fase de
+  // "captura" solo adelanta el orden cuando el que escucha es un ancestro; si escuchamos en el
+  // mismo elemento donde Leaflet ya tiene sus propios oyentes, el orden de ejecucion sigue siendo
+  // el de siempre (Leaflet primero, porque se registro primero), y nuestro codigo nunca se entera.
+  const contenedor = document.getElementById(idContenedorEscucha);
   if(!contenedor) return;
   mapaLeaflet.dragging.disable();
 
@@ -4008,13 +4012,15 @@ function habilitarArrastreConRotacion(mapaLeaflet, idContenedor, obtenerRotacion
   contenedor.addEventListener('touchcancel', terminar, { capture:true });
 
   // Tambien con mouse, para poder probarlo desde una computadora
-  contenedor.addEventListener('mousedown', function(e){ empezar(e.clientX, e.clientY); });
+  contenedor.addEventListener('mousedown', function(e){ empezar(e.clientX, e.clientY); }, { capture:true });
   window.addEventListener('mousemove', function(e){ if(arrastrando) mover(e.clientX, e.clientY); });
   window.addEventListener('mouseup', terminar);
 }
 
-function habilitarGiroTactil(idContenedor, alEmpezarGiro, alGirar){
-  const contenedor = document.getElementById(idContenedor);
+function habilitarGiroTactil(idContenedorEscucha, alEmpezarGiro, alGirar){
+  // Mismo motivo que en el arrastre: escuchamos desde el contenedor PADRE, no del mapa mismo,
+  // para que la fase de captura realmente nos deje adelantarnos a Leaflet.
+  const contenedor = document.getElementById(idContenedorEscucha);
   if(!contenedor) return;
   let anguloInicialDedos = null;
   let rotacionAlEmpezar = 0;
