@@ -4673,6 +4673,116 @@ function moverPoligonoSubidoA(item, nuevaLat, nuevaLon){
   }
 }
 
+// ======================================================================
+// Generador de KMZ propio, sin librerias externas (para que siga funcionando
+// offline). Un KMZ es simplemente un archivo ZIP que adentro tiene un doc.kml —
+// esto arma ese ZIP a mano, en el formato "guardado sin comprimir" (STORED),
+// que es perfectamente valido para ZIP y mucho mas simple de armar que uno
+// comprimido de verdad, sin perder nada de compatibilidad con Google Earth
+// ni con las apps de mapas que abren KMZ.
+// ======================================================================
+
+let tablaCRC32 = null;
+function obtenerTablaCRC32(){
+  if(tablaCRC32) return tablaCRC32;
+  tablaCRC32 = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++){
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    tablaCRC32[n] = c >>> 0;
+  }
+  return tablaCRC32;
+}
+function calcularCRC32(bytes){
+  const tabla = obtenerTablaCRC32();
+  let crc = 0xFFFFFFFF;
+  for(let i = 0; i < bytes.length; i++){
+    crc = tabla[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// DOS date/time empaquetado (formato que exige el estandar ZIP para la fecha del archivo)
+function fechaHoraDOS(){
+  const d = new Date();
+  const hora = ((d.getHours() & 0x1F) << 11) | ((d.getMinutes() & 0x3F) << 5) | ((d.getSeconds() >> 1) & 0x1F);
+  const fecha = (((d.getFullYear() - 1980) & 0x7F) << 9) | (((d.getMonth() + 1) & 0xF) << 5) | (d.getDate() & 0x1F);
+  return { hora: hora, fecha: fecha };
+}
+
+function escribirUint32LE(arr, offset, valor){
+  arr[offset] = valor & 0xFF;
+  arr[offset+1] = (valor >>> 8) & 0xFF;
+  arr[offset+2] = (valor >>> 16) & 0xFF;
+  arr[offset+3] = (valor >>> 24) & 0xFF;
+}
+function escribirUint16LE(arr, offset, valor){
+  arr[offset] = valor & 0xFF;
+  arr[offset+1] = (valor >>> 8) & 0xFF;
+}
+
+// Arma un archivo .kmz (ZIP con un solo archivo adentro, "doc.kml") a partir del texto KML.
+// Devuelve un Blob listo para descargar.
+function construirKMZ(nombreEntradaInterna, contenidoKmlTexto){
+  const datosArchivo = new TextEncoder().encode(contenidoKmlTexto);
+  const nombreBytes = new TextEncoder().encode(nombreEntradaInterna);
+  const crc = calcularCRC32(datosArchivo);
+  const { hora, fecha } = fechaHoraDOS();
+
+  // ---- Encabezado local del archivo + los datos en si ----
+  const encabezadoLocal = new Uint8Array(30 + nombreBytes.length);
+  escribirUint32LE(encabezadoLocal, 0, 0x04034b50); // firma de "encabezado de archivo local"
+  escribirUint16LE(encabezadoLocal, 4, 20);          // version necesaria
+  escribirUint16LE(encabezadoLocal, 6, 0);           // sin banderas especiales
+  escribirUint16LE(encabezadoLocal, 8, 0);           // metodo 0 = sin comprimir (STORED)
+  escribirUint16LE(encabezadoLocal, 10, hora);
+  escribirUint16LE(encabezadoLocal, 12, fecha);
+  escribirUint32LE(encabezadoLocal, 14, crc);
+  escribirUint32LE(encabezadoLocal, 18, datosArchivo.length); // tamaño comprimido = igual (no se comprime)
+  escribirUint32LE(encabezadoLocal, 22, datosArchivo.length); // tamaño original
+  escribirUint16LE(encabezadoLocal, 26, nombreBytes.length);
+  escribirUint16LE(encabezadoLocal, 28, 0); // sin campos extra
+  encabezadoLocal.set(nombreBytes, 30);
+
+  // ---- Encabezado de la "carpeta central" (indice del ZIP, va al final del archivo) ----
+  const encabezadoCentral = new Uint8Array(46 + nombreBytes.length);
+  escribirUint32LE(encabezadoCentral, 0, 0x02014b50); // firma de "encabezado central"
+  escribirUint16LE(encabezadoCentral, 4, 20);  // version que lo creo
+  escribirUint16LE(encabezadoCentral, 6, 20);  // version necesaria
+  escribirUint16LE(encabezadoCentral, 8, 0);
+  escribirUint16LE(encabezadoCentral, 10, 0);
+  escribirUint16LE(encabezadoCentral, 12, hora);
+  escribirUint16LE(encabezadoCentral, 14, fecha);
+  escribirUint32LE(encabezadoCentral, 16, crc);
+  escribirUint32LE(encabezadoCentral, 20, datosArchivo.length);
+  escribirUint32LE(encabezadoCentral, 24, datosArchivo.length);
+  escribirUint16LE(encabezadoCentral, 28, nombreBytes.length);
+  escribirUint16LE(encabezadoCentral, 30, 0); // campos extra
+  escribirUint16LE(encabezadoCentral, 32, 0); // comentario
+  escribirUint16LE(encabezadoCentral, 34, 0); // numero de disco
+  escribirUint16LE(encabezadoCentral, 36, 0); // atributos internos
+  escribirUint32LE(encabezadoCentral, 38, 0); // atributos externos
+  escribirUint32LE(encabezadoCentral, 42, 0); // donde empieza el encabezado local (offset 0, es el unico archivo)
+  encabezadoCentral.set(nombreBytes, 46);
+
+  // ---- Fin de la carpeta central (cierre del ZIP) ----
+  const finCentral = new Uint8Array(22);
+  const offsetEncabezadoLocal = 0;
+  const offsetCentral = encabezadoLocal.length + datosArchivo.length;
+  escribirUint32LE(finCentral, 0, 0x06054b50); // firma de "fin de carpeta central"
+  escribirUint16LE(finCentral, 4, 0);
+  escribirUint16LE(finCentral, 6, 0);
+  escribirUint16LE(finCentral, 8, 1);  // 1 archivo en este disco
+  escribirUint16LE(finCentral, 10, 1); // 1 archivo en total
+  escribirUint32LE(finCentral, 12, encabezadoCentral.length);
+  escribirUint32LE(finCentral, 16, offsetCentral);
+  escribirUint16LE(finCentral, 20, 0); // sin comentario
+
+  return new Blob([encabezadoLocal, datosArchivo, encabezadoCentral, finCentral], { type: 'application/vnd.google-earth.kmz' });
+}
+
 function descargarKmlDeItem(nombre, puntos, tipo){
   const kml = construirKML(nombre, puntos, tipo || determinarTipoFigura(puntos, false));
   const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
@@ -4886,7 +4996,7 @@ function quitarPoligonoKml(id){
   guardarPoligonosEnStorage();
 }
 
-function agregarPoligonoSubido(nombre, puntos, tipo){
+function agregarPoligonoSubido(nombre, puntos, tipo, omitirZonaAutomatica){
   const item = {
     id: 'kml_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     nombre: nombre,
@@ -4901,8 +5011,12 @@ function agregarPoligonoSubido(nombre, puntos, tipo){
   guardarPoligonosEnStorage();
 
   // Apenas tenemos los puntos, arrancamos ya mismo la descarga de caminos alrededor (no esperamos a nada mas)
-  const centro = item.tipo === 'punto' ? puntos[0] : centroide(puntos);
-  actualizarZonaAutomatica(centro[0], centro[1], nombre);
+  // — salvo que estemos cargando muchos puntos de golpe (ver procesarArchivosKml), en cuyo caso esto se
+  // hace UNA sola vez para todo el lote, no una vez por cada punto (para no saturar el servicio de mapas).
+  if(!omitirZonaAutomatica){
+    const centro = item.tipo === 'punto' ? puntos[0] : centroide(puntos);
+    actualizarZonaAutomatica(centro[0], centro[1], nombre);
+  }
 
   return item;
 }
@@ -4962,6 +5076,64 @@ function extraerPuntosDeCoordenadas(textoCoords){
     puntos.push([lat, lon]);
   }
   return puntos;
+}
+
+// Lee TODOS los <Placemark> de un archivo KML/KMZ, no solo el primero — asi un archivo con
+// 300 puntos separados (por ejemplo, un registro de daños con muchos predios) carga los 300,
+// no solo uno. Cada Placemark se agrega como un punto/linea/poligono independiente, con su
+// propio nombre, tal como aparece en el archivo original.
+function parsearKMLTodosLosPlacemarks(texto){
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(texto, 'text/xml');
+  if(xml.querySelector('parsererror')){
+    throw new Error('El archivo no es un XML/KML valido.');
+  }
+
+  const placemarks = xml.getElementsByTagName('Placemark');
+  const resultados = [];
+
+  for(let i = 0; i < placemarks.length; i++){
+    const pm = placemarks[i];
+    let puntos = null, tipo = null;
+
+    const poligono = pm.getElementsByTagName('Polygon')[0];
+    if(poligono){
+      const coordNodo = poligono.getElementsByTagName('coordinates')[0];
+      if(coordNodo){ puntos = extraerPuntosDeCoordenadas(coordNodo.textContent); tipo = 'poligono'; }
+    }
+    if(!puntos || puntos.length === 0){
+      const linea = pm.getElementsByTagName('LineString')[0];
+      if(linea){
+        const coordNodo = linea.getElementsByTagName('coordinates')[0];
+        if(coordNodo){ puntos = extraerPuntosDeCoordenadas(coordNodo.textContent); tipo = 'linea'; }
+      }
+    }
+    if(!puntos || puntos.length === 0){
+      const punto = pm.getElementsByTagName('Point')[0];
+      if(punto){
+        const coordNodo = punto.getElementsByTagName('coordinates')[0];
+        if(coordNodo){ puntos = extraerPuntosDeCoordenadas(coordNodo.textContent); tipo = 'punto'; }
+      }
+    }
+    if(!puntos || puntos.length === 0) continue; // este Placemark no tenia geometria reconocible, se salta
+
+    if(tipo === 'poligono' && puntos.length > 3){
+      const primero = puntos[0], ultimo = puntos[puntos.length - 1];
+      if(primero[0] === ultimo[0] && primero[1] === ultimo[1]) puntos.pop();
+    }
+
+    const nombreNodo = pm.getElementsByTagName('name')[0];
+    const nombreDetectado = nombreNodo ? nombreNodo.textContent.trim() : '';
+
+    resultados.push({ puntos: puntos, nombreDetectado: nombreDetectado, tipo: tipo });
+  }
+
+  if(resultados.length === 0){
+    // Ningun <Placemark> con geometria reconocible — probamos el metodo de respaldo, por si
+    // el archivo no usa Placemark y trae la geometria "suelta" en otro lado.
+    return [parsearKML(texto)];
+  }
+  return resultados;
 }
 
 function parsearKML(texto){
@@ -5123,10 +5295,27 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
     const archivo = archivos[index];
     leerArchivoKmlComoTexto(archivo).then(function(texto){
       try{
-        const resultado = parsearKML(texto);
-        const nombreEtiqueta = resultado.nombreDetectado || archivo.name.replace(/\.(kml|kmz)$/i, '');
-        agregarPoligonoSubido(nombreEtiqueta, resultado.puntos, resultado.tipo);
-        cargados++;
+        const resultados = parsearKMLTodosLosPlacemarks(texto);
+        const nombreBase = archivo.name.replace(/\.(kml|kmz)$/i, '');
+        const esCargaMasiva = resultados.length > 15;
+        let sumaLat = 0, sumaLon = 0, cantidadCentros = 0;
+
+        resultados.forEach(function(resultado, i){
+          const nombreEtiqueta = resultado.nombreDetectado
+            || (resultados.length > 1 ? (nombreBase + ' ' + (i+1)) : nombreBase);
+          const item = agregarPoligonoSubido(nombreEtiqueta, resultado.puntos, resultado.tipo, esCargaMasiva);
+          cargados++;
+          if(esCargaMasiva){
+            const centro = item.tipo === 'punto' ? item.puntos[0] : centroide(item.puntos);
+            sumaLat += centro[0]; sumaLon += centro[1]; cantidadCentros++;
+          }
+        });
+
+        // En cargas masivas, una sola consulta de caminos centrada en el promedio de todos los
+        // puntos del lote — evita disparar una consulta separada por cada uno de los 300 puntos.
+        if(esCargaMasiva && cantidadCentros > 0){
+          actualizarZonaAutomatica(sumaLat / cantidadCentros, sumaLon / cantidadCentros, nombreBase, 100);
+        }
       }catch(err){
         conError.push(archivo.name);
       }
