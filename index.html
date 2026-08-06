@@ -1096,13 +1096,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #map{
     width:100%;
     height:560px;
-    border-radius:14px;
-    border:2px solid #ffe28a;
     background:#fffef7;
-    box-shadow:0 4px 20px rgba(0,0,0,0.06);
+    transition: transform 0.6s ease-out;
   }
   .map-wrap{
     position:relative;
+    border-radius:14px;
+    border:2px solid #ffe28a;
+    box-shadow:0 4px 20px rgba(0,0,0,0.06);
+    overflow:hidden;
   }
   .banner-trazar{
     background:linear-gradient(90deg, #fff6cf, #ffffff);
@@ -2333,6 +2335,7 @@ function cargarMetaPlanosOffline(){
 }
 function guardarMetaPlanosOffline(){
   try{ localStorage.setItem('generadorKml_planosOffline', JSON.stringify(planosOfflineMeta)); }catch(e){ /* sin espacio o no disponible */ }
+  invalidarGrafoOffline(); // los caminos guardados pudieron haber cambiado: que se reconstruya con lo nuevo
 }
 
 function lon2tileX(lon, z){ return Math.floor((lon+180)/360 * Math.pow(2,z)); }
@@ -2360,7 +2363,7 @@ function obtenerCallesOverpass(bounds){
     return resp.json();
   }).then(function(data){
     const calles = [];
-    (data.elements || []).slice(0, 4000).forEach(function(el){
+    (data.elements || []).slice(0, 20000).forEach(function(el){
       if(el.type === 'way' && el.geometry){
         calles.push(el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }));
       }
@@ -2526,6 +2529,28 @@ function guardarPlanoAutomaticoAlrededorDePunto(lat, lon, nombreDestino){
   ejecutarGuardadoDePlano(bounds, zoom, nombre, { silencioso:true });
 }
 
+// Carga una tesela satelital con reintentos — con señal debil o intermitente (tipico en
+// terreno rural), un solo intento fallaba seguido, dejando el guardado automatico sin nada
+// aunque el cartel dijera que si habia respaldo. Con 3 intentos y una pequeña espera entre
+// cada uno, se recupera de cortes cortos de señal en vez de rendirse al primer error.
+function cargarTeselaConReintentos(url, intentosRestantes){
+  return new Promise(function(resolve){
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){
+      if(intentosRestantes > 1){
+        setTimeout(function(){
+          cargarTeselaConReintentos(url, intentosRestantes - 1).then(resolve);
+        }, 400);
+      }else{
+        resolve(null);
+      }
+    };
+    img.src = url;
+  });
+}
+
 function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
   opciones = opciones || {};
   const estado = document.getElementById('planosOfflineEstado');
@@ -2559,12 +2584,9 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
       const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
       const px = (tx - minX) * 256;
       const py = (ty - minY) * 256;
-      promesas.push(new Promise(function(resolve){
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function(){ ctx.drawImage(img, px, py, 256, 256); resolve(true); };
-        img.onerror = function(){ resolve(false); };
-        img.src = url;
+      promesas.push(cargarTeselaConReintentos(url, 3).then(function(img){
+        if(img){ ctx.drawImage(img, px, py, 256, 256); return true; }
+        return false;
       }));
     }
   }
@@ -2955,14 +2977,19 @@ function cachearCallesAlrededorDePunto(lat, lon, radioKm, etiqueta){
 }
 
 // ---------- Pausa el seguimiento automatico cuando el usuario toca el mapa con la mano ----------
-// Se aplica igual en el mapa principal y en el de navegacion: mientras el usuario arrastra o hace
-// zoom manualmente, el seguimiento automatico se pausa; recien 10 segundos despues del ultimo
-// toque, vuelve a centrar/encuadrar solo. Los movimientos que hace la APP (panTo/fitBounds/setView
-// programaticos) no cuentan como "toque manual" gracias a esta bandera.
+// Se aplica igual en el mapa principal y en el de navegacion. Hay dos tiempos de gracia distintos:
+// - Arrastrar o girar con la mano: se pausa 10 segundos.
+// - Hacer ZOOM manualmente (pellizcar): se pausa 3 MINUTOS — si te acercaste a mirar algo puntual
+//   con el zoom, tiene sentido que te deje mas tiempo mirando eso antes de volver a acomodarse solo.
+// Los movimientos que hace la APP (panTo/fitBounds/setView programaticos) no cuentan como
+// "toque manual" gracias a la bandera de abajo.
 let banderaMovimientoProgramatico = false;
 let ultimaInteraccionManualPrincipal = 0;
 let ultimaInteraccionManualNav = 0;
+let ultimoZoomManualPrincipal = 0;
+let ultimoZoomManualNav = 0;
 const PAUSA_SEGUIMIENTO_MS = 10000;
+const PAUSA_ZOOM_MS = 3 * 60 * 1000;
 
 function moverMapaProgramatico(fn){
   banderaMovimientoProgramatico = true;
@@ -2976,9 +3003,18 @@ function registrarInteraccionManual(cualMapa){
   else ultimaInteraccionManualNav = Date.now();
 }
 
+function registrarZoomManual(cualMapa){
+  if(banderaMovimientoProgramatico) return;
+  if(cualMapa === 'principal') ultimoZoomManualPrincipal = Date.now();
+  else ultimoZoomManualNav = Date.now();
+}
+
 function siguiendoPausadoPorToque(cualMapa){
-  const ultima = cualMapa === 'principal' ? ultimaInteraccionManualPrincipal : ultimaInteraccionManualNav;
-  return (Date.now() - ultima) < PAUSA_SEGUIMIENTO_MS;
+  const ultimaGeneral = cualMapa === 'principal' ? ultimaInteraccionManualPrincipal : ultimaInteraccionManualNav;
+  const ultimoZoom = cualMapa === 'principal' ? ultimoZoomManualPrincipal : ultimoZoomManualNav;
+  const pausadoPorArrastreOGiro = (Date.now() - ultimaGeneral) < PAUSA_SEGUIMIENTO_MS;
+  const pausadoPorZoom = (Date.now() - ultimoZoom) < PAUSA_ZOOM_MS;
+  return pausadoPorArrastreOGiro || pausadoPorZoom;
 }
 
 function obtenerMapa(){
@@ -3019,7 +3055,17 @@ function obtenerMapa(){
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
-    mapa.on('dragstart zoomstart', function(){ registrarInteraccionManual('principal'); });
+    mapa.on('zoomstart', function(){ registrarZoomManual('principal'); });
+    habilitarArrastreConRotacion(mapa, 'map', function(){ return rotacionTactilPrincipal; }, function(){
+      registrarInteraccionManual('principal');
+    });
+    habilitarGiroTactil('map', function(){
+      registrarInteraccionManual('principal');
+      return rotacionTactilPrincipal;
+    }, function(nuevaRotacion){
+      rotacionTactilPrincipal = nuevaRotacion;
+      aplicarRotacionPrincipal(nuevaRotacion);
+    });
   }
   document.getElementById('mapPanel').style.display = 'block';
   setTimeout(() => mapa.invalidateSize(), 150);
@@ -3179,6 +3225,51 @@ function distanciaMetros(lat1, lon1, lat2, lon2){
   const s = Math.sin(dLat/2)**2 + Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
 }
+// Calcula un punto ubicado a "distanciaMetros" hacia adelante en la direccion del rumbo actual.
+// Se usa para centrar la camara de navegacion un poco ADELANTE de donde estas parado en vez de
+// exactamente encima tuyo — asi tu punto queda mas abajo en la pantalla (tipo vista de auto) y
+// se ve mas camino por recorrer, en vez de repartir la pantalla mitad y mitad con el camino
+// que ya recorriste.
+function desplazarPuntoHaciaRumbo(lat, lon, rumboGrados, distanciaMetros){
+  const R = 6378137;
+  const rumboRad = rumboGrados * Math.PI/180;
+  const latRad = lat * Math.PI/180;
+  const lonRad = lon * Math.PI/180;
+  const nuevaLatRad = Math.asin(
+    Math.sin(latRad)*Math.cos(distanciaMetros/R) + Math.cos(latRad)*Math.sin(distanciaMetros/R)*Math.cos(rumboRad)
+  );
+  const nuevaLonRad = lonRad + Math.atan2(
+    Math.sin(rumboRad)*Math.sin(distanciaMetros/R)*Math.cos(latRad),
+    Math.cos(distanciaMetros/R) - Math.sin(latRad)*Math.sin(nuevaLatRad)
+  );
+  return [nuevaLatRad*180/Math.PI, nuevaLonRad*180/Math.PI];
+}
+
+// Devuelve el punto donde hay que centrar la camara para que tu posicion real quede mas abajo
+// en la pantalla (aprox. 3/4), dejando mas pantalla libre hacia donde avanzas. Si todavia no
+// hay un rumbo confiable (recien arrancando), centra directo en tu posicion, sin desplazar.
+// Decide que tan "de cerca" mostrar el mapa segun donde estas parado ahora mismo:
+// - Si quedan 3 km o menos hasta el destino: siempre de cerca (500 m), para el detalle
+//   final de llegada, sin importar si es ruta o calle.
+// - Si estas transitando por una ruta/carretera (fuera de ese ultimo tramo): mas alejado
+//   (5 km), porque a esa velocidad conviene ver mas camino por delante, no el detalle.
+// - En calle de ciudad, o sin ruta calculada todavia: de cerca (500 m) por defecto.
+function calcularEscalaZoomNav(lat, lon){
+  if(!navObjetivo) return 500;
+  const distDestino = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
+  if(distDestino <= 3000) return 500;
+  if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
+    const pasoActual = navPasos[navPasoActualIdx];
+    if(pareceRuta(pasoActual.nombreVia)) return 5000;
+  }
+  return 500;
+}
+
+function puntoDeCamaraConMirada(lat, lon){
+  if(navUltimaRotacionMapa === null) return [lat, lon];
+  return desplazarPuntoHaciaRumbo(lat, lon, navUltimaRotacionMapa, 125);
+}
+
 function calcularRumbo(lat1, lon1, lat2, lon2){
   const rad = d => d*Math.PI/180;
   const y = Math.sin(rad(lon2-lon1)) * Math.cos(rad(lat2));
@@ -3215,6 +3306,7 @@ let navPasos = [];
 let navPasoActualIdx = 0;
 let navDistanciaTotalRuta = null;
 let navTieneRutaValida = false;
+let navRutaEsOffline = false; // true cuando la ruta dibujada es del motor offline propio, no de OSRM
 let navUltimoFetchRuta = 0;
 let navUltimaPosParaRuta = null;
 let navVozActiva = true;
@@ -3307,6 +3399,162 @@ function traducirManiobra(paso){
 }
 
 // ---- Pedir ruta por calles/caminos a OSRM (necesita internet) ----
+// ======================================================================
+// MOTOR DE RUTAS OFFLINE — calcula un camino real por los caminos ya
+// guardados cuando no hay señal, en vez de solo mostrarlos como referencia.
+// ======================================================================
+//
+// Limitacion honesta que hay que tener clara: solo puede trazar ruta sobre los
+// tramos de camino que ya se guardaron con señal en algun momento — si el origen
+// o el destino quedan fuera de esa cobertura guardada, no va a poder completar
+// el tramo final (esto es inevitable sin conexion: no hay forma de "inventar"
+// un camino que nunca se descargo).
+
+let grafoOfflineCache = null; // se reconstruye solo la primera vez que hace falta
+
+function clavePuntoGrafo(lat, lon){
+  return lat.toFixed(5) + ',' + lon.toFixed(5);
+}
+
+function construirGrafoOffline(){
+  const nodos = {};
+  function agregarNodo(lat, lon){
+    const k = clavePuntoGrafo(lat, lon);
+    if(!nodos[k]) nodos[k] = { lat: lat, lon: lon, vecinos: [] };
+    return k;
+  }
+  function agregarArista(k1, k2, dist){
+    nodos[k1].vecinos.push({ clave: k2, distancia: dist });
+    nodos[k2].vecinos.push({ clave: k1, distancia: dist });
+  }
+
+  (planosOfflineMeta || []).forEach(function(meta){
+    (meta.calles || []).forEach(function(tramo){
+      for(let i = 0; i < tramo.length - 1; i++){
+        const p1 = tramo[i], p2 = tramo[i+1];
+        const k1 = agregarNodo(p1[0], p1[1]);
+        const k2 = agregarNodo(p2[0], p2[1]);
+        if(k1 !== k2){
+          agregarArista(k1, k2, distanciaMetros(p1[0], p1[1], p2[0], p2[1]));
+        }
+      }
+    });
+  });
+  return nodos;
+}
+
+function obtenerGrafoOffline(){
+  if(!grafoOfflineCache) grafoOfflineCache = construirGrafoOffline();
+  return grafoOfflineCache;
+}
+
+// Hay que llamar esto cada vez que se guardan caminos nuevos, para que el grafo
+// se reconstruya incluyendo los datos frescos (si no, seguiria rutiando solo con
+// lo que habia la primera vez que se armo, ignorando lo nuevo).
+function invalidarGrafoOffline(){
+  grafoOfflineCache = null;
+}
+
+function nodoMasCercanoEnGrafo(grafo, lat, lon){
+  let mejorClave = null, mejorDist = Infinity;
+  for(const k in grafo){
+    const n = grafo[k];
+    const d = distanciaMetros(lat, lon, n.lat, n.lon);
+    if(d < mejorDist){ mejorDist = d; mejorClave = k; }
+  }
+  return { clave: mejorClave, distancia: mejorDist };
+}
+
+// Cola de prioridad simple (heap binario) — hace falta para que Dijkstra funcione
+// rapido incluso con muchos miles de nodos, sin trabar el celular.
+function ColaPrioridadOffline(){ this.items = []; }
+ColaPrioridadOffline.prototype.push = function(prioridad, valor){
+  this.items.push({ p: prioridad, v: valor });
+  let i = this.items.length - 1;
+  while(i > 0){
+    const padre = (i - 1) >> 1;
+    if(this.items[padre].p <= this.items[i].p) break;
+    const tmp = this.items[padre]; this.items[padre] = this.items[i]; this.items[i] = tmp;
+    i = padre;
+  }
+};
+ColaPrioridadOffline.prototype.pop = function(){
+  if(this.items.length === 0) return null;
+  const tope = this.items[0];
+  const ultimo = this.items.pop();
+  if(this.items.length > 0){
+    this.items[0] = ultimo;
+    let i = 0;
+    while(true){
+      const izq = 2*i+1, der = 2*i+2;
+      let menor = i;
+      if(izq < this.items.length && this.items[izq].p < this.items[menor].p) menor = izq;
+      if(der < this.items.length && this.items[der].p < this.items[menor].p) menor = der;
+      if(menor === i) break;
+      const tmp = this.items[menor]; this.items[menor] = this.items[i]; this.items[i] = tmp;
+      i = menor;
+    }
+  }
+  return tope;
+};
+ColaPrioridadOffline.prototype.vacia = function(){ return this.items.length === 0; };
+
+// Calcula el camino mas corto entre dos puntos usando SOLO los caminos ya guardados
+// (Dijkstra sobre el grafo armado con los tramos descargados con señal). Devuelve null
+// si no hay caminos guardados cerca de alguno de los dos puntos, o si no existe conexion
+// entre ellos dentro de lo que se tiene guardado.
+function calcularRutaOffline(latOrigen, lonOrigen, latDestino, lonDestino){
+  const grafo = obtenerGrafoOffline();
+  if(Object.keys(grafo).length === 0) return null;
+
+  const origen = nodoMasCercanoEnGrafo(grafo, latOrigen, lonOrigen);
+  const destino = nodoMasCercanoEnGrafo(grafo, latDestino, lonDestino);
+  if(!origen.clave || !destino.clave) return null;
+  // Si el camino guardado mas cercano queda a mas de 2 km del punto real, no sirve de mucho
+  if(origen.distancia > 2000 || destino.distancia > 2000) return null;
+
+  const dist = {};
+  const prev = {};
+  const visitado = {};
+  dist[origen.clave] = 0;
+
+  const cola = new ColaPrioridadOffline();
+  cola.push(0, origen.clave);
+
+  while(!cola.vacia()){
+    const actual = cola.pop().v;
+    if(visitado[actual]) continue;
+    visitado[actual] = true;
+    if(actual === destino.clave) break;
+
+    grafo[actual].vecinos.forEach(function(vec){
+      if(visitado[vec.clave]) return;
+      const nuevaDist = dist[actual] + vec.distancia;
+      if(dist[vec.clave] === undefined || nuevaDist < dist[vec.clave]){
+        dist[vec.clave] = nuevaDist;
+        prev[vec.clave] = actual;
+        cola.push(nuevaDist, vec.clave);
+      }
+    });
+  }
+
+  if(dist[destino.clave] === undefined) return null; // no hay conexion entre ambos puntos guardados
+
+  const coords = [];
+  let actual = destino.clave;
+  while(actual){
+    coords.unshift([grafo[actual].lat, grafo[actual].lon]);
+    actual = prev[actual];
+  }
+  coords.push([latDestino, lonDestino]);
+
+  return {
+    coords: coords,
+    distanciaTotal: dist[destino.clave] + destino.distancia,
+    pasos: [] // sin indicaciones giro-a-giro (esto es solo la traza del camino, no una navegacion narrada)
+  };
+}
+
 function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   const url = 'https://router.project-osrm.org/route/v1/driving/' +
     lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
@@ -3392,7 +3640,28 @@ function asegurarMiniMapaNav(){
     }
   });
   navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
-  navMapaInstancia.on('dragstart zoomstart', function(){ registrarInteraccionManual('nav'); });
+  navMapaInstancia.on('zoomstart', function(){ registrarZoomManual('nav'); });
+  habilitarArrastreConRotacion(navMapaInstancia, 'navMapa', function(){
+    return navUltimaRotacionMapa === null ? 0 : -navUltimaRotacionMapa;
+  }, function(){
+    registrarInteraccionManual('nav');
+  });
+  habilitarGiroTactil('navMapa', function(){
+    registrarInteraccionManual('nav');
+    // Convertimos el "heading" guardado a la rotacion directa que ya tiene aplicada el
+    // contenedor ahora mismo (aplicarTransformMapaNav usa rotate(-heading)), para que el
+    // gesto arranque desde donde ya estaba, sin saltos.
+    return navUltimaRotacionMapa === null ? 0 : -navUltimaRotacionMapa;
+  }, function(nuevaRotacionDirecta){
+    const el = document.getElementById('navMapa');
+    if(el){
+      el.style.transformOrigin = '50% 50%';
+      el.style.transform = 'rotate(' + nuevaRotacionDirecta + 'deg) scale(2.0)';
+    }
+    // Guardamos el equivalente en "heading" para que, cuando retome la rotacion automatica
+    // por rumbo (despues de los 10s de pausa), continue suave desde donde lo dejaste con la mano.
+    navUltimaRotacionMapa = -nuevaRotacionDirecta;
+  });
   return navMapaInstancia;
 }
 
@@ -3426,8 +3695,8 @@ function trazarRutaEnMiniMapa(lat, lon){
     }).addTo(m);
     // Apenas tenemos la primera posicion, centramos ahi mismo (no esperamos a que llegue la ruta)
     moverMapaProgramatico(function(){
-      const zoomInicial = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
-      m.setView([lat, lon], zoomInicial);
+      const zoomInicial = m.getBoundsZoom(L.latLng(lat, lon).toBounds(calcularEscalaZoomNav(lat, lon)));
+      m.setView(puntoDeCamaraConMirada(lat, lon), zoomInicial);
     });
   }else{
     navMarcadorYo.setLatLng([lat, lon]);
@@ -3457,14 +3726,15 @@ function trazarRutaEnMiniMapa(lat, lon){
     const ahora = Date.now();
     if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 1200){
       navUltimoAjusteVista = ahora;
-      const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
-      moverMapaProgramatico(function(){ m.setView([lat, lon], zoomParaMediaKm, { animate: true }); });
+      const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(calcularEscalaZoomNav(lat, lon)));
+      moverMapaProgramatico(function(){ m.setView(puntoDeCamaraConMirada(lat, lon), zoomParaMediaKm, { animate: true }); });
     }
   }
 
-  // Verificacion proactiva: si estamos sin conexion, la ruta azul vieja no sirve de guia confiable —
-  // la ocultamos y dejamos solo el punto + brujula + distancia (que no dependen de internet).
-  if(navigator.onLine === false && navCapaRuta && m.hasLayer(navCapaRuta)){
+  // Verificacion proactiva: si estamos sin conexion, la ruta azul (de OSRM) vieja no sirve de
+  // guia confiable — la ocultamos. La ruta MORADA (calculada por el motor offline propio) no
+  // se oculta aca: esa se recalcula fresca en cada intento de abajo, sigue siendo confiable.
+  if(navigator.onLine === false && navCapaRuta && m.hasLayer(navCapaRuta) && !navRutaEsOffline){
     m.removeLayer(navCapaRuta);
     document.getElementById('navEstado').textContent = 'Sin conexión: se oculta la ruta calculada. Guiate por la flecha y la distancia.';
   }
@@ -3477,20 +3747,27 @@ function trazarRutaEnMiniMapa(lat, lon){
     obtenerRutaOSRM(lat, lon, navObjetivo[0], navObjetivo[1]).then(function(res){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
+      navRutaEsOffline = false;
       // Recentramos en tu posicion actual con el mismo zoom cercano de siempre — la ruta nueva
       // arranca siempre desde donde estas parado, asi que se ve igual en esa vista de cerca.
       // Salvo que estes mirando el mapa a tu manera (tocado hace menos de 10s): ahi no lo movemos.
       const esPrimeraRutaDeLaSesion = navPasos.length === 0;
       if(!siguiendoPausadoPorToque('nav')){
-        const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(500));
-        moverMapaProgramatico(function(){ m.setView([lat, lon], zoomParaMediaKm, { animate:true }); });
+        const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(calcularEscalaZoomNav(lat, lon)));
+        moverMapaProgramatico(function(){ m.setView(puntoDeCamaraConMirada(lat, lon), zoomParaMediaKm, { animate:true }); });
         navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
       }
       navPasos = res.pasos;
       // Importante: NO reiniciamos siempre a 0 — resincronizamos al primer paso que todavia
       // no se cruzo, para no repetir por voz la misma indicacion en cada recalculo de ruta.
+      const idxPasoAnterior = navPasoActualIdx;
       navPasoActualIdx = resincronizarPasoActual(lat, lon);
-      navAviso200Hecho = false;
+      // El aviso de voz solo se vuelve a "armar" si de verdad cambiaste de maniobra (el indice
+      // cambio) — si seguis en la misma, no lo tocamos, para no repetir el aviso en cada
+      // recalculo de ruta (que ahora pasa cada 3 segundos aproximadamente).
+      if(navPasoActualIdx !== idxPasoAnterior){
+        navAviso200Hecho = false;
+      }
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
@@ -3506,6 +3783,26 @@ function trazarRutaEnMiniMapa(lat, lon){
         hablar(res.pasos[0].texto);
       }
     }).catch(function(err){
+      // Antes de rendirnos del todo, probamos con el motor de rutas offline propio —
+      // calcula un camino real usando los tramos ya guardados, sin necesitar internet.
+      const rutaOffline = calcularRutaOffline(lat, lon, navObjetivo[0], navObjetivo[1]);
+      if(rutaOffline){
+        if(navCapaRuta) m.removeLayer(navCapaRuta);
+        // Linea punteada y de otro color: para que sea honesto que esta es una ruta
+        // aproximada calculada con los caminos guardados, no el calculo en vivo real.
+        navCapaRuta = L.polyline(rutaOffline.coords, { color:'#8a3fd1', weight:5, opacity:0.85, dashArray:'8,8' }).addTo(m);
+        navRutaEsOffline = true;
+        navDistanciaTotalRuta = rutaOffline.distanciaTotal;
+        navTieneRutaValida = true;
+        navPasos = [];
+        document.getElementById('navEstado').textContent = 'Sin señal — usando ruta aproximada por los caminos guardados (' + Math.round(rutaOffline.distanciaTotal) + ' m). Línea morada punteada.';
+        if(!navAnuncioRutaHecho){
+          navAnuncioRutaHecho = true;
+          hablar('Sin señal. Trazando ruta aproximada con los caminos guardados.');
+        }
+        return;
+      }
+
       // Importante: si ya teniamos una ruta buena de un intento anterior, la manejamos distinto
       // segun si es una falla pasajera (con señal) o si realmente no hay conexion.
       if(navTieneRutaValida){
@@ -3578,37 +3875,25 @@ function pareceRuta(nombreVia){
 }
 
 function revisarAvisosDeVoz(lat, lon, distTotalRecta){
-  // Si tenemos pasos de una ruta real, avisamos UNA sola vez por maniobra, a ~200 m antes —
-  // y solo si es una ruta/camino principal, no una calle dentro de una ciudad (ahi las
-  // maniobras son muy seguidas y avisar en cada una se vuelve repetitivo e innecesario).
+  // Avanzamos de maniobra en maniobra en silencio (esto lo sigue necesitando el zoom dinamico,
+  // para saber si estas en una ruta o en una calle de ciudad) — pero ya NO avisamos por voz
+  // en cada giro individual, eso quedo reemplazado por los 3 avisos de distancia de abajo.
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
     const paso = navPasos[navPasoActualIdx];
     const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
-    const esRutaPrincipal = pareceRuta(paso.nombreVia);
-
-    if(esRutaPrincipal && !navAviso200Hecho && distAlPaso <= 200){
-      navAviso200Hecho = true;
-      hablar('En 200 metros, ' + paso.texto.charAt(0).toLowerCase() + paso.texto.slice(1));
-    }
-    if(distAlPaso < 15){
+    if(distAlPaso < 15 && navPasoActualIdx < navPasos.length - 1){
       navPasoActualIdx++;
-      navAviso200Hecho = false;
-      if(navPasoActualIdx >= navPasos.length){
-        hablar('Estás llegando al destino');
-      }else if(!pareceRuta(navPasos[navPasoActualIdx].nombreVia)){
-        // Calle de ciudad: no esperamos a los 200m (las cuadras son cortas), avisamos ya mismo una vez
-        navAviso200Hecho = true;
-        hablar(navPasos[navPasoActualIdx].texto);
-      }
     }
-    return;
   }
-  // Sin ruta por camino: avisos periodicos en linea recta
-  const hitos = [500, 200, 100, 50, 20];
+
+  // Avisos de llegada por voz: solo estos 3 hitos de distancia al punto/poligono de destino,
+  // cada uno una unica vez (navUltimoAvisoDistancia evita que se repita).
+  const hitos = [3000, 1500, 300];
   for(const h of hitos){
     if(distTotalRecta <= h && navUltimoAvisoDistancia !== h){
       navUltimoAvisoDistancia = h;
-      hablar('Quedan ' + h + ' metros en línea recta.');
+      const distTxt = h >= 1000 ? (h/1000).toString().replace('.', ',') + ' kilómetros' : h + ' metros';
+      hablar('Quedan ' + distTxt + ' para llegar.');
       break;
     }
   }
@@ -3672,6 +3957,103 @@ function actualizarRotacionMapaNav(pos){
   // (mejor quieta que saltando a un valor de mala calidad).
 }
 
+// ---------- Girar el mapa con dos dedos (gesto tactil), en cualquiera de las dos pantallas ----------
+// Leaflet no trae esto de fabrica, asi que lo armamos a mano: mientras haya 2 dedos tocando,
+// medimos el angulo entre ellos y lo aplicamos como rotacion directa al contenedor del mapa.
+// Al soltar los dedos, la rotacion queda como quedo (no vuelve sola a 0), hasta que:
+// - en la pantalla de navegacion, pasen los 10s de pausa y la rotacion automatica por rumbo retome, o
+// - se vuelva a girar manualmente.
+// ---------- Arrastrar el mapa con un dedo, corrigiendo la rotacion ----------
+// Bug real que se detecto: cuando el mapa esta girado, Leaflet sigue calculando el arrastre
+// como si "arriba" fuera siempre el norte (no sabe que lo giramos visualmente por fuera) —
+// por eso, en ciertos angulos (sobre todo cerca de 180°), arrastrar hacia la derecha movia
+// el mapa hacia la izquierda, quedando al reves. La solucion: apagamos el arrastre nativo de
+// Leaflet y lo reemplazamos por uno propio, que SI tiene en cuenta cuanto esta girado el mapa
+// en ese momento, así el contenido siempre se mueve para el mismo lado que arrastra el dedo,
+// sin importar el angulo de rotacion.
+function habilitarArrastreConRotacion(mapaLeaflet, idContenedor, obtenerRotacionActualGrados, alEmpezarArrastre){
+  const contenedor = document.getElementById(idContenedor);
+  if(!contenedor) return;
+  mapaLeaflet.dragging.disable();
+
+  let arrastrando = false;
+  let ultimoX = 0, ultimoY = 0;
+
+  function empezar(x, y){
+    arrastrando = true;
+    ultimoX = x; ultimoY = y;
+    if(typeof alEmpezarArrastre === 'function') alEmpezarArrastre();
+  }
+  function mover(x, y){
+    if(!arrastrando) return;
+    const dx = x - ultimoX;
+    const dy = y - ultimoY;
+    ultimoX = x; ultimoY = y;
+    const rot = (obtenerRotacionActualGrados() || 0) * Math.PI / 180;
+    // Rotamos el vector del arrastre en sentido inverso a como esta girado el mapa en pantalla,
+    // asi el contenido siempre se mueve hacia donde arrastra el dedo (visualmente), nunca al reves.
+    const dxCorregido = dx * Math.cos(-rot) - dy * Math.sin(-rot);
+    const dyCorregido = dx * Math.sin(-rot) + dy * Math.cos(-rot);
+    mapaLeaflet.panBy([-dxCorregido, -dyCorregido], { animate:false });
+  }
+  function terminar(){ arrastrando = false; }
+
+  contenedor.addEventListener('touchstart', function(e){
+    if(e.touches.length === 1) empezar(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:true });
+  contenedor.addEventListener('touchmove', function(e){
+    if(e.touches.length === 1) mover(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:true });
+  contenedor.addEventListener('touchend', terminar);
+  contenedor.addEventListener('touchcancel', terminar);
+
+  // Tambien con mouse, para poder probarlo desde una computadora
+  contenedor.addEventListener('mousedown', function(e){ empezar(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function(e){ if(arrastrando) mover(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', terminar);
+}
+
+function habilitarGiroTactil(idContenedor, alEmpezarGiro, alGirar){
+  const contenedor = document.getElementById(idContenedor);
+  if(!contenedor) return;
+  let anguloInicialDedos = null;
+  let rotacionAlEmpezar = 0;
+
+  function anguloEntreDedos(touches){
+    const dx = touches[1].clientX - touches[0].clientX;
+    const dy = touches[1].clientY - touches[0].clientY;
+    return Math.atan2(dy, dx) * 180 / Math.PI;
+  }
+
+  contenedor.addEventListener('touchstart', function(e){
+    if(e.touches.length === 2){
+      anguloInicialDedos = anguloEntreDedos(e.touches);
+      rotacionAlEmpezar = (typeof alEmpezarGiro === 'function') ? (alEmpezarGiro() || 0) : 0;
+    }
+  }, { passive:true });
+
+  contenedor.addEventListener('touchmove', function(e){
+    if(e.touches.length === 2 && anguloInicialDedos !== null){
+      const anguloActual = anguloEntreDedos(e.touches);
+      const delta = anguloActual - anguloInicialDedos;
+      const nuevaRotacion = ((rotacionAlEmpezar + delta) % 360 + 360) % 360;
+      if(typeof alGirar === 'function') alGirar(nuevaRotacion);
+    }
+  }, { passive:true });
+
+  contenedor.addEventListener('touchend', function(e){
+    if(e.touches.length < 2) anguloInicialDedos = null;
+  });
+}
+
+let rotacionTactilPrincipal = 0;
+function aplicarRotacionPrincipal(grados){
+  const el = document.getElementById('map');
+  if(!el) return;
+  el.style.transformOrigin = '50% 50%';
+  el.style.transform = 'rotate(' + grados + 'deg) scale(2.0)';
+}
+
 function aplicarTransformMapaNav(headingGrados){
   const contenedor = document.getElementById('navMapa');
   if(!contenedor) return;
@@ -3685,6 +4067,31 @@ function aplicarTransformMapaNav(headingGrados){
   contenedor.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(2.0)';
 }
 
+// ---------- La navegación activa sobrevive a minimizar o cerrar la app por accidente ----------
+// Antes, si se minimizaba el celular o el navegador liberaba memoria de la pestaña en segundo
+// plano, al volver a abrir la app se perdía toda la navegación en curso. Ahora se guarda el
+// destino apenas arrancás a navegar, y si la app se abre de nuevo con eso todavía guardado
+// (porque no habías llegado ni cerrado el navegador a mano), retoma la navegación sola,
+// pidiendo una ruta nueva hacia el mismo lugar de siempre.
+function guardarSesionNavActiva(objetivo, nombre){
+  try{
+    localStorage.setItem('generadorKml_navActiva', JSON.stringify({ objetivo: objetivo, nombre: nombre }));
+  }catch(e){ /* sin espacio disponible: no es grave, solo no se podra retomar sola */ }
+}
+function borrarSesionNavActiva(){
+  try{ localStorage.removeItem('generadorKml_navActiva'); }catch(e){}
+}
+function restaurarSesionNavActivaSiExiste(){
+  try{
+    const crudo = localStorage.getItem('generadorKml_navActiva');
+    if(!crudo) return;
+    const s = JSON.parse(crudo);
+    if(s && Array.isArray(s.objetivo) && s.objetivo.length === 2 && s.nombre){
+      iniciarNavegacionHacia([s.objetivo], s.nombre);
+    }
+  }catch(e){ /* dato guardado invalido: lo ignoramos y seguimos normal */ }
+}
+
 function iniciarNavegacionHacia(puntos, nombre){
   const overlay = document.getElementById('overlayNav');
   const elNombre = document.getElementById('navNombre');
@@ -3692,6 +4099,7 @@ function iniciarNavegacionHacia(puntos, nombre){
   const elEstado = document.getElementById('navEstado');
 
   navObjetivo = centroide(puntos);
+  guardarSesionNavActiva(navObjetivo, nombre);
   navPasos = [];
   navPasoActualIdx = 0;
   navUltimoFetchRuta = 0;
@@ -3701,6 +4109,7 @@ function iniciarNavegacionHacia(puntos, nombre){
   navUltimaPosParaHeadingMov = null;
   navUltimaRotacionMapa = null;
   navTieneRutaValida = false;
+  navRutaEsOffline = false;
   navSeguirUbicacion = true;
   navUltimoAjusteVista = 0;
   navNombreDestino = nombre;
@@ -3757,6 +4166,7 @@ function iniciarNavegacionHacia(puntos, nombre){
     if(dist < 8){
       elEstado.textContent = '¡Llegaste! Estás a menos de 8 m del punto central del polígono.';
       hablar('Llegaste al destino.');
+      borrarSesionNavActiva(); // ya llegaste: no tiene sentido retomar esta navegación si se reabre la app
     }
   }, function(err){
     elEstado.textContent = 'No se pudo obtener tu ubicación: ' + err.message;
@@ -3779,6 +4189,7 @@ function activarEscuchaOrientacion(){
 
 function cerrarNavegador(){
   document.getElementById('overlayNav').classList.remove('activo');
+  borrarSesionNavActiva(); // cerraste a mano: no hace falta retomar esto si se reabre la app
   if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
   if(navOrientHandler){
     window.removeEventListener('deviceorientationabsolute', navOrientHandler, true);
@@ -4971,6 +5382,7 @@ document.getElementById('btnBorrarDestinoGuardado').addEventListener('click', fu
   mostrarDestinoGuardado();
 });
 mostrarDestinoGuardado();
+restaurarSesionNavActivaSiExiste();
 
 function anunciarUbicacionEncontrada(lat, lon){
   hablar('Ubicación encontrada.');
