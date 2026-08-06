@@ -3055,17 +3055,12 @@ function obtenerMapa(){
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
+    mapa.on('dragstart', function(){ registrarInteraccionManual('principal'); });
     mapa.on('zoomstart', function(){ registrarZoomManual('principal'); });
-    habilitarArrastreConRotacion(mapa, 'mapWrap', function(){ return rotacionTactilPrincipal; }, function(){
-      registrarInteraccionManual('principal');
-    });
-    habilitarGiroTactil(mapa, 'mapWrap', function(){
-      registrarInteraccionManual('principal');
-      return rotacionTactilPrincipal;
-    }, function(nuevaRotacion){
-      rotacionTactilPrincipal = nuevaRotacion;
-      aplicarRotacionPrincipal(nuevaRotacion);
-    });
+    // La pantalla principal queda FIJA (nunca rota) — solo se puede hacer zoom y arrastrar,
+    // con el comportamiento normal de Leaflet, sin ningun manejo especial de rotacion.
+    // (El giro con dos dedos y el arrastre corregido por rotacion son solo para la pantalla
+    // de navegacion, que si necesita rotar segun hacia donde estas mirando.)
   }
   document.getElementById('mapPanel').style.display = 'block';
   setTimeout(() => mapa.invalidateSize(), 150);
@@ -4122,6 +4117,17 @@ function iniciarNavegacionHacia(puntos, nombre){
   const elNombre = document.getElementById('navNombre');
   const elDistancia = document.getElementById('navDistancia');
   const elEstado = document.getElementById('navEstado');
+
+  // Importante: si ya habia un rastreo de GPS corriendo de una navegacion anterior (por ejemplo,
+  // si esta funcion se llama dos veces sin haber cerrado el navegador antes), lo cerramos primero.
+  // Sin esto, quedaban DOS (o mas) rastreos activos al mismo tiempo, cada uno avisando por su
+  // cuenta — eso era lo que hacia que la voz pareciera repetirse sola varias veces seguidas.
+  if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
+  if(navOrientHandler){
+    window.removeEventListener('deviceorientationabsolute', navOrientHandler, true);
+    window.removeEventListener('deviceorientation', navOrientHandler, true);
+    navOrientHandler = null;
+  }
 
   navObjetivo = centroide(puntos);
   guardarSesionNavActiva(navObjetivo, nombre);
