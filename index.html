@@ -4000,12 +4000,12 @@ function habilitarArrastreConRotacion(mapaLeaflet, idContenedor, obtenerRotacion
 
   contenedor.addEventListener('touchstart', function(e){
     if(e.touches.length === 1) empezar(e.touches[0].clientX, e.touches[0].clientY);
-  }, { passive:true });
+  }, { passive:true, capture:true });
   contenedor.addEventListener('touchmove', function(e){
     if(e.touches.length === 1) mover(e.touches[0].clientX, e.touches[0].clientY);
-  }, { passive:true });
-  contenedor.addEventListener('touchend', terminar);
-  contenedor.addEventListener('touchcancel', terminar);
+  }, { passive:true, capture:true });
+  contenedor.addEventListener('touchend', terminar, { capture:true });
+  contenedor.addEventListener('touchcancel', terminar, { capture:true });
 
   // Tambien con mouse, para poder probarlo desde una computadora
   contenedor.addEventListener('mousedown', function(e){ empezar(e.clientX, e.clientY); });
@@ -4030,7 +4030,7 @@ function habilitarGiroTactil(idContenedor, alEmpezarGiro, alGirar){
       anguloInicialDedos = anguloEntreDedos(e.touches);
       rotacionAlEmpezar = (typeof alEmpezarGiro === 'function') ? (alEmpezarGiro() || 0) : 0;
     }
-  }, { passive:true });
+  }, { passive:true, capture:true });
 
   contenedor.addEventListener('touchmove', function(e){
     if(e.touches.length === 2 && anguloInicialDedos !== null){
@@ -4039,11 +4039,11 @@ function habilitarGiroTactil(idContenedor, alEmpezarGiro, alGirar){
       const nuevaRotacion = ((rotacionAlEmpezar + delta) % 360 + 360) % 360;
       if(typeof alGirar === 'function') alGirar(nuevaRotacion);
     }
-  }, { passive:true });
+  }, { passive:true, capture:true });
 
   contenedor.addEventListener('touchend', function(e){
     if(e.touches.length < 2) anguloInicialDedos = null;
-  });
+  }, { capture:true });
 }
 
 let rotacionTactilPrincipal = 0;
