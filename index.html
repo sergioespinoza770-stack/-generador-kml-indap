@@ -3059,7 +3059,7 @@ function obtenerMapa(){
     habilitarArrastreConRotacion(mapa, 'mapWrap', function(){ return rotacionTactilPrincipal; }, function(){
       registrarInteraccionManual('principal');
     });
-    habilitarGiroTactil('mapWrap', function(){
+    habilitarGiroTactil(mapa, 'mapWrap', function(){
       registrarInteraccionManual('principal');
       return rotacionTactilPrincipal;
     }, function(nuevaRotacion){
@@ -3646,7 +3646,7 @@ function asegurarMiniMapaNav(){
   }, function(){
     registrarInteraccionManual('nav');
   });
-  habilitarGiroTactil('navMapaWrap', function(){
+  habilitarGiroTactil(navMapaInstancia, 'navMapaWrap', function(){
     registrarInteraccionManual('nav');
     // Convertimos el "heading" guardado a la rotacion directa que ya tiene aplicada el
     // contenedor ahora mismo (aplicarTransformMapaNav usa rotate(-heading)), para que el
@@ -4017,26 +4017,39 @@ function habilitarArrastreConRotacion(mapaLeaflet, idContenedorEscucha, obtenerR
   window.addEventListener('mouseup', terminar);
 }
 
-function habilitarGiroTactil(idContenedorEscucha, alEmpezarGiro, alGirar){
-  // Mismo motivo que en el arrastre: escuchamos desde el contenedor PADRE, no del mapa mismo,
-  // para que la fase de captura realmente nos deje adelantarnos a Leaflet.
+function habilitarGiroTactil(mapaLeaflet, idContenedorEscucha, alEmpezarGiro, alGirar){
+  // Cambio de enfoque: en vez de tratar de "ganarle" a Leaflet en el orden de los eventos,
+  // le apagamos del todo su propio zoom tactil (touchZoom) — asi no queda NADA compitiendo
+  // por el gesto de dos dedos, y nuestro codigo maneja both cosas juntas: gira Y hace zoom,
+  // como es esperable que haga un gesto de pellizcar/girar en cualquier app de mapas real.
   const contenedor = document.getElementById(idContenedorEscucha);
   if(!contenedor) return;
+  if(mapaLeaflet && mapaLeaflet.touchZoom) mapaLeaflet.touchZoom.disable();
+
   let anguloInicialDedos = null;
+  let distanciaInicialDedos = null;
   let rotacionAlEmpezar = 0;
+  let zoomAlEmpezar = 0;
 
   function anguloEntreDedos(touches){
     const dx = touches[1].clientX - touches[0].clientX;
     const dy = touches[1].clientY - touches[0].clientY;
     return Math.atan2(dy, dx) * 180 / Math.PI;
   }
+  function distanciaEntreDedos(touches){
+    const dx = touches[1].clientX - touches[0].clientX;
+    const dy = touches[1].clientY - touches[0].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
 
   contenedor.addEventListener('touchstart', function(e){
     if(e.touches.length === 2){
       anguloInicialDedos = anguloEntreDedos(e.touches);
+      distanciaInicialDedos = distanciaEntreDedos(e.touches);
+      zoomAlEmpezar = mapaLeaflet ? mapaLeaflet.getZoom() : 0;
       rotacionAlEmpezar = (typeof alEmpezarGiro === 'function') ? (alEmpezarGiro() || 0) : 0;
     }
-  }, { passive:true, capture:true });
+  }, { passive:true });
 
   contenedor.addEventListener('touchmove', function(e){
     if(e.touches.length === 2 && anguloInicialDedos !== null){
@@ -4044,11 +4057,17 @@ function habilitarGiroTactil(idContenedorEscucha, alEmpezarGiro, alGirar){
       const delta = anguloActual - anguloInicialDedos;
       const nuevaRotacion = ((rotacionAlEmpezar + delta) % 360 + 360) % 360;
       if(typeof alGirar === 'function') alGirar(nuevaRotacion);
+
+      if(mapaLeaflet && distanciaInicialDedos > 0){
+        const distanciaActual = distanciaEntreDedos(e.touches);
+        const nuevoZoom = zoomAlEmpezar + Math.log2(distanciaActual / distanciaInicialDedos);
+        mapaLeaflet.setZoom(nuevoZoom, { animate:false });
+      }
     }
-  }, { passive:true, capture:true });
+  }, { passive:true });
 
   contenedor.addEventListener('touchend', function(e){
-    if(e.touches.length < 2) anguloInicialDedos = null;
+    if(e.touches.length < 2){ anguloInicialDedos = null; distanciaInicialDedos = null; }
   }, { capture:true });
 }
 
