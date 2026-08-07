@@ -33,11 +33,25 @@
           "accept": [
             "application/vnd.google-earth.kml+xml",
             "application/vnd.google-earth.kmz",
+            "application/octet-stream",
             ".kml",
             ".kmz"
           ]
         }
       ]
     }
-  }
+  },
+  "file_handlers": [
+    {
+      "action": "./compartido.html",
+      "accept": {
+        "application/vnd.google-earth.kml+xml": [
+          ".kml"
+        ],
+        "application/vnd.google-earth.kmz": [
+          ".kmz"
+        ]
+      }
+    }
+  ]
 }
