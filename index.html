@@ -1107,15 +1107,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
     overflow:hidden;
   }
   .banner-trazar{
-    background:linear-gradient(90deg, #fff6cf, #ffffff);
-    border:2px dashed #ffc700;
-    border-radius:10px;
-    padding:10px 14px;
-    margin-bottom:12px;
+    background:transparent;
+    border:none;
+    border-left:3px solid #ffc700;
+    border-radius:0;
+    padding:4px 0 4px 12px;
+    margin-bottom:16px;
     font-family:var(--sans);
-    font-weight:600;
-    font-size:13px;
-    color:var(--accent-text);
+    font-weight:500;
+    font-size:12.5px;
+    color:var(--muted);
   }
   .toolbar-campo{
     position:absolute;
@@ -1915,6 +1916,54 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span id="tabsPlantillas" style="display:contents;"></span>
     <button type="button" id="btnNuevaPlantilla" class="tipo-opt" style="cursor:pointer; border-style:dashed; background:transparent; color:var(--accent-dark); font-weight:700;">➕ Mi propio formato</button>
   </div>
+
+<div id="modalPlantilla" style="display:none; position:fixed; inset:0; z-index:5500; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:14px; padding:20px; max-width:460px; width:100%; max-height:88vh; overflow-y:auto; font-family:var(--sans, sans-serif);">
+    <h3 style="margin:0 0 4px 0; font-family:var(--serif, Georgia); font-size:19px;">Armá tu propio formato</h3>
+    <p class="hint" style="margin:0 0 16px 0;">Decile a la app cómo te llegan tus coordenadas siempre, y la próxima vez pegás directo, sin editar nada a mano.</p>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Nombre de esta plantilla</label>
+    <input type="text" id="plantillaNombre" placeholder="Ej: Formato de la Consultora Rivas" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué va primero en cada punto?</label>
+    <select id="plantillaOrden" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value="lat">Latitud primero (lat, lon)</option>
+      <option value="lon">Longitud primero (lon, lat)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa los dos números de un mismo punto?</label>
+    <select id="plantillaSepNumeros" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value=",">Coma ( , )</option>
+      <option value=";">Punto y coma ( ; )</option>
+      <option value=" ">Espacio</option>
+      <option value="\t">Tabulación (como al copiar de Excel)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa un punto del siguiente?</label>
+    <select id="plantillaSepPuntos" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value="linea">Salto de línea (cada punto en su propia línea)</option>
+      <option value="espacio">Espacio</option>
+      <option value="punto_y_coma">Punto y coma ( ; )</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Los decimales usan punto o coma?</label>
+    <select id="plantillaSepDecimal" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value=".">Punto (ej: -38.4567)</option>
+      <option value=",">Coma (ej: -38,4567)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Probá pegando un par de puntos de ejemplo</label>
+    <textarea id="plantillaEjemplo" rows="3" placeholder="Pegá acá un par de líneas de ejemplo, tal cual te llegan siempre" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:13px; margin-bottom:8px; font-family:var(--mono); resize:vertical;"></textarea>
+    <div id="plantillaResultadoPrueba" class="hint" style="margin-bottom:14px; min-height:18px;"></div>
+
+    <div style="display:flex; gap:8px;">
+      <button type="button" id="btnGuardarPlantilla" style="flex:1; padding:10px;">Guardar plantilla</button>
+      <button type="button" id="btnCerrarPlantilla" class="secundario" style="flex:1; padding:10px;">Cancelar</button>
+    </div>
+
+    <div id="listaPlantillasGuardadas" style="margin-top:18px;"></div>
+  </div>
+</div>
 
   <div class="field kml-extra" id="kmlExtra">
     <label for="archivoKml">Seleccioná los archivos .kml o .kmz que necesites (Ctrl o Shift para elegir varios)</label>
@@ -6638,53 +6687,6 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
-<div id="modalPlantilla" style="display:none; position:fixed; inset:0; z-index:5500; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px;">
-  <div style="background:#fff; border-radius:14px; padding:20px; max-width:460px; width:100%; max-height:88vh; overflow-y:auto; font-family:var(--sans, sans-serif);">
-    <h3 style="margin:0 0 4px 0; font-family:var(--serif, Georgia); font-size:19px;">Armá tu propio formato</h3>
-    <p class="hint" style="margin:0 0 16px 0;">Decile a la app cómo te llegan tus coordenadas siempre, y la próxima vez pegás directo, sin editar nada a mano.</p>
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Nombre de esta plantilla</label>
-    <input type="text" id="plantillaNombre" placeholder="Ej: Formato de la Consultora Rivas" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué va primero en cada punto?</label>
-    <select id="plantillaOrden" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
-      <option value="lat">Latitud primero (lat, lon)</option>
-      <option value="lon">Longitud primero (lon, lat)</option>
-    </select>
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa los dos números de un mismo punto?</label>
-    <select id="plantillaSepNumeros" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
-      <option value=",">Coma ( , )</option>
-      <option value=";">Punto y coma ( ; )</option>
-      <option value=" ">Espacio</option>
-      <option value="\t">Tabulación (como al copiar de Excel)</option>
-    </select>
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa un punto del siguiente?</label>
-    <select id="plantillaSepPuntos" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
-      <option value="linea">Salto de línea (cada punto en su propia línea)</option>
-      <option value="espacio">Espacio</option>
-      <option value="punto_y_coma">Punto y coma ( ; )</option>
-    </select>
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Los decimales usan punto o coma?</label>
-    <select id="plantillaSepDecimal" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
-      <option value=".">Punto (ej: -38.4567)</option>
-      <option value=",">Coma (ej: -38,4567)</option>
-    </select>
-
-    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Probá pegando un par de puntos de ejemplo</label>
-    <textarea id="plantillaEjemplo" rows="3" placeholder="Pegá acá un par de líneas de ejemplo, tal cual te llegan siempre" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:13px; margin-bottom:8px; font-family:var(--mono); resize:vertical;"></textarea>
-    <div id="plantillaResultadoPrueba" class="hint" style="margin-bottom:14px; min-height:18px;"></div>
-
-    <div style="display:flex; gap:8px;">
-      <button type="button" id="btnGuardarPlantilla" style="flex:1; padding:10px;">Guardar plantilla</button>
-      <button type="button" id="btnCerrarPlantilla" class="secundario" style="flex:1; padding:10px;">Cancelar</button>
-    </div>
-
-    <div id="listaPlantillasGuardadas" style="margin-top:18px;"></div>
-  </div>
-</div>
 
 </body>
 </html>
