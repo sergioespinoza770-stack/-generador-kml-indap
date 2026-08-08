@@ -1917,9 +1917,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="field kml-extra" id="kmlExtra">
     <label for="archivoKml">Seleccioná los archivos .kml o .kmz que necesites (Ctrl o Shift para elegir varios)</label>
     <input type="file" id="archivoKml" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple>
-    <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). De cada archivo se carga el primer polígono que encuentre y se muestra fijo en el mapa, cada uno con un color distinto, como referencia. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Cuando el lápiz ✏️ no está activo, tocá cualquier polígono en el mapa para ver su nombre, superficie, y navegar hacia él.</p>
+    <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). Se cargan <strong>todos los puntos/polígonos</strong> que traiga cada archivo (no solo el primero), cada uno con su nombre. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Cuando el lápiz ✏️ no está activo, tocá cualquier punto/polígono en el mapa para ver su nombre, superficie, y navegar hacia él. Desde ahí también podés ponerle una <strong>categoría</strong> (con su propio color), una <strong>nota</strong>, y vincularle <strong>fotos</strong>.</p>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <label for="filtroCategoria" style="margin:0; white-space:nowrap; font-size:12.5px;">🏷️ Filtrar por categoría:</label>
+      <select id="filtroCategoria" style="flex:1; padding:7px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:13px;">
+        <option value="">Todas</option>
+      </select>
+    </div>
     <div id="listaKmlSubidos" class="lista-kml"></div>
     <div class="btn-row" style="margin-top:10px;">
+      <button type="button" id="btnExportarTodo" style="background:#1e7a45; color:#fff; box-shadow:0 4px 14px rgba(30,122,69,0.32);">⬇️ Exportar todo (KML + Excel)</button>
       <button type="button" class="btn-campo peligro" id="btnLimpiarKmlSubidos">Borrar todos los KML cargados</button>
     </div>
   </div>
@@ -2040,6 +2047,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span style="opacity:0.5;"> · </span>
     <span style="font-weight:600;">2026</span>
   </p>
+  <p style="text-align:center; margin-top:6px; font-family:var(--mono); font-size:10.5px; color:#c4c4c4;" id="versionApp"></p>
 </div>
 
 <script>
@@ -2233,26 +2241,24 @@ function longitudTotalLinea(puntos){
   return total;
 }
 
-function construirKML(nombre, puntos, tipoForzado){
-  const tipo = tipoForzado || determinarTipoFigura(puntos, false);
-  const nombreEsc = nombre.replace(/[<>&]/g, '');
-  let geometriaXml;
-
+function construirGeometriaXmlKML(puntos, tipo){
   if(tipo === 'punto'){
     const p = puntos[0];
-    geometriaXml =
+    return (
 '      <Point>\n' +
 '        <coordinates>' + p[1] + ',' + p[0] + ',0</coordinates>\n' +
-'      </Point>\n';
+'      </Point>\n'
+    );
   }else if(tipo === 'linea'){
     const coordLines = puntos.map(pt => '              ' + pt[1] + ',' + pt[0] + ',0').join('\n');
-    geometriaXml =
+    return (
 '      <LineString>\n' +
 '        <tessellate>1</tessellate>\n' +
 '        <coordinates>\n' +
 coordLines + '\n' +
 '        </coordinates>\n' +
-'      </LineString>\n';
+'      </LineString>\n'
+    );
   }else{
     let puntosCierre = puntos;
     const primero = puntos[0];
@@ -2261,7 +2267,7 @@ coordLines + '\n' +
       puntosCierre = puntos.concat([primero]);
     }
     const coordLines = puntosCierre.map(pt => '              ' + pt[1] + ',' + pt[0] + ',0').join('\n');
-    geometriaXml =
+    return (
 '      <Polygon>\n' +
 '        <outerBoundaryIs>\n' +
 '          <LinearRing>\n' +
@@ -2270,8 +2276,15 @@ coordLines + '\n' +
 '            </coordinates>\n' +
 '          </LinearRing>\n' +
 '        </outerBoundaryIs>\n' +
-'      </Polygon>\n';
+'      </Polygon>\n'
+    );
   }
+}
+
+function construirKML(nombre, puntos, tipoForzado){
+  const tipo = tipoForzado || determinarTipoFigura(puntos, false);
+  const nombreEsc = nombre.replace(/[<>&]/g, '');
+  const geometriaXml = construirGeometriaXmlKML(puntos, tipo);
 
   return '<?xml version="1.0" encoding="UTF-8"?>\n' +
 '<kml xmlns="http://www.opengis.net/kml/2.2">\n' +
@@ -4259,6 +4272,7 @@ let camaraWatchId = null;
 let camaraFotoActualDataUrl = null;
 let camaraCapturaPendiente = null; // {posicion, fecha} de la foto recien tomada, antes de confirmar
 let fotosSesion = []; // {id, dataUrl, nombre}
+let itemVinculandoFoto = null; // si esta seteado, la proxima foto se vincula a este punto/predio
 
 function abrirCamara(){
   const overlay = document.getElementById('overlayCamara');
@@ -4296,6 +4310,7 @@ function cerrarCamara(){
   if(camaraWatchId !== null){ navigator.geolocation.clearWatch(camaraWatchId); camaraWatchId = null; }
   camaraFotoActualDataUrl = null;
   camaraCapturaPendiente = null;
+  itemVinculandoFoto = null;
 }
 
 function tomarFoto(){
@@ -4370,21 +4385,63 @@ function guardarFotoEnGaleria(){
 
   const dataUrlFinal = canvasFinal.toDataURL('image/jpeg', 0.92);
 
-  fotosSesion.push({
-    id: 'foto_' + Date.now(),
-    dataUrl: dataUrlFinal,
-    nombre: nombreFoto
-  });
-  renderizarGaleriaFotos();
+  if(itemVinculandoFoto){
+    // Vinculando a un punto/predio especifico: usamos una version mas liviana (mas chica),
+    // porque estas quedan guardadas de forma permanente junto con el punto — con la version
+    // grande, unas pocas fotos ya llenarian el espacio disponible del navegador.
+    redimensionarDataUrl(dataUrlFinal, 900, 0.72).then(function(dataUrlLiviana){
+      itemVinculandoFoto.fotos.push({
+        id: 'fotoitem_' + Date.now(),
+        dataUrl: dataUrlLiviana,
+        nombre: nombreFoto,
+        fecha: fechaTexto
+      });
+      guardarPoligonosEnStorage();
+      document.getElementById('camaraEstado').textContent = 'Foto vinculada a "' + itemVinculandoFoto.nombre + '". Podés sacar otra, o cerrar la cámara.';
+      itemVinculandoFoto = null;
+    });
+  }else{
+    fotosSesion.push({
+      id: 'foto_' + Date.now(),
+      dataUrl: dataUrlFinal,
+      nombre: nombreFoto
+    });
+    renderizarGaleriaFotos();
+    document.getElementById('camaraEstado').textContent = 'Guardada: "' + nombreFoto + '". Ya está en la galería de abajo.';
+  }
 
   camaraCapturaPendiente = null;
-  document.getElementById('camaraEstado').textContent = 'Guardada: "' + nombreFoto + '". Ya está en la galería de abajo.';
 
   // Volvemos a la vista en vivo para la proxima foto
   document.getElementById('camaraVideo').style.display = 'block';
   document.getElementById('camaraCanvas').style.display = 'none';
   document.getElementById('camaraControlesVivo').style.display = 'flex';
   document.getElementById('camaraControlesFoto').style.display = 'none';
+}
+
+// Reduce el tamaño de una imagen (dataURL) para que ocupe menos espacio guardado —
+// se usa para las fotos vinculadas a un punto, que quedan guardadas permanentemente.
+function redimensionarDataUrl(dataUrlOriginal, anchoMaximo, calidad){
+  return new Promise(function(resolve){
+    const img = new Image();
+    img.onload = function(){
+      const escala = Math.min(1, anchoMaximo / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * escala);
+      canvas.height = Math.round(img.height * escala);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', calidad));
+    };
+    img.onerror = function(){ resolve(dataUrlOriginal); };
+    img.src = dataUrlOriginal;
+  });
+}
+
+// Abre la camara "en modo vinculado": la proxima foto que se saque queda asociada a este
+// punto/predio en particular, no a la galeria general de la sesion.
+function abrirCamaraParaItem(item){
+  itemVinculandoFoto = item;
+  abrirCamara();
 }
 
 
@@ -4580,23 +4637,40 @@ function siguienteColor(){
   return PALETA_COLORES[poligonosSubidos.length % PALETA_COLORES.length];
 }
 
+// Deriva siempre el MISMO color para la misma categoria escrita (texto libre) — asi, sin tener
+// que armar una lista fija de categorias de antemano, todos los puntos "Inundación" quedan
+// siempre del mismo color entre si, distinto de todos los "PDTI", etc.
+function colorPorCategoria(categoria){
+  if(!categoria || !categoria.trim()) return null;
+  let hash = 0;
+  for(let i = 0; i < categoria.length; i++){
+    hash = (hash * 31 + categoria.charCodeAt(i)) >>> 0;
+  }
+  return PALETA_COLORES[hash % PALETA_COLORES.length];
+}
+
+function colorDeItem(item){
+  return colorPorCategoria(item.categoria) || item.color;
+}
+
 function dibujarCapaKmlSubido(item){
   const m = obtenerMapa();
   const tipo = item.tipo || determinarTipoFigura(item.puntos, false);
+  const colorActivo = colorDeItem(item);
   let capa;
 
   if(tipo === 'punto'){
     capa = L.circleMarker(item.puntos[0], {
       radius: 10,
-      color: item.color,
+      color: colorActivo,
       weight: 3,
-      fillColor: item.color,
+      fillColor: colorActivo,
       fillOpacity: 0.6,
       interactive: true
     });
   }else if(tipo === 'linea'){
     capa = L.polyline(item.puntos, {
-      color: item.color,
+      color: colorActivo,
       weight: 4,
       dashArray: '6 5',
       opacity: 0.9,
@@ -4604,16 +4678,16 @@ function dibujarCapaKmlSubido(item){
     });
   }else{
     capa = L.polygon(item.puntos, {
-      color: item.color,
+      color: colorActivo,
       weight: 3,
       dashArray: '6 5',
-      fillColor: item.color,
+      fillColor: colorActivo,
       fillOpacity: 0.10,
       interactive: true
     });
   }
 
-  capa.bindTooltip(item.nombre, { sticky: true });
+  capa.bindTooltip(item.nombre + (item.categoria ? ' (' + item.categoria + ')' : ''), { sticky: true });
   capa.on('click', function(e){
     if(modoMedicionActivo) return; // mientras se esta trazando, el clic no debe abrir el panel de info
     L.DomEvent.stopPropagation(e);
@@ -4789,6 +4863,75 @@ function construirKMZ(nombreEntradaInterna, contenidoKmlTexto){
   return new Blob([encabezadoLocal, datosArchivo, encabezadoCentral, finCentral], { type: 'application/vnd.google-earth.kmz' });
 }
 
+// ---------- Exportar TODO junto: un KML combinado + una planilla CSV con todos los puntos ----------
+// Pensado para cuando ya tenés varios puntos/predios cargados (subidos, generados, trazados) y
+// necesitás el reporte completo de una sola vez, en vez de descargar archivo por archivo.
+function construirKMLCombinado(items){
+  const placemarks = items.map(function(item){
+    const nombreEsc = item.nombre.replace(/[<>&]/g, '');
+    const geometriaXml = construirGeometriaXmlKML(item.puntos, item.tipo);
+    return '    <Placemark>\n      <name>' + nombreEsc + '</name>\n' + geometriaXml + '    </Placemark>\n';
+  }).join('');
+
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+'<kml xmlns="http://www.opengis.net/kml/2.2">\n' +
+'  <Document>\n' +
+'    <name>Predios exportados</name>\n' +
+placemarks +
+'  </Document>\n' +
+'</kml>\n';
+}
+
+function construirCSVDeItems(items){
+  const filas = [['Nombre', 'Categoría', 'Nota', 'Tipo', 'Latitud/Centro', 'Longitud/Centro', 'Superficie (ha)', 'Longitud (m)', 'Cantidad de puntos', 'Cantidad de fotos', 'UTM Este', 'UTM Norte', 'Huso']];
+  items.forEach(function(item){
+    const centro = item.tipo === 'punto' ? item.puntos[0] : centroide(item.puntos);
+    const utm = latLonToUtm(centro[0], centro[1]);
+    let superficie = '', longitudM = '';
+    if(item.tipo === 'poligono') superficie = calcularAreaHa(item.puntos).toFixed(2);
+    if(item.tipo === 'linea') longitudM = Math.round(longitudTotalLinea(item.puntos));
+    filas.push([
+      item.nombre, item.categoria || '', item.nota || '', item.tipo, centro[0].toFixed(6), centro[1].toFixed(6),
+      superficie, longitudM, item.puntos.length, (item.fotos ? item.fotos.length : 0),
+      Math.round(utm.este), Math.round(utm.norte), utm.huso + utm.hemisferio
+    ]);
+  });
+  // Punto y coma como separador: es lo que Excel en español espera para abrir bien las columnas
+  return filas.map(function(fila){
+    return fila.map(function(campo){
+      const texto = String(campo);
+      return /[";\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
+    }).join(';');
+  }).join('\r\n');
+}
+
+function descargarBlob(contenido, nombreArchivo, tipoMime){
+  const blob = new Blob([contenido], { type: tipoMime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportarTodoComoInforme(){
+  if(poligonosSubidos.length === 0){
+    alert('Todavía no hay ningún punto/predio cargado para exportar.');
+    return;
+  }
+  const fechaHoy = new Date().toLocaleDateString('es-CL').replace(/\//g, '-');
+
+  const kmlCombinado = construirKMLCombinado(poligonosSubidos);
+  descargarBlob(kmlCombinado, 'Predios_' + fechaHoy + '.kml', 'application/vnd.google-earth.kml+xml');
+
+  // El \uFEFF al principio es para que Excel en Windows reconozca los acentos/ñ correctamente
+  const csv = '\uFEFF' + construirCSVDeItems(poligonosSubidos);
+  descargarBlob(csv, 'Predios_' + fechaHoy + '.csv', 'text/csv;charset=utf-8');
+}
+
 function descargarKmlDeItem(nombre, puntos, tipo){
   const kml = construirKML(nombre, puntos, tipo || determinarTipoFigura(puntos, false));
   const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
@@ -4801,6 +4944,88 @@ function descargarKmlDeItem(nombre, puntos, tipo){
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ---------- Panel de "Detalles" de un punto: categoria, nota, fotos vinculadas ----------
+function listaDeCategoriasUsadas(){
+  const set = new Set();
+  poligonosSubidos.forEach(function(it){ if(it.categoria && it.categoria.trim()) set.add(it.categoria.trim()); });
+  return Array.from(set);
+}
+
+function cerrarModalDetalles(){
+  const modal = document.getElementById('modalDetallesItem');
+  if(modal) modal.remove();
+}
+
+function mostrarModalDetallesItem(item){
+  cerrarModalDetalles();
+
+  const categoriasDatalist = listaDeCategoriasUsadas().map(function(c){
+    return '<option value="' + c.replace(/"/g,'') + '">';
+  }).join('');
+
+  const fotosHtml = (item.fotos && item.fotos.length > 0)
+    ? item.fotos.map(function(f, i){
+        return '<div style="position:relative; display:inline-block; margin:4px;">' +
+          '<img src="' + f.dataUrl + '" style="width:76px; height:76px; object-fit:cover; border-radius:8px; border:2px solid #ffc700;">' +
+          '<button data-idx="' + i + '" class="btnBorrarFotoItem" style="position:absolute; top:-6px; right:-6px; width:22px; height:22px; border-radius:50%; background:#c0221a; color:#fff; border:2px solid #fff; font-size:11px; font-weight:800; cursor:pointer; padding:0; line-height:1;">✕</button>' +
+        '</div>';
+      }).join('')
+    : '<p class="hint" style="margin:6px 0;">Todavía no tenés ninguna foto vinculada a este punto.</p>';
+
+  const modal = document.createElement('div');
+  modal.id = 'modalDetallesItem';
+  modal.style.cssText = 'position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;';
+  modal.innerHTML =
+    '<div style="background:#fff; border-radius:14px; padding:20px; max-width:420px; width:100%; max-height:85vh; overflow-y:auto; font-family:var(--sans, sans-serif);">' +
+      '<div style="font-weight:800; font-size:15px; margin-bottom:2px;">' + item.nombre + '</div>' +
+      '<p class="hint" style="margin:0 0 14px 0;">Categoría, nota y fotos de este punto en particular.</p>' +
+
+      '<label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Categoría (opcional)</label>' +
+      '<input type="text" id="inputCategoriaItem" list="listaCategoriasUsadas" value="' + (item.categoria || '').replace(/"/g,'') + '" placeholder="Ej: Inundación, PDTI, Verificación..." style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:12px;">' +
+      '<datalist id="listaCategoriasUsadas">' + categoriasDatalist + '</datalist>' +
+
+      '<label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Nota (opcional)</label>' +
+      '<textarea id="inputNotaItem" rows="3" placeholder="Ej: Portón cerrado, acceso por el sur..." style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:12px; font-family:inherit; resize:vertical;">' + (item.nota || '') + '</textarea>' +
+
+      '<label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:6px;">Fotos vinculadas</label>' +
+      '<div id="galeriaFotosItem" style="margin-bottom:10px;">' + fotosHtml + '</div>' +
+      '<button id="btnSacarFotoItem" type="button" style="width:100%; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:9px; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; margin-bottom:14px;">📷 Sacar foto y vincular a este punto</button>' +
+
+      '<div style="display:flex; gap:8px;">' +
+        '<button id="btnGuardarDetallesItem" type="button" style="flex:1; padding:10px;">Guardar</button>' +
+        '<button id="btnCerrarDetallesItem" type="button" class="secundario" style="flex:1; padding:10px;">Cerrar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  document.getElementById('btnSacarFotoItem').addEventListener('click', function(){
+    cerrarModalDetalles();
+    abrirCamaraParaItem(item);
+  });
+  document.getElementById('btnGuardarDetallesItem').addEventListener('click', function(){
+    item.categoria = document.getElementById('inputCategoriaItem').value.trim();
+    item.nota = document.getElementById('inputNotaItem').value.trim();
+    guardarPoligonosEnStorage();
+    if(capasKmlSubidos[item.id]){ obtenerMapa().removeLayer(capasKmlSubidos[item.id]); delete capasKmlSubidos[item.id]; }
+    dibujarCapaKmlSubido(item);
+    renderizarListaKml();
+    cerrarModalDetalles();
+  });
+  document.getElementById('btnCerrarDetallesItem').addEventListener('click', cerrarModalDetalles);
+  modal.addEventListener('click', function(e){ if(e.target === modal) cerrarModalDetalles(); });
+
+  modal.querySelectorAll('.btnBorrarFotoItem').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const idx = parseInt(btn.getAttribute('data-idx'), 10);
+      if(confirm('¿Borrar esta foto vinculada?')){
+        item.fotos.splice(idx, 1);
+        guardarPoligonosEnStorage();
+        mostrarModalDetallesItem(item); // volvemos a pintar el modal actualizado
+      }
+    });
+  });
 }
 
 function mostrarInfoPoligonoSubido(item, latlngClick){
@@ -4830,16 +5055,29 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
   const idBtnMover = 'infoBtnMover_' + item.id;
   const idBtnBorrar = 'infoBtnBorrar_' + item.id;
   const idBtnDescargar = 'infoBtnDescargar_' + item.id;
+  const idBtnDetalles = 'infoBtnDetalles_' + item.id;
+
+  const lineaExtra = (item.categoria || item.nota || (item.fotos && item.fotos.length > 0))
+    ? '<div style="font-size:11px; color:#5c8a1a; margin-bottom:6px;">' +
+        (item.categoria ? '🏷️ ' + item.categoria + ' ' : '') +
+        (item.nota ? '· 📝 ' + item.nota.slice(0, 40) + (item.nota.length > 40 ? '…' : '') + ' ' : '') +
+        (item.fotos && item.fotos.length > 0 ? '· 📷 ' + item.fotos.length : '') +
+      '</div>'
+    : '';
 
   const popup = L.popup({ maxWidth: 260, className: 'popup-info-poligono', autoClose: true, closeOnClick: true })
     .setLatLng(latlngClick)
     .setContent(
       '<div style="font-family:var(--sans, sans-serif); min-width:200px;">' +
         '<div style="font-weight:700; font-size:13.5px; color:#000; margin-bottom:4px;">' + item.nombre + '</div>' +
-        '<div style="font-size:12px; color:#4a4a4a; margin-bottom:6px;">' + lineaMedida + '</div>' +
+        '<div style="font-size:12px; color:#4a4a4a; margin-bottom:4px;">' + lineaMedida + '</div>' +
+        lineaExtra +
         '<div id="' + idInfo + '" style="font-size:11.5px; color:#8a6d00; margin-bottom:8px;">Calculando distancia por camino...</div>' +
         '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
-        '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
+        '<div style="display:flex; gap:6px; margin-bottom:6px;">' +
+          '<button id="' + idBtnDetalles + '" style="flex:1; background:#fff6d6; border:1px solid #e0c04a; color:#5c4a00; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">📋 Detalles</button>' +
+          '<button id="' + idBtnDescargar + '" style="flex:1; background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">⬇️ KML</button>' +
+        '</div>' +
         '<div style="display:flex; gap:6px;">' +
           '<button id="' + idBtnMover + '" style="flex:1; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Mover</button>' +
           '<button id="' + idBtnBorrar + '" style="flex:1; background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">🗑️ Eliminar</button>' +
@@ -4854,6 +5092,13 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
       btn.addEventListener('click', function(){
         m.closePopup();
         iniciarNavegacionHacia(item.puntos, item.nombre);
+      });
+    }
+    const btnDetalles = document.getElementById(idBtnDetalles);
+    if(btnDetalles){
+      btnDetalles.addEventListener('click', function(){
+        m.closePopup();
+        mostrarModalDetallesItem(item);
       });
     }
     const btnDescargar = document.getElementById(idBtnDescargar);
@@ -4908,6 +5153,7 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
 function renderizarListaKml(){
   const cont = document.getElementById('listaKmlSubidos');
   cont.innerHTML = '';
+  actualizarSelectorCategorias();
   poligonosSubidos.forEach(function(item){
     const fila = document.createElement('div');
     fila.className = 'item-kml';
@@ -5009,7 +5255,10 @@ function agregarPoligonoSubido(nombre, puntos, tipo, omitirZonaAutomatica){
     puntos: puntos,
     tipo: tipo || determinarTipoFigura(puntos, false),
     color: siguienteColor(),
-    visible: true
+    visible: true,
+    categoria: '',   // texto libre — vos elegís como categorizarlo (ej: "Inundación", "PDTI", etc.)
+    nota: '',        // texto corto opcional, para dejar constancia de algo puntual
+    fotos: []        // fotos georreferenciadas vinculadas a este punto/predio en particular
   };
   poligonosSubidos.push(item);
   dibujarCapaKmlSubido(item);
@@ -5044,6 +5293,14 @@ function cargarPoligonosDesdeStorage(){
     if(!Array.isArray(datos) || datos.length === 0) return;
 
     poligonosSubidos = datos;
+    // Si algun punto viene de una version anterior, sin categoria/nota/fotos, les completamos
+    // esos campos con un valor por defecto — asi el resto del codigo nunca se rompe por asumir
+    // que existen.
+    poligonosSubidos.forEach(function(item){
+      if(item.categoria === undefined) item.categoria = '';
+      if(item.nota === undefined) item.nota = '';
+      if(!Array.isArray(item.fotos)) item.fotos = [];
+    });
     const m = obtenerMapa();
     poligonosSubidos.forEach(item => dibujarCapaKmlSubido(item));
     renderizarListaKml();
@@ -5060,6 +5317,35 @@ function cargarPoligonosDesdeStorage(){
     // sin datos guardados o localStorage no disponible: seguimos normal
   }
 }
+
+// ---------- Filtro por categoría: muestra/oculta en el mapa segun la categoria elegida ----------
+function actualizarSelectorCategorias(){
+  const select = document.getElementById('filtroCategoria');
+  if(!select) return;
+  const valorPrevio = select.value;
+  const categorias = listaDeCategoriasUsadas();
+  select.innerHTML = '<option value="">Todas</option>' +
+    categorias.map(function(c){ return '<option value="' + c.replace(/"/g,'') + '">' + c + '</option>'; }).join('');
+  if(categorias.includes(valorPrevio)) select.value = valorPrevio;
+}
+
+function aplicarFiltroCategoria(){
+  const select = document.getElementById('filtroCategoria');
+  if(!select) return;
+  const categoriaElegida = select.value;
+  const m = obtenerMapa();
+  poligonosSubidos.forEach(function(item){
+    const capa = capasKmlSubidos[item.id];
+    if(!capa) return;
+    const debeVerse = item.visible && (!categoriaElegida || item.categoria === categoriaElegida);
+    if(debeVerse && !m.hasLayer(capa)) capa.addTo(m);
+    if(!debeVerse && m.hasLayer(capa)) m.removeLayer(capa);
+  });
+}
+
+document.getElementById('filtroCategoria') && document.getElementById('filtroCategoria').addEventListener('change', aplicarFiltroCategoria);
+
+document.getElementById('btnExportarTodo') && document.getElementById('btnExportarTodo').addEventListener('click', exportarTodoComoInforme);
 
 document.getElementById('btnLimpiarKmlSubidos') && document.getElementById('btnLimpiarKmlSubidos').addEventListener('click', function(){
   const m = obtenerMapa();
@@ -5591,6 +5877,12 @@ function mostrarDestinoGuardado(){
     wrap.style.display = 'flex';
   }catch(e){ wrap.style.display = 'none'; }
 }
+// Numero de version visible, para confirmar rapido si el celular tiene la ultima version
+// puesta o una vieja en cache, sin tener que hacer todo un proceso de verificacion.
+const APP_VERSION = 'v2026.08.08-1';
+const elVersion = document.getElementById('versionApp');
+if(elVersion) elVersion.textContent = APP_VERSION;
+
 document.getElementById('btnUsarDestinoGuardado').addEventListener('click', function(){
   try{
     const d = JSON.parse(localStorage.getItem('generadorKml_ultimoDestino'));
