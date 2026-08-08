@@ -1906,12 +1906,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </label>
     <label class="tipo-opt" id="optSirsds">
       <input type="radio" name="tipoCoord" value="sirsds">
-      Del SIRSD-S
+      Formato SIG (lon,lat,0)
     </label>
     <label class="tipo-opt" id="optKml">
       <input type="radio" name="tipoCoord" value="kml">
       Subir KML o KMZ
     </label>
+    <span id="tabsPlantillas" style="display:contents;"></span>
+    <button type="button" id="btnNuevaPlantilla" class="tipo-opt" style="cursor:pointer; border-style:dashed; background:transparent; color:var(--accent-dark); font-weight:700;">➕ Mi propio formato</button>
   </div>
 
   <div class="field kml-extra" id="kmlExtra">
@@ -2092,6 +2094,7 @@ function actualizarModo(){
   optUtm.classList.remove('activo');
   optSirsds.classList.remove('activo');
   optKml.classList.remove('activo');
+  document.querySelectorAll('#tabsPlantillas .tipo-opt').forEach(function(el){ el.classList.remove('activo'); });
   utmExtra.classList.remove('visible');
   kmlExtra.classList.remove('visible');
   campoCoords.style.display = '';
@@ -2104,13 +2107,27 @@ function actualizarModo(){
     coordsBox.placeholder = '234567 5745123;234610 5745080;234700 5745010;...';
   }else if(modo === 'sirsds'){
     optSirsds.classList.add('activo');
-    labelCoords.textContent = 'Coordenadas del SIRSD-S (formato: lon,lat,0 lon,lat,0 ...)';
-    hintCoords.textContent = 'Pegá tal cual salen del SIRSD-S: puntos separados por espacio, cada uno como lon,lat,0.';
+    labelCoords.textContent = 'Coordenadas en formato SIG (lon,lat,0 lon,lat,0 ...)';
+    hintCoords.textContent = 'Pegá la lista tal cual la exporte tu sistema (SIRSD-S, otro SIG, o el bloque de coordenadas de un KML): puntos separados por espacio, cada uno como lon,lat,0.';
     coordsBox.placeholder = '-72.22834925533441,-39.20827593756514,0 -72.22828433142792,-39.20833448027012,0 ...';
   }else if(modo === 'kml'){
     optKml.classList.add('activo');
     kmlExtra.classList.add('visible');
     campoCoords.style.display = 'none';
+  }else if(modo.indexOf('plantilla_') === 0){
+    const plantilla = obtenerPlantillaPorId(modo.replace('plantilla_', ''));
+    const opt = document.getElementById('optPlantilla_' + modo.replace('plantilla_', ''));
+    if(opt) opt.classList.add('activo');
+    const nombreSep = { ',':'coma', ';':'punto y coma', ' ':'espacio', '\t':'tabulación' };
+    const nombrePuntos = { linea:'salto de línea', espacio:'espacio', punto_y_coma:'punto y coma' };
+    labelCoords.textContent = 'Coordenadas — plantilla "' + (plantilla ? plantilla.nombre : '') + '"';
+    hintCoords.textContent = plantilla
+      ? ('Formato propio: ' + (plantilla.ordenPrimero === 'lat' ? 'latitud primero' : 'longitud primero') +
+         ', números separados por ' + nombreSep[plantilla.separadorNumeros] +
+         ', puntos separados por ' + nombrePuntos[plantilla.separadorPuntos] +
+         ', decimales con ' + (plantilla.separadorDecimal === ',' ? 'coma' : 'punto') + '.')
+      : 'Esta plantilla ya no existe — creá una nueva con el botón "➕ Mi propio formato".';
+    coordsBox.placeholder = 'Pegá tus coordenadas en el formato de esta plantilla...';
   }else{
     optGeo.classList.add('activo');
     labelCoords.textContent = 'Coordenadas geográficas (formato: lat lon 0 0;lat lon 0 0;...)';
@@ -2207,6 +2224,188 @@ function parseCoordsSirsds(raw){
   return out;
 }
 
+// ======================================================================
+// PLANTILLAS DE COORDENADAS PROPIAS — cada usuario arma su propio formato
+// (ademas de los 4 fijos: Geograficas, UTM, Formato SIG, Subir KML) y queda
+// guardado en este navegador, disponible como una pestaña mas la proxima vez.
+// ======================================================================
+let plantillasCoordenadas = [];
+
+function cargarPlantillasDesdeStorage(){
+  try{
+    const crudo = localStorage.getItem('generadorKml_plantillasCoordenadas');
+    if(crudo) plantillasCoordenadas = JSON.parse(crudo) || [];
+  }catch(e){ plantillasCoordenadas = []; }
+}
+function guardarPlantillasEnStorage(){
+  try{ localStorage.setItem('generadorKml_plantillasCoordenadas', JSON.stringify(plantillasCoordenadas)); }catch(e){}
+}
+
+// Interpreta un bloque de texto segun las reglas de una plantilla, y devuelve puntos [lat,lon].
+function parsearConPlantilla(texto, plantilla){
+  const limpio = (texto || '').trim();
+  if(!limpio) return [];
+
+  let chunksPuntos;
+  if(plantilla.separadorPuntos === 'linea'){
+    chunksPuntos = limpio.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+  }else if(plantilla.separadorPuntos === 'punto_y_coma'){
+    chunksPuntos = limpio.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+  }else{
+    // 'espacio': si el separador ENTRE los dos numeros de un punto tambien es espacio,
+    // no hay forma de distinguir por caracteres — agrupamos los numeros de a 2 en 2.
+    const tokens = limpio.split(/\s+/).filter(Boolean);
+    if(plantilla.separadorNumeros === ' '){
+      chunksPuntos = [];
+      for(let i = 0; i < tokens.length; i += 2){
+        if(tokens[i+1] !== undefined) chunksPuntos.push(tokens[i] + ' ' + tokens[i+1]);
+      }
+    }else{
+      chunksPuntos = tokens;
+    }
+  }
+
+  const puntos = [];
+  chunksPuntos.forEach(function(chunk){
+    let partes;
+    if(plantilla.separadorNumeros === '\t'){
+      partes = chunk.split(/\t+/).filter(Boolean);
+    }else if(plantilla.separadorNumeros === ' '){
+      partes = chunk.split(/\s+/).filter(Boolean);
+    }else{
+      partes = chunk.split(plantilla.separadorNumeros).map(function(s){ return s.trim(); }).filter(Boolean);
+    }
+    if(partes.length < 2) return;
+    let n1 = partes[0], n2 = partes[1];
+    if(plantilla.separadorDecimal === ','){
+      n1 = n1.replace(',', '.');
+      n2 = n2.replace(',', '.');
+    }
+    const v1 = parseFloat(n1), v2 = parseFloat(n2);
+    if(isNaN(v1) || isNaN(v2)) return;
+    if(plantilla.ordenPrimero === 'lat'){
+      puntos.push([v1, v2]);
+    }else{
+      puntos.push([v2, v1]);
+    }
+  });
+  return puntos;
+}
+
+function renderizarTabsPlantillas(){
+  const cont = document.getElementById('tabsPlantillas');
+  if(!cont) return;
+  cont.innerHTML = plantillasCoordenadas.map(function(p){
+    return '<label class="tipo-opt" id="optPlantilla_' + p.id + '">' +
+      '<input type="radio" name="tipoCoord" value="plantilla_' + p.id + '">' +
+      '🧩 ' + p.nombre +
+    '</label>';
+  }).join('');
+  cont.querySelectorAll('input[name=tipoCoord]').forEach(function(r){
+    r.addEventListener('change', actualizarModo);
+  });
+}
+
+function obtenerPlantillaPorId(id){
+  return plantillasCoordenadas.find(function(p){ return p.id === id; });
+}
+
+// ---------- Modal constructor de plantillas ----------
+function abrirModalPlantilla(){
+  document.getElementById('modalPlantilla').style.display = 'flex';
+  document.getElementById('plantillaNombre').value = '';
+  document.getElementById('plantillaEjemplo').value = '';
+  document.getElementById('plantillaResultadoPrueba').textContent = '';
+  renderizarListaPlantillasGuardadas();
+}
+function cerrarModalPlantilla(){
+  document.getElementById('modalPlantilla').style.display = 'none';
+}
+
+function leerPlantillaDelFormulario(){
+  return {
+    ordenPrimero: document.getElementById('plantillaOrden').value,
+    separadorNumeros: document.getElementById('plantillaSepNumeros').value,
+    separadorPuntos: document.getElementById('plantillaSepPuntos').value,
+    separadorDecimal: document.getElementById('plantillaSepDecimal').value
+  };
+}
+
+function probarPlantillaEnVivo(){
+  const ejemplo = document.getElementById('plantillaEjemplo').value;
+  const resultado = document.getElementById('plantillaResultadoPrueba');
+  if(!ejemplo.trim()){ resultado.textContent = ''; return; }
+  const plantilla = leerPlantillaDelFormulario();
+  // Si coma es separador de numeros Y separador decimal a la vez, avisamos que es ambiguo
+  if(plantilla.separadorNumeros === plantilla.separadorDecimal){
+    resultado.innerHTML = '<span style="color:#c0221a;">⚠️ El separador entre números y el separador decimal no pueden ser el mismo carácter.</span>';
+    return;
+  }
+  try{
+    const puntos = parsearConPlantilla(ejemplo, plantilla);
+    if(puntos.length === 0){
+      resultado.innerHTML = '<span style="color:#c0221a;">No se reconoció ningún punto — revisá las opciones de arriba.</span>';
+    }else{
+      resultado.innerHTML = '<span style="color:#1e7a45;">✅ Se reconocieron ' + puntos.length + ' punto(s). Primero: ' +
+        puntos[0][0].toFixed(6) + ', ' + puntos[0][1].toFixed(6) + ' (lat, lon)</span>';
+    }
+  }catch(e){
+    resultado.innerHTML = '<span style="color:#c0221a;">Error al interpretar: ' + e.message + '</span>';
+  }
+}
+
+function renderizarListaPlantillasGuardadas(){
+  const cont = document.getElementById('listaPlantillasGuardadas');
+  if(plantillasCoordenadas.length === 0){ cont.innerHTML = ''; return; }
+  cont.innerHTML = '<p class="hint" style="font-weight:700; margin-bottom:6px;">Tus plantillas guardadas:</p>' +
+    plantillasCoordenadas.map(function(p){
+      return '<div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f0f0f0;">' +
+        '<span style="flex:1; font-size:13px;">🧩 ' + p.nombre + '</span>' +
+        '<button type="button" data-id="' + p.id + '" class="btnBorrarPlantilla" style="background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:5px 10px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer;">Borrar</button>' +
+      '</div>';
+    }).join('');
+  cont.querySelectorAll('.btnBorrarPlantilla').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const id = btn.getAttribute('data-id');
+      const p = obtenerPlantillaPorId(id);
+      if(p && confirm('¿Borrar la plantilla "' + p.nombre + '"?')){
+        plantillasCoordenadas = plantillasCoordenadas.filter(function(x){ return x.id !== id; });
+        guardarPlantillasEnStorage();
+        renderizarTabsPlantillas();
+        renderizarListaPlantillasGuardadas();
+      }
+    });
+  });
+}
+
+document.getElementById('btnNuevaPlantilla').addEventListener('click', abrirModalPlantilla);
+document.getElementById('btnCerrarPlantilla').addEventListener('click', cerrarModalPlantilla);
+document.getElementById('plantillaEjemplo').addEventListener('input', probarPlantillaEnVivo);
+['plantillaOrden','plantillaSepNumeros','plantillaSepPuntos','plantillaSepDecimal'].forEach(function(id){
+  document.getElementById(id).addEventListener('change', probarPlantillaEnVivo);
+});
+document.getElementById('btnGuardarPlantilla').addEventListener('click', function(){
+  const nombre = document.getElementById('plantillaNombre').value.trim();
+  if(!nombre){ alert('Ponele un nombre a la plantilla antes de guardarla.'); return; }
+  const plantilla = leerPlantillaDelFormulario();
+  if(plantilla.separadorNumeros === plantilla.separadorDecimal){
+    alert('El separador entre números y el separador decimal no pueden ser el mismo carácter — corregilo antes de guardar.');
+    return;
+  }
+  plantilla.id = 'plant_' + Date.now();
+  plantilla.nombre = nombre;
+  plantillasCoordenadas.push(plantilla);
+  guardarPlantillasEnStorage();
+  renderizarTabsPlantillas();
+  cerrarModalPlantilla();
+  // Seleccionamos automaticamente la plantilla recien creada
+  const radio = document.querySelector('input[name=tipoCoord][value="plantilla_' + plantilla.id + '"]');
+  if(radio){ radio.checked = true; actualizarModo(); }
+});
+
+cargarPlantillasDesdeStorage();
+renderizarTabsPlantillas();
+
 function obtenerPuntos(){
   const raw = document.getElementById('coords').value;
   const modo = document.querySelector('input[name=tipoCoord]:checked').value;
@@ -2218,6 +2417,10 @@ function obtenerPuntos(){
     puntos = parseCoordsUtm(raw, huso, esSur);
   }else if(modo === 'sirsds'){
     puntos = parseCoordsSirsds(raw);
+  }else if(modo.indexOf('plantilla_') === 0){
+    const plantilla = obtenerPlantillaPorId(modo.replace('plantilla_', ''));
+    if(!plantilla) throw new Error('Esa plantilla ya no existe.');
+    puntos = parsearConPlantilla(raw, plantilla);
   }else{
     puntos = parseCoordsGeo(raw);
   }
@@ -6435,5 +6638,53 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+<div id="modalPlantilla" style="display:none; position:fixed; inset:0; z-index:5500; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:14px; padding:20px; max-width:460px; width:100%; max-height:88vh; overflow-y:auto; font-family:var(--sans, sans-serif);">
+    <h3 style="margin:0 0 4px 0; font-family:var(--serif, Georgia); font-size:19px;">Armá tu propio formato</h3>
+    <p class="hint" style="margin:0 0 16px 0;">Decile a la app cómo te llegan tus coordenadas siempre, y la próxima vez pegás directo, sin editar nada a mano.</p>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Nombre de esta plantilla</label>
+    <input type="text" id="plantillaNombre" placeholder="Ej: Formato de la Consultora Rivas" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué va primero en cada punto?</label>
+    <select id="plantillaOrden" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value="lat">Latitud primero (lat, lon)</option>
+      <option value="lon">Longitud primero (lon, lat)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa los dos números de un mismo punto?</label>
+    <select id="plantillaSepNumeros" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value=",">Coma ( , )</option>
+      <option value=";">Punto y coma ( ; )</option>
+      <option value=" ">Espacio</option>
+      <option value="\t">Tabulación (como al copiar de Excel)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Qué separa un punto del siguiente?</label>
+    <select id="plantillaSepPuntos" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value="linea">Salto de línea (cada punto en su propia línea)</option>
+      <option value="espacio">Espacio</option>
+      <option value="punto_y_coma">Punto y coma ( ; )</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">¿Los decimales usan punto o coma?</label>
+    <select id="plantillaSepDecimal" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:14px; margin-bottom:14px;">
+      <option value=".">Punto (ej: -38.4567)</option>
+      <option value=",">Coma (ej: -38,4567)</option>
+    </select>
+
+    <label style="font-weight:700; font-size:12.5px; display:block; margin-bottom:4px;">Probá pegando un par de puntos de ejemplo</label>
+    <textarea id="plantillaEjemplo" rows="3" placeholder="Pegá acá un par de líneas de ejemplo, tal cual te llegan siempre" style="width:100%; padding:9px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:13px; margin-bottom:8px; font-family:var(--mono); resize:vertical;"></textarea>
+    <div id="plantillaResultadoPrueba" class="hint" style="margin-bottom:14px; min-height:18px;"></div>
+
+    <div style="display:flex; gap:8px;">
+      <button type="button" id="btnGuardarPlantilla" style="flex:1; padding:10px;">Guardar plantilla</button>
+      <button type="button" id="btnCerrarPlantilla" class="secundario" style="flex:1; padding:10px;">Cancelar</button>
+    </div>
+
+    <div id="listaPlantillasGuardadas" style="margin-top:18px;"></div>
+  </div>
+</div>
+
 </body>
 </html>
