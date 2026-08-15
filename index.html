@@ -1623,6 +1623,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
     position:relative;
   }
 
+  /* ===== Modo navegación activa: ocultamos lo que no hace falta mientras se navega
+     (banner de trazar, etiqueta de previsualización, caja de buscar ciudad) y agrandamos
+     el mapa lo más posible para que ocupe casi toda la pantalla. ===== */
+  body.nav-activa .banner-trazar,
+  body.nav-activa .map-label,
+  body.nav-activa .buscar-ciudad-wrap,
+  body.nav-activa .toolbar-campo,
+  body.nav-activa .indicador-señal:not(.indicador-señal-nav){
+    display:none !important;
+  }
+  body.nav-activa #map{
+    height:80vh;
+    min-height:480px;
+  }
+  @media (max-width:640px){
+    body.nav-activa #map{
+      height:86vh;
+      min-height:440px;
+    }
+  }
+
   /* ---- Navegador ---- */
   .nav-info{
     text-align:center;
@@ -4424,6 +4445,7 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   navAnuncioInicialHecho = false;
   navAnuncioRutaHecho = false;
   modoNavegacionActivo = true;
+  document.body.classList.add('nav-activa');
 
   elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
@@ -4496,6 +4518,7 @@ function activarEscuchaOrientacion(){
 function cerrarNavegador(){
   document.getElementById('navInfoPanel').style.display = 'none';
   modoNavegacionActivo = false;
+  document.body.classList.remove('nav-activa');
   borrarSesionNavActiva(); // cerraste a mano: no hace falta retomar esto si se reabre la app
   if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
   if(navOrientHandler){
