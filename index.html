@@ -1143,9 +1143,44 @@ svg.leaflet-image-layer.leaflet-interactive path {
     transition:transform 0.12s, background 0.12s;
     padding:4px 2px;
   }
-  .btn-icono .emoji-boton{
-    font-size:21px;
-    line-height:1;
+  .btn-icono.descargar-zona{
+    border-color:#8a6dd6;
+    background:#f4f0ff;
+  }
+  .btn-tamaño-zona{
+    background:#fff;
+    border:2px solid #ffe28a;
+    border-radius:10px;
+    padding:9px 8px;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:12.5px;
+    color:#1a1a1a;
+    text-align:left;
+    cursor:pointer;
+    transition:border-color 0.12s, background 0.12s;
+  }
+  .btn-tamaño-zona.seleccionado{
+    border-color:#ffc700;
+    background:#fff3c4;
+  }
+  .segmento-tamaño{
+    flex:1;
+    background:transparent;
+    border:none;
+    border-radius:9px;
+    padding:11px 4px;
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:14px;
+    color:#5a4a10;
+    cursor:pointer;
+    transition:background 0.15s, color 0.15s;
+  }
+  .segmento-tamaño.seleccionado{
+    background:#1a73e8;
+    color:#fff;
+    box-shadow:0 2px 8px rgba(26,115,232,0.35);
   }
   .btn-icono .texto-boton{
     font-family:var(--sans);
@@ -2073,6 +2108,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
           <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
         </button>
+        <button type="button" class="btn-icono descargar-zona" id="btnPrepararZona" title="Descargar esta zona para usar sin señal" aria-label="Preparar zona sin señal">
+          <span class="emoji-boton">📦</span><span class="texto-boton">Preparar<br>zona</span>
+        </button>
       </div>
       <div class="indicador-señal" id="indicadorSeñal"><span class="punto-señal" id="puntoSeñal"></span><span id="textoSeñal">En línea</span></div>
       <div id="campoAreaBadge" class="area-flotante" style="display:none;"></div>
@@ -2090,6 +2128,41 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <p class="hint">Esto es totalmente automático — no hace falta guardar nada a mano. Mientras tengas señal, la app va guardando sola la imagen y los caminos alrededor de cada punto que subís, generás o hacia el que navegás, y también alrededor de tu propia posición mientras te movés. Cuando cambiás de zona (te alejás lo suficiente), lo viejo se borra solo, así esta lista nunca queda llena de lugares antiguos.</p>
       <div id="listaPlanosOffline" class="lista-kml"></div>
+    </div>
+
+    <!-- Panel manual: "Preparar zona sin señal" — a diferencia del respaldo automático (que
+         guarda solo un radio chico alrededor de cada punto), esto deja elegir de antemano
+         un area mas grande, viendo el circulo REAL sobre el mapa que sigue visible arriba
+         mientras se elige (no un popup que lo tapa). Pensado para usar con WiFi antes de
+         salir a una zona donde ya se sabe que no va a haber señal. -->
+    <div id="modalZonaOffline" style="display:none; position:fixed; left:0; right:0; bottom:0; z-index:3000; pointer-events:none;">
+      <div style="pointer-events:auto; background:#fffdf5; border:2px solid #ffc700; border-bottom:none; border-radius:18px 18px 0 0; max-width:520px; margin:0 auto; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow:0 -6px 26px rgba(0,0,0,0.22);">
+        <div style="width:38px; height:4px; background:#e5d99a; border-radius:3px; margin:0 auto 12px;"></div>
+        <h3 style="margin:0 0 4px; font-family:var(--sans); font-size:15px; color:#1a1a1a;">📦 Preparar zona para usar sin señal</h3>
+        <p class="hint" style="margin:0 0 12px;">Elegí el tamaño — mirá el círculo violeta en el mapa de arriba, que se actualiza al toque.</p>
+
+        <div style="display:flex; background:#f2ead0; border-radius:12px; padding:4px; gap:4px; margin-bottom:12px;" id="zonaOfflineOpciones">
+          <button type="button" class="segmento-tamaño" data-radio="500" data-etiqueta="Pequeño">Pequeño</button>
+          <button type="button" class="segmento-tamaño" data-radio="1500" data-etiqueta="Regular">Regular</button>
+          <button type="button" class="segmento-tamaño" data-radio="3000" data-etiqueta="Grande">Grande</button>
+        </div>
+
+        <div id="zonaOfflineEstimado" style="background:#fff8e1; border:1.5px solid #ffe28a; border-radius:10px; padding:10px 12px; font-family:var(--sans); font-size:13px; color:#5a4a10; margin-bottom:12px; display:none;">
+          <div id="zonaOfflineEstimadoTexto"></div>
+        </div>
+
+        <div id="zonaOfflineProgresoWrap" style="display:none; margin-bottom:12px;">
+          <div style="background:#f2ead0; border-radius:8px; overflow:hidden; height:14px;">
+            <div id="zonaOfflineProgresoBarra" style="background:linear-gradient(90deg,#ffc700,#ffab00); height:100%; width:0%; transition:width 0.2s;"></div>
+          </div>
+          <p class="hint" id="zonaOfflineProgresoTexto" style="margin:6px 0 0; text-align:center;"></p>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="btnZonaOfflineDescargar" style="flex:1; display:none;">⬇️ Descargar esta zona</button>
+          <button type="button" id="btnZonaOfflineCerrar" class="secundario" style="flex:1;">Cerrar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2827,6 +2900,9 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
   const reportar = function(texto){
     if(!opciones.silencioso && estado) estado.textContent = texto;
   };
+  const avisarProgreso = function(hechas, total){
+    if(typeof opciones.onProgreso === 'function') opciones.onProgreso(hechas, total);
+  };
 
   const minX = lon2tileX(bounds.getWest(), zoom);
   const maxX = lon2tileX(bounds.getEast(), zoom);
@@ -2836,18 +2912,29 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
   const tilesY = maxY - minY + 1;
   const totalTiles = tilesX * tilesY;
 
+  // En vez de fallar directo cuando la zona pedida no entra en el limite de 100 teselas,
+  // bajamos el zoom un nivel (menos detalle, pero cubre mas area con la misma cantidad de
+  // teselas) y reintentamos solos — asi el usuario no tiene que ir probando a mano.
   if(totalTiles > 100){
-    reportar('La zona visible es muy grande para guardar (' + totalTiles + ' teselas, máximo 100). Acercá el zoom sobre el predio y probá de nuevo.');
+    if(zoom > 12){
+      if(!opciones.silencioso) reportar('La zona es grande para el nivel de detalle actual — ajustando el zoom automáticamente para poder cubrirla entera...');
+      ejecutarGuardadoDePlano(bounds, zoom - 1, nombreForzado, opciones);
+      return;
+    }
+    reportar('La zona elegida es demasiado grande incluso con el mínimo detalle (' + totalTiles + ' teselas, máximo 100). Elegí un tamaño más chico.');
+    if(typeof opciones.onError === 'function') opciones.onError('demasiado_grande');
     return;
   }
 
   reportar('Descargando ' + totalTiles + ' teselas y el trazado de caminos de esta zona...');
+  avisarProgreso(0, totalTiles);
 
   const canvas = document.createElement('canvas');
   canvas.width = tilesX * 256;
   canvas.height = tilesY * 256;
   const ctx = canvas.getContext('2d');
 
+  let hechasCont = 0;
   const promesas = [];
   for(let ty = minY; ty <= maxY; ty++){
     for(let tx = minX; tx <= maxX; tx++){
@@ -2855,6 +2942,8 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
       const px = (tx - minX) * 256;
       const py = (ty - minY) * 256;
       promesas.push(cargarTeselaConReintentos(url, 3).then(function(img){
+        hechasCont++;
+        avisarProgreso(hechasCont, totalTiles);
         if(img){ ctx.drawImage(img, px, py, 256, 256); return true; }
         return false;
       }));
@@ -2897,8 +2986,10 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
             renderizarListaPlanosOffline();
             const avisoCalles = calles.length > 0 ? (' + ' + calles.length + ' tramos de camino.') : ' (sin caminos mapeados en OpenStreetMap para esta zona).';
             reportar('Plano "' + nombre + '" guardado (' + okCount + '/' + totalTiles + ' teselas)' + avisoCalles + ' Se va a usar solo cuando estés sin conexión en esta zona, o tocando "Usar ahora".');
+            if(typeof opciones.onListo === 'function') opciones.onListo({ okCount: okCount, totalTiles: totalTiles, nombre: nombre, calles: calles.length });
           }).catch(function(err){
             reportar('No se pudo guardar el plano: ' + err.message);
+            if(typeof opciones.onError === 'function') opciones.onError(err.message);
           });
         }, 'image/jpeg', 0.78);
       }catch(err){
@@ -4826,6 +4917,139 @@ document.getElementById('btnCapaOffline').addEventListener('click', function(){
     activarCapaOffline(m);
   }
 });
+
+// ===== Panel manual "Preparar zona sin señal" =====
+// Deja elegir de antemano cuánto terreno bajar (chico/mediano/grande/predio completo),
+// muestra el círculo real sobre el mapa antes de confirmar, y una barra de progreso
+// mientras se descarga — a diferencia del respaldo automático, que es silencioso y de
+// tamaño fijo chico alrededor de cada punto.
+let zonaOfflineCirculo = null;
+let zonaOfflineRadioElegido = null;
+const ZONA_OFFLINE_ZOOM_BASE = 17;
+const ZONA_OFFLINE_KB_POR_TESELA = 28; // estimación (JPEG calidad 0.78, ~256x256, imagen satelital)
+
+function zonaOfflineCalcularTiles(radioM, zoom){
+  const m = obtenerMapa();
+  const centro = m.getCenter();
+  const metrosPorGrado = 111320;
+  const deltaLat = radioM / metrosPorGrado;
+  const deltaLon = radioM / (metrosPorGrado * Math.cos(centro.lat * Math.PI / 180));
+  const bounds = {
+    getNorth: () => centro.lat + deltaLat,
+    getSouth: () => centro.lat - deltaLat,
+    getEast:  () => centro.lng + deltaLon,
+    getWest:  () => centro.lng - deltaLon,
+  };
+  const minX = lon2tileX(bounds.getWest(), zoom);
+  const maxX = lon2tileX(bounds.getEast(), zoom);
+  const minY = lat2tileY(bounds.getNorth(), zoom);
+  const maxY = lat2tileY(bounds.getSouth(), zoom);
+  const total = (maxX - minX + 1) * (maxY - minY + 1);
+  return { bounds: bounds, total: total };
+}
+
+function zonaOfflineMostrarPreview(radioM){
+  const m = obtenerMapa();
+  if(zonaOfflineCirculo){ m.removeLayer(zonaOfflineCirculo); zonaOfflineCirculo = null; }
+  zonaOfflineCirculo = L.circle(m.getCenter(), {
+    radius: radioM,
+    color: '#8a6dd6',
+    weight: 2.5,
+    fillColor: '#8a6dd6',
+    fillOpacity: 0.12,
+    dashArray: '6 6'
+  }).addTo(m);
+
+  // buscamos el zoom mas alto (mas detalle) que entre dentro del limite de 100 teselas
+  let zoomUsado = ZONA_OFFLINE_ZOOM_BASE;
+  let calc = zonaOfflineCalcularTiles(radioM, zoomUsado);
+  while(calc.total > 100 && zoomUsado > 12){
+    zoomUsado -= 1;
+    calc = zonaOfflineCalcularTiles(radioM, zoomUsado);
+  }
+  const mb = (calc.total * ZONA_OFFLINE_KB_POR_TESELA / 1024).toFixed(1);
+  const cajaEstimado = document.getElementById('zonaOfflineEstimado');
+  const textoEstimado = document.getElementById('zonaOfflineEstimadoTexto');
+  cajaEstimado.style.display = 'block';
+  textoEstimado.innerHTML = '📐 ' + calc.total + ' teselas · aprox. <strong>' + mb + ' MB</strong> · nivel de detalle ' + (zoomUsado === ZONA_OFFLINE_ZOOM_BASE ? 'alto' : 'reducido para que entre toda el área') +
+    '.<br>El círculo punteado en el mapa muestra exactamente la zona que se va a guardar.';
+  document.getElementById('btnZonaOfflineDescargar').style.display = 'block';
+
+  if(!m.getBounds().contains(zonaOfflineCirculo.getBounds())){
+    m.fitBounds(zonaOfflineCirculo.getBounds().pad(0.2));
+  }
+}
+
+document.querySelectorAll('.segmento-tamaño').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.segmento-tamaño').forEach(b => b.classList.remove('seleccionado'));
+    btn.classList.add('seleccionado');
+    zonaOfflineRadioElegido = parseInt(btn.getAttribute('data-radio'), 10);
+    zonaOfflineMostrarPreview(zonaOfflineRadioElegido);
+  });
+});
+
+document.getElementById('btnPrepararZona').addEventListener('click', function(){
+  document.getElementById('modalZonaOffline').style.display = 'block';
+  document.getElementById('zonaOfflineEstimado').style.display = 'none';
+  document.getElementById('zonaOfflineProgresoWrap').style.display = 'none';
+  document.getElementById('btnZonaOfflineDescargar').style.display = 'none';
+  document.querySelectorAll('.segmento-tamaño').forEach(b => b.classList.remove('seleccionado'));
+  zonaOfflineRadioElegido = null;
+  // Elegimos "Regular" (el del medio) como punto de partida, igual que arranca preseleccionado
+  // en cualquier selector de 3 opciones — así el círculo ya aparece en el mapa sin que el
+  // usuario tenga que tocar nada primero.
+  const segRegular = document.querySelector('.segmento-tamaño[data-radio="1500"]');
+  if(segRegular) segRegular.click();
+});
+
+function zonaOfflineCerrarModal(){
+  document.getElementById('modalZonaOffline').style.display = 'none';
+  const m = obtenerMapa();
+  if(zonaOfflineCirculo){ m.removeLayer(zonaOfflineCirculo); zonaOfflineCirculo = null; }
+}
+document.getElementById('btnZonaOfflineCerrar').addEventListener('click', zonaOfflineCerrarModal);
+
+document.getElementById('btnZonaOfflineDescargar').addEventListener('click', function(){
+  if(!zonaOfflineRadioElegido) return;
+  let zoomUsado = ZONA_OFFLINE_ZOOM_BASE;
+  let calc = zonaOfflineCalcularTiles(zonaOfflineRadioElegido, zoomUsado);
+  while(calc.total > 100 && zoomUsado > 12){
+    zoomUsado -= 1;
+    calc = zonaOfflineCalcularTiles(zonaOfflineRadioElegido, zoomUsado);
+  }
+
+  document.getElementById('zonaOfflineProgresoWrap').style.display = 'block';
+  document.getElementById('btnZonaOfflineDescargar').disabled = true;
+  document.getElementById('btnZonaOfflineDescargar').style.opacity = '0.6';
+  const barra = document.getElementById('zonaOfflineProgresoBarra');
+  const texto = document.getElementById('zonaOfflineProgresoTexto');
+  barra.style.width = '0%';
+  texto.textContent = 'Empezando descarga...';
+
+  const nombreZona = 'Zona preparada (' + (zonaOfflineRadioElegido/1000).toFixed(1) + ' km, ' + new Date().toLocaleDateString('es-CL') + ')';
+
+  ejecutarGuardadoDePlano(calc.bounds, zoomUsado, nombreZona, {
+    silencioso: true,
+    onProgreso: function(hechas, total){
+      const pct = Math.round((hechas/total) * 100);
+      barra.style.width = pct + '%';
+      texto.textContent = 'Descargando teselas: ' + hechas + ' / ' + total + ' (' + pct + '%)';
+    },
+    onListo: function(info){
+      barra.style.width = '100%';
+      texto.textContent = '✅ Listo — ' + info.okCount + '/' + info.totalTiles + ' teselas guardadas' + (info.calles > 0 ? (' + ' + info.calles + ' tramos de camino.') : '.') + ' Ya podés usar esta zona sin señal.';
+      document.getElementById('btnZonaOfflineDescargar').disabled = false;
+      document.getElementById('btnZonaOfflineDescargar').style.opacity = '1';
+    },
+    onError: function(msg){
+      texto.textContent = '⚠️ No se pudo completar la descarga: ' + msg;
+      document.getElementById('btnZonaOfflineDescargar').disabled = false;
+      document.getElementById('btnZonaOfflineDescargar').style.opacity = '1';
+    }
+  });
+});
+
 document.getElementById('btnCerrarCamara').addEventListener('click', cerrarCamara);
 document.getElementById('btnDisparar').addEventListener('click', tomarFoto);
 
