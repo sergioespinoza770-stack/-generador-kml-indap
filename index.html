@@ -1340,14 +1340,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     letter-spacing:0.05em;
   }
   .leaflet-control-scale-line{
-    background:rgba(255,255,255,0.88) !important;
-    border:2px solid #ffe28a !important;
-    color:var(--accent-text) !important;
+    background:rgba(255,255,255,0.96) !important;
+    border:2.5px solid #8a6d00 !important;
+    color:#1a1a1a !important;
     font-family:var(--sans) !important;
-    font-weight:600 !important;
-    font-size:11px !important;
-    border-radius:4px !important;
-    padding:2px 6px !important;
+    font-weight:800 !important;
+    font-size:13px !important;
+    border-radius:5px !important;
+    padding:3px 8px !important;
   }
   .medida-lado{
     background:rgba(255,255,255,0.9);
@@ -1505,9 +1505,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     padding:78px 16px 30px;
     box-sizing:border-box;
   }
-  #overlayNav.overlay-scroll{
-    padding-top:190px;
-  }
   .overlay-cerrar{
     position:absolute;
     top:16px;
@@ -1598,44 +1595,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     overflow:hidden;
     position:relative;
   }
-  #navMapa{
-    width:100%;
-    height:100%;
-    transition: transform 0.6s ease-out;
-  }
 
   /* ---- Navegador ---- */
-  #navBrujula{
-    width:200px;
-    height:200px;
-    border-radius:50%;
-    background:radial-gradient(circle at 50% 45%, #1c1c1c, #050505);
-    border:4px solid #ffc700;
-    position:relative;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    box-shadow:0 0 40px rgba(255,199,0,0.15);
-  }
-  #navFlecha{
-    width:0;
-    height:0;
-    border-left:20px solid transparent;
-    border-right:20px solid transparent;
-    border-bottom:68px solid #ffc700;
-    position:absolute;
-    top:24px;
-    transform-origin:50% 76px;
-    transition:transform 0.25s ease-out;
-    filter:drop-shadow(0 0 6px rgba(255,199,0,0.5));
-  }
-  #navCentro{
-    width:14px;
-    height:14px;
-    border-radius:50%;
-    background:#ffffff;
-    z-index:2;
-  }
   .nav-info{
     text-align:center;
     margin-top:26px;
@@ -1825,26 +1786,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="zona-arrastrar-caja">📂 Soltá el/los archivo(s) .kml o .kmz acá</div>
 </div>
 
-<div id="overlayNav" class="overlay-full overlay-scroll">
-  <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegador">✕</button>
-  <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz">🔊</button>
-  <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline">🛰️</button>
-  <div class="nav-mapa-wrap" id="navMapaWrap" style="position:relative;">
-    <div id="navMapa"></div>
-    <div class="badge-plano-activo" id="badgePlanoActivoNav"></div>
-  </div>
-  <div id="navBrujula">
-    <div id="navFlecha"></div>
-    <div id="navCentro"></div>
-  </div>
-  <div class="nav-info">
-    <div class="nav-distancia" id="navDistancia">— m</div>
-    <div class="nav-nombre" id="navNombre">Buscando ubicación...</div>
-  </div>
-  <div class="indicador-señal indicador-señal-nav" id="indicadorSeñalNav"><span class="punto-señal" id="puntoSeñalNav"></span><span id="textoSeñalNav">En línea</span></div>
-  <div class="nav-estado" id="navEstado"></div>
-</div>
-
 <div id="overlayCamara" class="overlay-full overlay-scroll">
   <button class="overlay-cerrar" id="btnCerrarCamara" type="button" aria-label="Cerrar cámara">✕</button>
   <video id="camaraVideo" autoplay playsinline muted></video>
@@ -1969,17 +1910,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <label for="archivoKml">Seleccioná los archivos .kml o .kmz que necesites (Ctrl o Shift para elegir varios)</label>
     <input type="file" id="archivoKml" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple>
     <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). Se cargan <strong>todos los puntos/polígonos</strong> que traiga cada archivo (no solo el primero), cada uno con su nombre. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Cuando el lápiz ✏️ no está activo, tocá cualquier punto/polígono en el mapa para ver su nombre, superficie, y navegar hacia él. Desde ahí también podés ponerle una <strong>categoría</strong> (con su propio color), una <strong>nota</strong>, y vincularle <strong>fotos</strong>.</p>
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-      <label for="filtroCategoria" style="margin:0; white-space:nowrap; font-size:12.5px;">🏷️ Filtrar por categoría:</label>
-      <select id="filtroCategoria" style="flex:1; padding:7px 10px; border-radius:8px; border:1.5px solid #ddd; font-size:13px;">
-        <option value="">Todas</option>
-      </select>
-    </div>
     <div id="listaKmlSubidos" class="lista-kml"></div>
-    <div class="btn-row" style="margin-top:10px;">
-      <button type="button" id="btnExportarTodo" style="background:#1e7a45; color:#fff; box-shadow:0 4px 14px rgba(30,122,69,0.32);">⬇️ Exportar todo (KML + Excel)</button>
-      <button type="button" class="btn-campo peligro" id="btnLimpiarKmlSubidos">Borrar todos los KML cargados</button>
-    </div>
   </div>
 
   <div class="row utm-extra" id="utmExtra">
@@ -2008,7 +1939,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="btn-row">
-    <button id="btnPreview" class="secundario" type="button">Previsualizar en imagen satelital</button>
+    <button id="btnPreview" class="secundario" type="button">Previsualizar KML en mapa</button>
     <button id="btnGenerar" type="button">Generar y descargar KML</button>
   </div>
   <div class="status" id="status"></div>
@@ -2037,11 +1968,37 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" id="btnBuscarCiudad" class="secundario" style="width:auto; padding:0 18px;">Buscar</button>
       </div>
       <div id="resultadosCiudad" style="display:none; margin-top:8px;"></div>
-      <p class="hint" style="margin-top:6px;">Podés escribir solo el nombre de una ciudad/pueblo, o una dirección completa con calle, número y comuna (ej: "Manuel Montt 500, Lautaro").</p>
+      <p class="hint" style="margin-top:6px;">Podés escribir el nombre de una ciudad/pueblo, una dirección completa con calle y número, <strong>o pegar directo una ubicación que te compartieron por WhatsApp</strong> (el link que copia, o las coordenadas sueltas).</p>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #f0e0a0;">
+        <label style="margin:0; white-space:nowrap; font-size:12.5px;">🚗 Al navegar, priorizar:</label>
+        <div style="display:flex; gap:6px;">
+          <button type="button" id="btnRutaCorta" style="width:auto; padding:6px 12px; font-size:12px;">📏 Más corta</button>
+          <button type="button" id="btnRutaRapida" style="width:auto; padding:6px 12px; font-size:12px; background:#eee; color:#555; box-shadow:none;">⏱️ Más rápida</button>
+        </div>
+      </div>
     </div>
 
     <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
+<div id="navInfoPanel" style="display:none; position:absolute; top:0; left:0; right:0; z-index:700; background:rgba(20,20,22,0.94); color:#fff; padding:10px 14px; border-radius:14px 14px 0 0; font-family:var(--sans);">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+    <div style="flex:1; min-width:0;">
+      <div class="nav-nombre" id="navNombre" style="color:#fff; font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Buscando ubicación...</div>
+      <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
+        <span class="nav-distancia" id="navDistancia" style="color:#ffc700; font-size:20px; font-weight:800;">— m</span>
+        <span class="hint" id="navDistanciaEtiqueta" style="color:#cfcfcf; margin:0;">en línea recta</span>
+        <span class="hint" id="navDistanciaRuta" style="color:#8fd6a8; font-weight:700; margin:0;"></span>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px; flex-shrink:0;">
+      <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz" style="position:static;">🔊</button>
+      <button class="overlay-offline-nav" id="btnCapaOfflineNav" type="button" title="Usar mapa guardado sin conexión (manual)" aria-label="Alternar capa offline" style="position:static;">🛰️</button>
+      <button class="overlay-cerrar" id="btnCerrarNav" type="button" aria-label="Cerrar navegación" style="position:static;">✕</button>
+    </div>
+  </div>
+  <div class="indicador-señal indicador-señal-nav" id="indicadorSeñalNav" style="margin:6px auto 0;"><span class="punto-señal" id="puntoSeñalNav"></span><span id="textoSeñalNav">En línea</span></div>
+  <div class="nav-estado" id="navEstado" style="color:#e5e5e5;"></div>
+</div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
         <button type="button" class="btn-icono" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">
@@ -3114,11 +3071,13 @@ function activarCapaOffline(mapaRef, metaForzada){
 
   const meta = metaForzada || buscarPlanoParaVista(mapaRef);
   const btn = document.getElementById('btnCapaOffline');
+  const btnNav = document.getElementById('btnCapaOfflineNav');
 
   if(meta){
     if(mapaRef.hasLayer(capaOffline)) mapaRef.removeLayer(capaOffline);
     mostrarPlanoOfflineEnMapa(mapaRef, meta);
     if(btn){ btn.classList.add('activo'); btn.title = 'Sin conexión: usando el plano guardado "' + meta.nombre + '"'; }
+    if(btnNav) btnNav.classList.add('activo');
   }else{
     // No hay imagen que coincida, pero mostramos igual la grilla + cualquier
     // tramo de camino guardado que se superponga con esta vista (aunque sea de otro plano).
@@ -3131,6 +3090,7 @@ function activarCapaOffline(mapaRef, metaForzada){
         ? ('Sin conexión: sin imagen guardada para esta vista, mostrando ' + cantidadCalles + ' tramo(s) de camino guardados')
         : 'Sin conexión: usando grilla local (tocá para reintentar satélite)';
     }
+    if(btnNav) btnNav.classList.add('activo');
   }
 
   mostrarBadgePlanoActivo('badgePlanoActivo', nombresDePlanosParaVista(mapaRef));
@@ -3144,7 +3104,9 @@ function activarCapaSatelital(mapaRef){
   if(capaCallesOfflineActual){ mapaRef.removeLayer(capaCallesOfflineActual); capaCallesOfflineActual = null; }
   if(!mapaRef.hasLayer(capaSatelital)) capaSatelital.addTo(mapaRef);
   const btn = document.getElementById('btnCapaOffline');
+  const btnNav = document.getElementById('btnCapaOfflineNav');
   if(btn){ btn.classList.remove('activo'); btn.title = 'Cambiar entre imagen satelital y grilla sin conexión'; }
+  if(btnNav) btnNav.classList.remove('activo');
   ocultarBadgePlanoActivo('badgePlanoActivo');
 }
 
@@ -3284,7 +3246,8 @@ function siguiendoPausadoPorToque(cualMapa){
 
 function obtenerMapa(){
   if(!mapa){
-    mapa = L.map('map', { attributionControl: true });
+    mapa = L.map('map', { attributionControl: true, zoomControl: false });
+    L.control.zoom({ position: 'bottomright' }).addTo(mapa);
 
     capaSatelital = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
@@ -3297,7 +3260,7 @@ function obtenerMapa(){
     // Si varias teselas fallan seguidas (sin señal), pasamos solas a la grilla offline
     capaSatelital.on('tileerror', function(){
       fallasTeselas++;
-      if(fallasTeselas >= 4) activarCapaOffline(mapa);
+      if(fallasTeselas >= 4 && !modoOfflineActivo) activarCapaOffline(mapa);
     });
     capaSatelital.on('tileload', function(){ fallasTeselas = 0; });
 
@@ -3320,12 +3283,26 @@ function obtenerMapa(){
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
-    mapa.on('dragstart', function(){ registrarInteraccionManual('principal'); });
     mapa.on('zoomstart', function(){ registrarZoomManual('principal'); });
-    // La pantalla principal queda FIJA (nunca rota) — solo se puede hacer zoom y arrastrar,
-    // con el comportamiento normal de Leaflet, sin ningun manejo especial de rotacion.
-    // (El giro con dos dedos y el arrastre corregido por rotacion son solo para la pantalla
-    // de navegacion, que si necesita rotar segun hacia donde estas mirando.)
+
+    // Arrastre y giro con dos dedos: SIEMPRE activos, pero la ROTACION solo se aplica
+    // mientras se este navegando (modoNavegacionActivo) — el resto del tiempo, la rotacion
+    // queda fija en 0, asi que el arrastre se comporta exactamente igual que el nativo de
+    // Leaflet (sin ninguna correccion visible), y el pellizco con dos dedos solo hace zoom.
+    habilitarArrastreConRotacion(mapa, 'mapWrap', function(){
+      return modoNavegacionActivo ? rotacionTactilPrincipal : 0;
+    }, function(){
+      registrarInteraccionManual('principal');
+    });
+    habilitarGiroTactil(mapa, 'mapWrap', function(){
+      registrarInteraccionManual('principal');
+      return modoNavegacionActivo ? rotacionTactilPrincipal : 0;
+    }, function(nuevaRotacion){
+      if(!modoNavegacionActivo) return; // fuera de navegacion, ignoramos el giro (solo queda el zoom del gesto)
+      rotacionTactilPrincipal = nuevaRotacion;
+      aplicarRotacionPrincipal(nuevaRotacion);
+      navUltimaRotacionMapa = -nuevaRotacion; // asi la rotacion automatica por rumbo retoma suave despues
+    });
   }
   document.getElementById('mapPanel').style.display = 'block';
   setTimeout(() => mapa.invalidateSize(), 150);
@@ -3554,9 +3531,6 @@ let navObjetivo = null; // [lat, lon]
 let navUltimaHeadingDispositivo = null;
 
 // ---- Mapa de ruta, voz y ruteo por calles/caminos ----
-let navMapaInstancia = null;
-let navCapaSatNav = null;
-let navCapaOfflineNav = null;
 let navMarcadorYo = null;
 let navSeguirUbicacion = true;
 let navUltimoAjusteVista = 0;
@@ -3815,6 +3789,34 @@ function calcularRutaOffline(latOrigen, lonOrigen, latDestino, lonDestino){
   };
 }
 
+// Preferencia de ruta: 'corta' (menor distancia, por defecto) o 'rapida' (menor tiempo estimado).
+// Se guarda en el navegador, así se acuerda la próxima vez sin tener que elegirla de nuevo.
+let preferenciaRuta = localStorage.getItem('generadorKml_preferenciaRuta') || 'corta';
+
+function actualizarBotonesPreferenciaRuta(){
+  const btnCorta = document.getElementById('btnRutaCorta');
+  const btnRapida = document.getElementById('btnRutaRapida');
+  if(!btnCorta || !btnRapida) return;
+  if(preferenciaRuta === 'rapida'){
+    btnRapida.style.background = ''; btnRapida.style.color = ''; btnRapida.style.boxShadow = '';
+    btnCorta.style.background = '#eee'; btnCorta.style.color = '#555'; btnCorta.style.boxShadow = 'none';
+  }else{
+    btnCorta.style.background = ''; btnCorta.style.color = ''; btnCorta.style.boxShadow = '';
+    btnRapida.style.background = '#eee'; btnRapida.style.color = '#555'; btnRapida.style.boxShadow = 'none';
+  }
+}
+document.getElementById('btnRutaCorta') && document.getElementById('btnRutaCorta').addEventListener('click', function(){
+  preferenciaRuta = 'corta';
+  localStorage.setItem('generadorKml_preferenciaRuta', 'corta');
+  actualizarBotonesPreferenciaRuta();
+});
+document.getElementById('btnRutaRapida') && document.getElementById('btnRutaRapida').addEventListener('click', function(){
+  preferenciaRuta = 'rapida';
+  localStorage.setItem('generadorKml_preferenciaRuta', 'rapida');
+  actualizarBotonesPreferenciaRuta();
+});
+actualizarBotonesPreferenciaRuta();
+
 function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   const url = 'https://router.project-osrm.org/route/v1/driving/' +
     lon1 + ',' + lat1 + ';' + lon2 + ',' + lat2 +
@@ -3831,11 +3833,17 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
     if(data.code !== 'Ok' || !data.routes || data.routes.length === 0){
       throw new Error('Sin ruta trazable por camino hasta ese punto');
     }
-    // De las alternativas que devuelve el servicio, elegimos la de MENOR DISTANCIA total
-    // (no la mas rapida por defecto), para priorizar el camino mas corto sobre el mejor pavimentado.
+    // De las alternativas que devuelve el servicio, elegimos segun la preferencia guardada:
+    // "corta" = menor distancia total (por defecto, prioriza el camino mas corto por sobre
+    // el mejor pavimentado); "rapida" = menor tiempo estimado (prioriza velocidad de viaje,
+    // aunque sea un camino mas largo en distancia).
     let ruta = data.routes[0];
     for(let i=1; i<data.routes.length; i++){
-      if(data.routes[i].distance < ruta.distance) ruta = data.routes[i];
+      if(preferenciaRuta === 'rapida'){
+        if(data.routes[i].duration < ruta.duration) ruta = data.routes[i];
+      }else{
+        if(data.routes[i].distance < ruta.distance) ruta = data.routes[i];
+      }
     }
     const coords = ruta.geometry.coordinates.map(c => [c[1], c[0]]); // lon,lat -> lat,lon
     const pasos = [];
@@ -3857,82 +3865,15 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
   });
 }
 
-let navModoOfflineActivo = false;
-
-function activarOfflineEnNav(mapaRef){
-  navModoOfflineActivo = true;
-  if(mapaRef.hasLayer(navCapaSatNav)) mapaRef.removeLayer(navCapaSatNav);
-  const meta = buscarPlanoParaVista(mapaRef);
-  if(meta){
-    mostrarPlanoOfflineEnMapa(mapaRef, meta);
-  }else{
-    if(!mapaRef.hasLayer(navCapaOfflineNav)) navCapaOfflineNav.addTo(mapaRef);
-    mostrarSoloCallesGuardadas(mapaRef);
-  }
-  const btn = document.getElementById('btnCapaOfflineNav');
-  if(btn) btn.classList.add('activo');
-  mostrarBadgePlanoActivo('badgePlanoActivoNav', nombresDePlanosParaVista(mapaRef));
-}
-
-function activarSatelitalEnNav(mapaRef){
-  navModoOfflineActivo = false;
-  if(mapaRef.hasLayer(navCapaOfflineNav)) mapaRef.removeLayer(navCapaOfflineNav);
-  if(capaImagenOfflineActual && mapaRef.hasLayer(capaImagenOfflineActual)) mapaRef.removeLayer(capaImagenOfflineActual);
-  if(capaCallesOfflineActual && mapaRef.hasLayer(capaCallesOfflineActual)) mapaRef.removeLayer(capaCallesOfflineActual);
-  if(!mapaRef.hasLayer(navCapaSatNav)) navCapaSatNav.addTo(mapaRef);
-  const btn = document.getElementById('btnCapaOfflineNav');
-  if(btn) btn.classList.remove('activo');
-  ocultarBadgePlanoActivo('badgePlanoActivoNav');
-}
-
-function asegurarMiniMapaNav(){
-  if(navMapaInstancia) return navMapaInstancia;
-  navMapaInstancia = L.map('navMapa', { attributionControl:false, zoomControl:false });
-  L.control.zoom({ position: 'bottomright' }).addTo(navMapaInstancia);
-  navCapaSatNav = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19 });
-  navCapaOfflineNav = new CapaSinConexion({ maxZoom:19 });
-  navCapaSatNav.addTo(navMapaInstancia);
-  let fallasNav = 0;
-  navCapaSatNav.on('tileerror', function(){
-    fallasNav++;
-    if(fallasNav >= 4 && navMapaInstancia.hasLayer(navCapaSatNav) && !navModoOfflineActivo){
-      activarOfflineEnNav(navMapaInstancia);
-    }
-  });
-  navMapaInstancia.on('moveend', function(){ intentarCachearCallesAutomatico(navMapaInstancia); });
-  navMapaInstancia.on('zoomstart', function(){ registrarZoomManual('nav'); });
-  habilitarArrastreConRotacion(navMapaInstancia, 'navMapaWrap', function(){
-    return navUltimaRotacionMapa === null ? 0 : -navUltimaRotacionMapa;
-  }, function(){
-    registrarInteraccionManual('nav');
-  });
-  habilitarGiroTactil(navMapaInstancia, 'navMapaWrap', function(){
-    registrarInteraccionManual('nav');
-    // Convertimos el "heading" guardado a la rotacion directa que ya tiene aplicada el
-    // contenedor ahora mismo (aplicarTransformMapaNav usa rotate(-heading)), para que el
-    // gesto arranque desde donde ya estaba, sin saltos.
-    return navUltimaRotacionMapa === null ? 0 : -navUltimaRotacionMapa;
-  }, function(nuevaRotacionDirecta){
-    const el = document.getElementById('navMapa');
-    if(el){
-      el.style.transformOrigin = '50% 50%';
-      el.style.transform = 'rotate(' + nuevaRotacionDirecta + 'deg) scale(2.0)';
-    }
-    // Guardamos el equivalente en "heading" para que, cuando retome la rotacion automatica
-    // por rumbo (despues de los 10s de pausa), continue suave desde donde lo dejaste con la mano.
-    navUltimaRotacionMapa = -nuevaRotacionDirecta;
-  });
-  return navMapaInstancia;
-}
 
 document.getElementById('btnCapaOfflineNav').addEventListener('click', function(){
-  const m = asegurarMiniMapaNav();
-  if(navModoOfflineActivo) activarSatelitalEnNav(m);
-  else activarOfflineEnNav(m);
+  const m = obtenerMapa();
+  if(modoOfflineActivo) activarCapaSatelital(m);
+  else activarCapaOffline(m);
 });
 
 function trazarRutaEnMiniMapa(lat, lon){
-  const m = asegurarMiniMapaNav();
+  const m = obtenerMapa();
   const esPrimeraVez = !navMarcadorYo;
 
   // Primer anuncio por voz: nombre del destino, direccion cardinal y distancia en linea recta.
@@ -3982,7 +3923,7 @@ function trazarRutaEnMiniMapa(lat, lon){
   // mientras avanzas — no se abre para mostrar el destino lejano, eso solo confunde la vista
   // de cerca. Si tocaste el mapa con la mano hace menos de 10 segundos, lo dejamos quieto
   // para que puedas mirar libremente donde quieras — el seguimiento vuelve solo despues de eso.
-  if(!esPrimeraVez && navSeguirUbicacion && !siguiendoPausadoPorToque('nav')){
+  if(!esPrimeraVez && navSeguirUbicacion && !siguiendoPausadoPorToque('principal')){
     const ahora = Date.now();
     if(!navUltimoAjusteVista || ahora - navUltimoAjusteVista > 1200){
       navUltimoAjusteVista = ahora;
@@ -4012,7 +3953,7 @@ function trazarRutaEnMiniMapa(lat, lon){
       // arranca siempre desde donde estas parado, asi que se ve igual en esa vista de cerca.
       // Salvo que estes mirando el mapa a tu manera (tocado hace menos de 10s): ahi no lo movemos.
       const esPrimeraRutaDeLaSesion = navPasos.length === 0;
-      if(!siguiendoPausadoPorToque('nav')){
+      if(!siguiendoPausadoPorToque('principal')){
         const zoomParaMediaKm = m.getBoundsZoom(L.latLng(lat, lon).toBounds(calcularEscalaZoomNav(lat, lon)));
         moverMapaProgramatico(function(){ m.setView(puntoDeCamaraConMirada(lat, lon), zoomParaMediaKm, { animate:true }); });
         navUltimoAjusteVista = Date.now(); // evita que el ajuste de seguimiento pelee con este encuadre
@@ -4030,6 +3971,11 @@ function trazarRutaEnMiniMapa(lat, lon){
       }
       navDistanciaTotalRuta = res.distanciaTotal;
       navTieneRutaValida = true;
+      const elDistRuta = document.getElementById('navDistanciaRuta');
+      if(elDistRuta){
+        const km = res.distanciaTotal / 1000;
+        elDistRuta.textContent = '🛣️ ' + (km >= 1 ? km.toFixed(2) + ' km' : Math.round(res.distanciaTotal) + ' m') + ' por camino';
+      }
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
       if(!navAnuncioRutaHecho){
         navAnuncioRutaHecho = true;
@@ -4087,24 +4033,18 @@ function trazarRutaEnMiniMapa(lat, lon){
   }
 }
 
-// Si la conexion se corta mientras se esta navegando, pasamos de inmediato al respaldo offline
-// (imagen/caminos guardados o grilla) y ocultamos la ruta azul vieja — sin esperar a que fallen
-// las teselas de a poco. Si vuelve la señal, se restaura solo la vista satelital y se recalcula la ruta.
+// Si la conexion se corta mientras se esta navegando, ocultamos la ruta azul vieja de inmediato
+// (la capa offline/satelital ya se cambia sola, esto lo maneja obtenerMapa()). Si vuelve la señal,
+// se fuerza a recalcular la ruta de nuevo.
 window.addEventListener('offline', function(){
-  if(navMapaInstancia && !navModoOfflineActivo){
-    activarOfflineEnNav(navMapaInstancia);
-  }
-  if(navMapaInstancia && navCapaRuta && navMapaInstancia.hasLayer(navCapaRuta)){
-    navMapaInstancia.removeLayer(navCapaRuta);
+  if(mapa && navCapaRuta && mapa.hasLayer(navCapaRuta)){
+    mapa.removeLayer(navCapaRuta);
     const estadoEl = document.getElementById('navEstado');
     if(estadoEl) estadoEl.textContent = 'Sin conexión: se oculta la ruta calculada. Guiate por la flecha y la distancia.';
   }
 });
 window.addEventListener('online', function(){
-  if(navMapaInstancia && navModoOfflineActivo){
-    activarSatelitalEnNav(navMapaInstancia);
-  }
-  if(navMapaInstancia && navObjetivo){
+  if(mapa && navObjetivo){
     navUltimoFetchRuta = 0; // fuerza a pedir la ruta de nuevo apenas vuelva la señal
   }
 });
@@ -4148,7 +4088,7 @@ function revisarAvisosDeVoz(lat, lon, distTotalRecta){
 
   // Avisos de llegada por voz: solo estos 3 hitos de distancia al punto/poligono de destino,
   // cada uno una unica vez (navUltimoAvisoDistancia evita que se repita).
-  const hitos = [3000, 1500, 300];
+  const hitos = [300];
   for(const h of hitos){
     if(distTotalRecta <= h && navUltimoAvisoDistancia !== h){
       navUltimoAvisoDistancia = h;
@@ -4189,8 +4129,8 @@ function suavizarHeading(headingViejo, headingNuevo, factor){
 }
 
 function actualizarRotacionMapaNav(pos){
-  if(!navSeguirUbicacion || siguiendoPausadoPorToque('nav')){
-    return; // con el mapa libre (por toque manual reciente) no lo giramos, para no pelear con tu mano
+  if(!modoNavegacionActivo || !navSeguirUbicacion || siguiendoPausadoPorToque('principal')){
+    return; // fuera de navegacion, o con el mapa libre (por toque manual reciente), no rotamos
   }
 
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
@@ -4221,7 +4161,7 @@ function actualizarRotacionMapaNav(pos){
 // Leaflet no trae esto de fabrica, asi que lo armamos a mano: mientras haya 2 dedos tocando,
 // medimos el angulo entre ellos y lo aplicamos como rotacion directa al contenedor del mapa.
 // Al soltar los dedos, la rotacion queda como quedo (no vuelve sola a 0), hasta que:
-// - en la pantalla de navegacion, pasen los 10s de pausa y la rotacion automatica por rumbo retome, o
+// - pasen los 10s de pausa y la rotacion automatica por rumbo retome (si segue navegando), o
 // - se vuelva a girar manualmente.
 // ---------- Arrastrar el mapa con un dedo, corrigiendo la rotacion ----------
 // Bug real que se detecto: cuando el mapa esta girado, Leaflet sigue calculando el arrastre
@@ -4331,6 +4271,7 @@ function habilitarGiroTactil(mapaLeaflet, idContenedorEscucha, alEmpezarGiro, al
   }, { capture:true });
 }
 
+let modoNavegacionActivo = false; // true mientras se este navegando activamente en la pantalla principal
 let rotacionTactilPrincipal = 0;
 function aplicarRotacionPrincipal(grados){
   const el = document.getElementById('map');
@@ -4340,9 +4281,9 @@ function aplicarRotacionPrincipal(grados){
 }
 
 function aplicarTransformMapaNav(headingGrados){
-  const contenedor = document.getElementById('navMapa');
+  const contenedor = document.getElementById('map');
   if(!contenedor) return;
-  // Importante: rotamos el CONTENEDOR de Leaflet (#navMapa), no ".leaflet-map-pane" de adentro —
+  // Importante: rotamos el CONTENEDOR de Leaflet (#map), no ".leaflet-map-pane" de adentro —
   // Leaflet usa esa capa interna para moverse (pan/zoom) escribiendo su propia transformacion ahi
   // todo el tiempo; si nosotros tambien escribiamos una transformacion distinta en el mismo lugar,
   // las dos se pisaban entre si y el mapa "perdia" donde estaba parado, dando el bamboleo e
@@ -4350,6 +4291,9 @@ function aplicarTransformMapaNav(headingGrados){
   // su propio movimiento interno sin que nosotros nos metamos en el medio.
   contenedor.style.transformOrigin = '50% 50%';
   contenedor.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(2.0)';
+  // Mantenemos sincronizada la rotacion "directa" (la que usa el gesto de dos dedos), para que
+  // si arrancas a girar con la mano justo despues, no salte de golpe desde donde ya estaba.
+  rotacionTactilPrincipal = -headingGrados;
 }
 
 // ---------- La navegación activa sobrevive a minimizar o cerrar la app por accidente ----------
@@ -4372,13 +4316,54 @@ function restaurarSesionNavActivaSiExiste(){
     if(!crudo) return;
     const s = JSON.parse(crudo);
     if(s && Array.isArray(s.objetivo) && s.objetivo.length === 2 && s.nombre){
-      iniciarNavegacionHacia([s.objetivo], s.nombre);
+      // Al retomar sola (se minimizo/recargo la app durante una navegacion ya en curso), NO
+      // volvemos a preguntar la preferencia — seguimos con la que ya estaba elegida para este viaje.
+      iniciarNavegacionHaciaConfirmada([s.objetivo], s.nombre);
     }
   }catch(e){ /* dato guardado invalido: lo ignoramos y seguimos normal */ }
 }
 
+// Antes de arrancar a navegar, preguntamos que preferencia usar ESTA vez (no una configuracion
+// fija de antemano) — asi cada viaje puede elegir lo que le convenga en el momento.
 function iniciarNavegacionHacia(puntos, nombre){
-  const overlay = document.getElementById('overlayNav');
+  mostrarModalPreferenciaRuta(puntos, nombre);
+}
+
+function mostrarModalPreferenciaRuta(puntos, nombre){
+  const modalViejo = document.getElementById('modalPreferenciaRuta');
+  if(modalViejo) modalViejo.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modalPreferenciaRuta';
+  modal.style.cssText = 'position:fixed; inset:0; z-index:5600; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:16px;';
+  modal.innerHTML =
+    '<div style="background:#fff; border-radius:14px; padding:22px 20px; max-width:380px; width:100%; font-family:var(--sans, sans-serif); text-align:center;">' +
+      '<div style="font-weight:800; font-size:16px; margin-bottom:4px;">¿Cómo querés ir hacia "' + nombre + '"?</div>' +
+      '<p class="hint" style="margin:0 0 18px 0;">Elegí para este viaje — se puede cambiar en cualquier otra navegación.</p>' +
+      '<button type="button" id="btnModalRutaCorta" style="width:100%; padding:14px; margin-bottom:10px; font-size:14.5px;">📏 Ruta más corta<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Menos kilómetros — mezcla ripio y asfalto</span></button>' +
+      '<button type="button" id="btnModalRutaRapida" style="width:100%; padding:14px; font-size:14.5px; background:#eef2ff; color:#2c3ea8; box-shadow:none;">⏱️ Ruta más rápida<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Prioriza velocidad, aunque sean más km</span></button>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  document.getElementById('btnModalRutaCorta').addEventListener('click', function(){
+    preferenciaRuta = 'corta';
+    localStorage.setItem('generadorKml_preferenciaRuta', 'corta');
+    actualizarBotonesPreferenciaRuta();
+    modal.remove();
+    iniciarNavegacionHaciaConfirmada(puntos, nombre);
+  });
+  document.getElementById('btnModalRutaRapida').addEventListener('click', function(){
+    preferenciaRuta = 'rapida';
+    localStorage.setItem('generadorKml_preferenciaRuta', 'rapida');
+    actualizarBotonesPreferenciaRuta();
+    modal.remove();
+    iniciarNavegacionHaciaConfirmada(puntos, nombre);
+  });
+}
+
+function iniciarNavegacionHaciaConfirmada(puntos, nombre){
+  const m = obtenerMapa();
+  const panel = document.getElementById('navInfoPanel');
   const elNombre = document.getElementById('navNombre');
   const elDistancia = document.getElementById('navDistancia');
   const elEstado = document.getElementById('navEstado');
@@ -4411,11 +4396,16 @@ function iniciarNavegacionHacia(puntos, nombre){
   navNombreDestino = nombre;
   navAnuncioInicialHecho = false;
   navAnuncioRutaHecho = false;
+  modoNavegacionActivo = true;
+
   elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
+  const elDistRutaInicial = document.getElementById('navDistanciaRuta');
+  if(elDistRutaInicial) elDistRutaInicial.textContent = '';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
-  overlay.classList.add('activo');
-  setTimeout(function(){ asegurarMiniMapaNav().invalidateSize(); }, 200);
+  panel.style.display = 'block';
+  document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'start' });
+  setTimeout(function(){ m.invalidateSize(); }, 200);
 
   // El anuncio por voz completo (nombre, direccion, distancia, tiempo) se dice apenas
   // llega la primera posicion GPS — ver anunciarInicioSiCorresponde() en trazarRutaEnMiniMapa.
@@ -4442,15 +4432,8 @@ function iniciarNavegacionHacia(puntos, nombre){
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
     const dist = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
-    const rumbo = calcularRumbo(lat, lon, navObjetivo[0], navObjetivo[1]);
 
     elDistancia.textContent = dist >= 1000 ? (dist/1000).toFixed(2) + ' km' : Math.round(dist) + ' m';
-
-    let rotacion = rumbo;
-    if(navUltimaHeadingDispositivo !== null){
-      rotacion = (rumbo - navUltimaHeadingDispositivo + 360) % 360;
-    }
-    document.getElementById('navFlecha').style.transform = 'rotate(' + rotacion + 'deg)';
 
     // Rotar la PANTALLA del mapa segun hacia donde te estas moviendo realmente (no el norte fijo),
     // asi "arriba" siempre es "adelante" mientras avanzas — como en Waze/Google Maps.
@@ -4484,7 +4467,8 @@ function activarEscuchaOrientacion(){
 }
 
 function cerrarNavegador(){
-  document.getElementById('overlayNav').classList.remove('activo');
+  document.getElementById('navInfoPanel').style.display = 'none';
+  modoNavegacionActivo = false;
   borrarSesionNavActiva(); // cerraste a mano: no hace falta retomar esto si se reabre la app
   if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
   if(navOrientHandler){
@@ -4494,6 +4478,20 @@ function cerrarNavegador(){
   }
   navUltimaHeadingDispositivo = null;
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+  // Volvemos la pantalla principal a su estado "quieto" de siempre: sin rotacion, sin la
+  // ruta azul ni los marcadores temporales de navegacion (los puntos guardados de verdad
+  // siguen ahi, esos no se tocan). Importante: limpiamos el transform del todo (no solo
+  // "rotate(0deg)") — si dejabamos el scale(2.0) de compensacion puesto, el mapa quedaba
+  // con un zoom visual pegado despues de cerrar, aunque ya no estuviera rotado.
+  rotacionTactilPrincipal = 0;
+  const elMapa = document.getElementById('map');
+  if(elMapa) elMapa.style.transform = 'none';
+  if(mapa){
+    if(navCapaRuta && mapa.hasLayer(navCapaRuta)){ mapa.removeLayer(navCapaRuta); navCapaRuta = null; }
+    if(navMarcadorYo && mapa.hasLayer(navMarcadorYo)){ mapa.removeLayer(navMarcadorYo); navMarcadorYo = null; }
+    if(navMarcadorDestino && mapa.hasLayer(navMarcadorDestino)){ mapa.removeLayer(navMarcadorDestino); navMarcadorDestino = null; }
+  }
 
   // Si habia una actualizacion de la app esperando para aplicarse (se difirio mientras
   // navegabas, para no interrumpirte), la aplicamos recien ahora que es un momento seguro.
@@ -5115,75 +5113,6 @@ function construirKMZ(nombreEntradaInterna, contenidoKmlTexto){
   return new Blob([encabezadoLocal, datosArchivo, encabezadoCentral, finCentral], { type: 'application/vnd.google-earth.kmz' });
 }
 
-// ---------- Exportar TODO junto: un KML combinado + una planilla CSV con todos los puntos ----------
-// Pensado para cuando ya tenés varios puntos/predios cargados (subidos, generados, trazados) y
-// necesitás el reporte completo de una sola vez, en vez de descargar archivo por archivo.
-function construirKMLCombinado(items){
-  const placemarks = items.map(function(item){
-    const nombreEsc = item.nombre.replace(/[<>&]/g, '');
-    const geometriaXml = construirGeometriaXmlKML(item.puntos, item.tipo);
-    return '    <Placemark>\n      <name>' + nombreEsc + '</name>\n' + geometriaXml + '    </Placemark>\n';
-  }).join('');
-
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
-'<kml xmlns="http://www.opengis.net/kml/2.2">\n' +
-'  <Document>\n' +
-'    <name>Predios exportados</name>\n' +
-placemarks +
-'  </Document>\n' +
-'</kml>\n';
-}
-
-function construirCSVDeItems(items){
-  const filas = [['Nombre', 'Categoría', 'Nota', 'Tipo', 'Latitud/Centro', 'Longitud/Centro', 'Superficie (ha)', 'Longitud (m)', 'Cantidad de puntos', 'Cantidad de fotos', 'UTM Este', 'UTM Norte', 'Huso']];
-  items.forEach(function(item){
-    const centro = item.tipo === 'punto' ? item.puntos[0] : centroide(item.puntos);
-    const utm = latLonToUtm(centro[0], centro[1]);
-    let superficie = '', longitudM = '';
-    if(item.tipo === 'poligono') superficie = calcularAreaHa(item.puntos).toFixed(2);
-    if(item.tipo === 'linea') longitudM = Math.round(longitudTotalLinea(item.puntos));
-    filas.push([
-      item.nombre, item.categoria || '', item.nota || '', item.tipo, centro[0].toFixed(6), centro[1].toFixed(6),
-      superficie, longitudM, item.puntos.length, (item.fotos ? item.fotos.length : 0),
-      Math.round(utm.este), Math.round(utm.norte), utm.huso + utm.hemisferio
-    ]);
-  });
-  // Punto y coma como separador: es lo que Excel en español espera para abrir bien las columnas
-  return filas.map(function(fila){
-    return fila.map(function(campo){
-      const texto = String(campo);
-      return /[";\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
-    }).join(';');
-  }).join('\r\n');
-}
-
-function descargarBlob(contenido, nombreArchivo, tipoMime){
-  const blob = new Blob([contenido], { type: tipoMime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nombreArchivo;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function exportarTodoComoInforme(){
-  if(poligonosSubidos.length === 0){
-    alert('Todavía no hay ningún punto/predio cargado para exportar.');
-    return;
-  }
-  const fechaHoy = new Date().toLocaleDateString('es-CL').replace(/\//g, '-');
-
-  const kmlCombinado = construirKMLCombinado(poligonosSubidos);
-  descargarBlob(kmlCombinado, 'Predios_' + fechaHoy + '.kml', 'application/vnd.google-earth.kml+xml');
-
-  // El \uFEFF al principio es para que Excel en Windows reconozca los acentos/ñ correctamente
-  const csv = '\uFEFF' + construirCSVDeItems(poligonosSubidos);
-  descargarBlob(csv, 'Predios_' + fechaHoy + '.csv', 'text/csv;charset=utf-8');
-}
-
 function descargarKmlDeItem(nombre, puntos, tipo){
   const kml = construirKML(nombre, puntos, tipo || determinarTipoFigura(puntos, false));
   const nombreArchivo = nombre.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.kml';
@@ -5386,15 +5315,16 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
 
   navigator.geolocation.getCurrentPosition(function(pos){
     const centro = centroide(item.puntos);
+    const distRectaKm = (distanciaMetros(pos.coords.latitude, pos.coords.longitude, centro[0], centro[1]) / 1000).toFixed(1);
     obtenerRutaOSRM(pos.coords.latitude, pos.coords.longitude, centro[0], centro[1]).then(function(res){
       const elInfo = document.getElementById(idInfo);
       if(!elInfo) return; // el popup ya se cerro
       const distKm = (res.distanciaTotal / 1000).toFixed(1);
       const tiempo = formatearDuracion(res.duracionSeg);
-      elInfo.textContent = distKm + ' km por camino · ~' + tiempo + ' de viaje';
+      elInfo.textContent = distKm + ' km por camino (' + distRectaKm + ' km en línea recta) · ~' + tiempo + ' de viaje';
     }).catch(function(err){
       const elInfo = document.getElementById(idInfo);
-      if(elInfo) elInfo.textContent = 'Sin ruta por camino disponible (' + err.message + ').';
+      if(elInfo) elInfo.textContent = distRectaKm + ' km en línea recta · sin ruta por camino disponible (' + err.message + ').';
     });
   }, function(){
     const elInfo = document.getElementById(idInfo);
@@ -5405,7 +5335,6 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
 function renderizarListaKml(){
   const cont = document.getElementById('listaKmlSubidos');
   cont.innerHTML = '';
-  actualizarSelectorCategorias();
   poligonosSubidos.forEach(function(item){
     const fila = document.createElement('div');
     fila.className = 'item-kml';
@@ -5569,44 +5498,6 @@ function cargarPoligonosDesdeStorage(){
     // sin datos guardados o localStorage no disponible: seguimos normal
   }
 }
-
-// ---------- Filtro por categoría: muestra/oculta en el mapa segun la categoria elegida ----------
-function actualizarSelectorCategorias(){
-  const select = document.getElementById('filtroCategoria');
-  if(!select) return;
-  const valorPrevio = select.value;
-  const categorias = listaDeCategoriasUsadas();
-  select.innerHTML = '<option value="">Todas</option>' +
-    categorias.map(function(c){ return '<option value="' + c.replace(/"/g,'') + '">' + c + '</option>'; }).join('');
-  if(categorias.includes(valorPrevio)) select.value = valorPrevio;
-}
-
-function aplicarFiltroCategoria(){
-  const select = document.getElementById('filtroCategoria');
-  if(!select) return;
-  const categoriaElegida = select.value;
-  const m = obtenerMapa();
-  poligonosSubidos.forEach(function(item){
-    const capa = capasKmlSubidos[item.id];
-    if(!capa) return;
-    const debeVerse = item.visible && (!categoriaElegida || item.categoria === categoriaElegida);
-    if(debeVerse && !m.hasLayer(capa)) capa.addTo(m);
-    if(!debeVerse && m.hasLayer(capa)) m.removeLayer(capa);
-  });
-}
-
-document.getElementById('filtroCategoria') && document.getElementById('filtroCategoria').addEventListener('change', aplicarFiltroCategoria);
-
-document.getElementById('btnExportarTodo') && document.getElementById('btnExportarTodo').addEventListener('click', exportarTodoComoInforme);
-
-document.getElementById('btnLimpiarKmlSubidos') && document.getElementById('btnLimpiarKmlSubidos').addEventListener('click', function(){
-  const m = obtenerMapa();
-  Object.values(capasKmlSubidos).forEach(c => m.removeLayer(c));
-  capasKmlSubidos = {};
-  poligonosSubidos = [];
-  renderizarListaKml();
-  guardarPoligonosEnStorage();
-});
 
 function extraerPuntosDeCoordenadas(textoCoords){
   const tokens = textoCoords.trim().split(/\s+/).filter(t => t.length > 0);
@@ -5976,6 +5867,33 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 // (sector/localidad) usando un servicio externo; si no hay conexion o tarda demasiado, avisa
 // igual sin el nombre del lugar en vez de quedarse callado.
 // ---------- Buscar y navegar directo a una ciudad (sin necesitar coordenadas) ----------
+// Reconoce si lo que se pegó ya es una ubicación directa — un link de Google Maps (los que
+// manda WhatsApp al compartir ubicación), o un par de coordenadas sueltas — sin necesitar
+// buscarlo por nombre. Devuelve {lat, lon} o null si no reconoce nada.
+function detectarUbicacionPegada(texto){
+  const t = texto.trim();
+
+  // Links tipo:  https://maps.google.com/?q=-38.7,-72.6
+  //              https://www.google.com/maps/@-38.7,-72.6,15z
+  //              https://goo.gl/maps/... (estos no traen coordenadas en la URL, no se detectan)
+  let m = t.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if(m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
+
+  m = t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if(m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
+
+  // Un par de coordenadas sueltas, tal cual las tipea alguien: "-38.7, -72.6" o "-38.7 -72.6"
+  m = t.match(/^(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)$/);
+  if(m){
+    const a = parseFloat(m[1]), b = parseFloat(m[2]);
+    // Si el primer numero esta fuera del rango de latitud (-90 a 90), asumimos que vino
+    // como lon,lat en vez de lat,lon, y los damos vuelta.
+    if(Math.abs(a) > 90) return { lat: b, lon: a };
+    return { lat: a, lon: b };
+  }
+  return null;
+}
+
 function buscarCiudad(idInput, idResultados){
   idInput = idInput || 'buscarCiudadInput';
   idResultados = idResultados || 'resultadosCiudad';
@@ -5983,6 +5901,33 @@ function buscarCiudad(idInput, idResultados){
   const q = input.value.trim();
   const cont = document.getElementById(idResultados);
   if(!q){ cont.style.display = 'none'; cont.innerHTML = ''; return; }
+
+  // Si ya es una ubicacion directa (link de WhatsApp/Maps, o coordenadas sueltas), vamos
+  // directo ahi, sin necesitar buscarlo por nombre en ningun servicio externo.
+  const ubicacionDirecta = detectarUbicacionPegada(q);
+  if(ubicacionDirecta){
+    cont.style.display = 'block';
+    cont.innerHTML = '';
+    const fila = document.createElement('div');
+    fila.className = 'item-kml';
+    const nombreSpan = document.createElement('span');
+    nombreSpan.className = 'nombre-kml';
+    nombreSpan.textContent = '📍 Ubicación pegada: ' + ubicacionDirecta.lat.toFixed(6) + ', ' + ubicacionDirecta.lon.toFixed(6);
+    const btnIr = document.createElement('button');
+    btnIr.type = 'button';
+    btnIr.className = 'btn-ir';
+    btnIr.textContent = 'Navegar';
+    btnIr.addEventListener('click', function(){
+      cont.style.display = 'none';
+      cont.innerHTML = '';
+      input.value = '';
+      iniciarNavegacionHacia([[ubicacionDirecta.lat, ubicacionDirecta.lon]], 'Ubicación compartida');
+    });
+    fila.appendChild(nombreSpan);
+    fila.appendChild(btnIr);
+    cont.appendChild(fila);
+    return;
+  }
 
   cont.style.display = 'block';
   cont.innerHTML = '<p class="hint">Buscando...</p>';
@@ -6638,9 +6583,7 @@ revisarArchivoCompartido();
 let actualizacionPendiente = false;
 
 function intentarRecargarSiEsSeguro(){
-  const overlayNavEl = document.getElementById('overlayNav');
-  const navegandoActivo = overlayNavEl && overlayNavEl.classList.contains('activo');
-  if(navegandoActivo){
+  if(modoNavegacionActivo){
     actualizacionPendiente = true;
     return;
   }
@@ -6675,9 +6618,7 @@ if('serviceWorker' in navigator){
     let yaRecargoPorControllerChange = false;
     navigator.serviceWorker.addEventListener('controllerchange', function(){
       if(yaRecargoPorControllerChange) return;
-      const overlayNavEl = document.getElementById('overlayNav');
-      const navegandoActivo = overlayNavEl && overlayNavEl.classList.contains('activo');
-      if(navegandoActivo){
+      if(modoNavegacionActivo){
         actualizacionPendiente = true;
         return;
       }
