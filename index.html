@@ -1585,6 +1585,33 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:#1a73e8;
     background:rgba(26,115,232,0.18);
   }
+  /* Botones del panel de navegación (claro, no negro) */
+  #navInfoPanel .overlay-mute,
+  #navInfoPanel .overlay-offline-nav{
+    width:40px;
+    height:40px;
+    background:#fff8e1;
+    border-color:#ffc700;
+    color:#1a1a1a;
+    font-size:17px;
+  }
+  #navInfoPanel .overlay-mute.silenciado{
+    border-color:#c8c8c8;
+    background:#f2f2f2;
+    opacity:0.75;
+  }
+  #navInfoPanel .overlay-offline-nav.activo{
+    border-color:#ffc700;
+    background:#ffe9a8;
+  }
+  #navInfoPanel .overlay-cerrar{
+    width:40px;
+    height:40px;
+    background:#fdeceb;
+    border-color:#e0b8b3;
+    color:#a3291c;
+    font-size:18px;
+  }
   .nav-mapa-wrap{
     width:min(94vw, 760px);
     height:560px;
@@ -1980,15 +2007,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
-<div id="navInfoPanel" style="display:none; position:absolute; top:0; left:0; right:0; z-index:700; background:rgba(20,20,22,0.94); color:#fff; padding:10px 14px; border-radius:14px 14px 0 0; font-family:var(--sans);">
+<div id="navInfoPanel" style="display:none; position:absolute; top:0; left:0; right:0; z-index:700; background:#fffdf5; color:#1a1a1a; padding:10px 14px; border-radius:14px 14px 0 0; border:2px solid #ffc700; border-bottom:none; box-shadow:0 3px 14px rgba(0,0,0,0.18); font-family:var(--sans);">
   <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
     <div style="flex:1; min-width:0;">
-      <div class="nav-nombre" id="navNombre" style="color:#fff; font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Buscando ubicación...</div>
+      <div class="nav-nombre" id="navNombre" style="color:#1a1a1a; font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Buscando ubicación...</div>
       <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
-        <span class="nav-distancia" id="navDistancia" style="color:#ffc700; font-size:20px; font-weight:800;">— m</span>
-        <span class="hint" id="navDistanciaEtiqueta" style="color:#cfcfcf; margin:0;">en línea recta</span>
-        <span class="hint" id="navDistanciaRuta" style="color:#8fd6a8; font-weight:700; margin:0;"></span>
+        <span class="nav-distancia" id="navDistanciaRuta" style="color:#c98a00; font-size:26px; font-weight:800;">calculando...</span>
       </div>
+      <span id="navDistancia" style="display:none;">— m</span>
+      <span id="navDistanciaEtiqueta" style="display:none;">en línea recta</span>
     </div>
     <div style="display:flex; gap:6px; flex-shrink:0;">
       <button class="overlay-mute" id="btnMuteNav" type="button" title="Silenciar/activar voz" aria-label="Silenciar voz" style="position:static;">🔊</button>
@@ -1997,7 +2024,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
   </div>
   <div class="indicador-señal indicador-señal-nav" id="indicadorSeñalNav" style="margin:6px auto 0;"><span class="punto-señal" id="puntoSeñalNav"></span><span id="textoSeñalNav">En línea</span></div>
-  <div class="nav-estado" id="navEstado" style="color:#e5e5e5;"></div>
+  <div class="nav-estado" id="navEstado" style="color:#5a5a5a;"></div>
 </div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
@@ -4401,7 +4428,7 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   elNombre.textContent = 'Yendo hacia: ' + nombre;
   elDistancia.textContent = '— m';
   const elDistRutaInicial = document.getElementById('navDistanciaRuta');
-  if(elDistRutaInicial) elDistRutaInicial.textContent = '';
+  if(elDistRutaInicial) elDistRutaInicial.textContent = 'Calculando distancia...';
   elEstado.textContent = 'Buscando señal GPS y calculando ruta por camino...';
   panel.style.display = 'block';
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'start' });
