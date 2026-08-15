@@ -1672,6 +1672,32 @@ svg.leaflet-image-layer.leaflet-interactive path {
     height:80vh;
     min-height:480px;
   }
+  #btnRecentrarNav{
+    position:absolute;
+    bottom:16px;
+    right:16px;
+    z-index:600;
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    background:#fff;
+    border:2px solid #5a5a5a;
+    color:#5a5a5a;
+    font-size:22px;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    box-shadow:0 3px 12px rgba(0,0,0,0.25);
+  }
+  body.nav-activa #btnRecentrarNav{
+    display:flex;
+  }
+  #btnRecentrarNav.siguiendo{
+    border-color:#1a73e8;
+    color:#1a73e8;
+    background:#eaf1fd;
+  }
   @media (max-width:640px){
     body.nav-activa #map{
       height:86vh;
@@ -2116,6 +2142,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <span class="emoji-boton">📦</span><span class="texto-boton">Preparar<br>zona</span>
         </button>
       </div>
+      <button type="button" id="btnRecentrarNav" title="Volver a mi ubicación actual" aria-label="Volver a mi ubicación actual" style="display:none;">📍</button>
       <div class="indicador-señal" id="indicadorSeñal"><span class="punto-señal" id="puntoSeñal"></span><span id="textoSeñal">En línea</span></div>
       <div id="campoAreaBadge" class="area-flotante" style="display:none;"></div>
     </div>
@@ -3445,7 +3472,7 @@ function obtenerMapa(){
       rotacionTactilPrincipal = nuevaRotacion;
       aplicarRotacionPrincipal(nuevaRotacion);
       navUltimaRotacionMapa = -nuevaRotacion; // asi la rotacion automatica por rumbo retoma suave despues
-      navRotacionAcumuladaNav = nuevaRotacion; // idem, para que el proximo giro automatico no salte
+      navRotacionAcumuladaNav = -nuevaRotacion; // idem, para que el proximo giro automatico no salte (navRotacionAcumuladaNav guarda el rumbo, no la rotacion CSS directa)
     });
   }
   document.getElementById('mapPanel').style.display = 'block';
@@ -3677,6 +3704,8 @@ let navUltimaHeadingDispositivo = null;
 // ---- Mapa de ruta, voz y ruteo por calles/caminos ----
 let navMarcadorYo = null;
 let navSeguirUbicacion = true;
+let navUltimaLatConocida = null;
+let navUltimaLonConocida = null;
 let navUltimoAjusteVista = 0;
 let navMarcadorDestino = null;
 let navCapaRuta = null;
@@ -4265,6 +4294,35 @@ function actualizarProximoGiro(lat, lon){
   elDist.textContent = distAlGiro >= 1000 ? (distAlGiro/1000).toFixed(2) + ' km' : Math.round(distAlGiro) + ' m';
 }
 
+// Botón flotante "volver a mi ubicación": si te alejaste tocando/arrastrando el mapa mientras
+// navegabas (para mirar algo más adelante en la ruta, por ejemplo) y "perdés" tu posición en
+// pantalla, este botón te devuelve de un toque al lugar exacto donde estás parado ahora mismo,
+// sin tener que esperar a que el seguimiento automático retome solo.
+function actualizarBotonRecentrar(){
+  const btn = document.getElementById('btnRecentrarNav');
+  if(!btn) return;
+  const siguiendoAhora = navSeguirUbicacion && !siguiendoPausadoPorToque('principal');
+  btn.classList.toggle('siguiendo', siguiendoAhora);
+}
+
+document.getElementById('btnRecentrarNav').addEventListener('click', function(){
+  navSeguirUbicacion = true;
+  // Reseteamos los relojes de "toque manual reciente" a cero para que siguiendoPausadoPorToque()
+  // deje de considerar que el mapa está pausado, y el seguimiento automático pueda retomar ya
+  // mismo en el próximo tick de GPS, en vez de esperar a que venza la pausa normal.
+  ultimaInteraccionManualPrincipal = 0;
+  ultimoZoomManualPrincipal = 0;
+
+  const m = obtenerMapa();
+  if(navUltimaLatConocida !== null && navUltimaLonConocida !== null){
+    const zoomActual = m.getBoundsZoom(L.latLng(navUltimaLatConocida, navUltimaLonConocida).toBounds(calcularEscalaZoomNav(navUltimaLatConocida, navUltimaLonConocida)));
+    moverMapaProgramatico(function(){
+      m.setView(puntoDeCamaraConMirada(navUltimaLatConocida, navUltimaLonConocida), zoomActual, { animate: true });
+    });
+  }
+  actualizarBotonRecentrar();
+});
+
 function abrirNavegador(){
   const objetivo = elegirObjetivoNavegacion();
   if(!objetivo){
@@ -4461,19 +4519,22 @@ function aplicarTransformMapaNav(headingGrados){
   // entre 0 y 360, asi que al cruzar por ejemplo de 359° a 1° el numero pega un salto de -358,
   // y como el mapa tiene una transicion suave (transition: transform), el navegador animaba
   // eso como si hubiera que girar casi una vuelta entera — ahi es cuando la pantalla parecia
-  // "volverse loca" y dar vueltas de golpe. Guardando un acumulado que nunca vuelve a 0, el
-  // numero que llega al CSS siempre sigue una linea continua y el giro visual es siempre el
-  // corto, para el lado que corresponde.
+  // "volverse loca" y dar vueltas de golpe. navRotacionAcumuladaNav guarda el RUMBO (no la
+  // rotacion CSS) de forma continua, sin volver nunca a 0 al cruzar 360°.
+  //
+  // OJO con el modulo en JavaScript: para numeros negativos, "%" NO devuelve un resultado
+  // siempre positivo (a diferencia de otros lenguajes) — por eso la primera version de este
+  // arreglo todavia fallaba en ciertos angulos. La formula correcta y segura para llevar
+  // cualquier numero (positivo o negativo) al rango [0,360) es "((x % 360) + 360) % 360".
   if(navRotacionAcumuladaNav === null){
-    navRotacionAcumuladaNav = -headingGrados;
+    navRotacionAcumuladaNav = headingGrados;
   }else{
-    const objetivo = -headingGrados;
     const actualEnvuelto = ((navRotacionAcumuladaNav % 360) + 360) % 360;
-    let diferencia = ((objetivo - actualEnvuelto + 540) % 360) - 180;
+    const diferencia = ((((headingGrados - actualEnvuelto + 180) % 360) + 360) % 360) - 180;
     navRotacionAcumuladaNav += diferencia;
   }
   contenedor.style.transformOrigin = '50% 50%';
-  contenedor.style.transform = 'rotate(' + navRotacionAcumuladaNav + 'deg) scale(2.0)';
+  contenedor.style.transform = 'rotate(' + (-navRotacionAcumuladaNav) + 'deg) scale(2.0)';
   // Mantenemos sincronizada la rotacion "directa" (la que usa el gesto de dos dedos), para que
   // si arrancas a girar con la mano justo despues, no salte de golpe desde donde ya estaba.
   rotacionTactilPrincipal = -headingGrados;
@@ -4616,6 +4677,8 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   navWatchId = navigator.geolocation.watchPosition(function(pos){
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
+    navUltimaLatConocida = lat;
+    navUltimaLonConocida = lon;
     const dist = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
 
     elDistancia.textContent = dist >= 1000 ? (dist/1000).toFixed(2) + ' km' : Math.round(dist) + ' m';
@@ -4624,6 +4687,8 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
     // navPasos[navPasoActualIdx] es justo el punto de la próxima maniobra sin cruzar todavía
     // (ver revisarAvisosDeVoz, que avanza el índice apenas se pasa un cruce).
     actualizarProximoGiro(lat, lon);
+
+    actualizarBotonRecentrar();
 
     // Rotar la PANTALLA del mapa segun hacia donde te estas moviendo realmente (no el norte fijo),
     // asi "arriba" siempre es "adelante" mientras avanzas — como en Waze/Google Maps.
@@ -4668,6 +4733,8 @@ function cerrarNavegador(){
     navOrientHandler = null;
   }
   navUltimaHeadingDispositivo = null;
+  navUltimaLatConocida = null;
+  navUltimaLonConocida = null;
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
 
   // Volvemos la pantalla principal a su estado "quieto" de siempre: sin rotacion, sin la
