@@ -3441,6 +3441,7 @@ function obtenerMapa(){
       rotacionTactilPrincipal = nuevaRotacion;
       aplicarRotacionPrincipal(nuevaRotacion);
       navUltimaRotacionMapa = -nuevaRotacion; // asi la rotacion automatica por rumbo retoma suave despues
+      navRotacionAcumuladaNav = nuevaRotacion; // idem, para que el proximo giro automatico no salte
     });
   }
   document.getElementById('mapPanel').style.display = 'block';
@@ -4254,6 +4255,7 @@ let navNombreDestino = '';
 let navAnuncioInicialHecho = false;
 let navAnuncioRutaHecho = false;
 let navUltimaRotacionMapa = null;
+let navRotacionAcumuladaNav = null; // version "desenrollada" (sin modulo 360) de la rotacion del mapa, ver aplicarTransformMapaNav
 
 // Rota la vista del mapa (solo las teselas/capas, no los botones ni el control de zoom)
 // para que "arriba" sea siempre hacia donde te estas moviendo, no el norte fijo.
@@ -4428,8 +4430,24 @@ function aplicarTransformMapaNav(headingGrados){
   // las dos se pisaban entre si y el mapa "perdia" donde estaba parado, dando el bamboleo e
   // inestabilidad que se notaba. Rotando el contenedor de afuera, Leaflet queda libre de manejar
   // su propio movimiento interno sin que nosotros nos metamos en el medio.
+  //
+  // "Desenrollamos" el angulo antes de aplicarlo al CSS: headingGrados siempre llega envuelto
+  // entre 0 y 360, asi que al cruzar por ejemplo de 359° a 1° el numero pega un salto de -358,
+  // y como el mapa tiene una transicion suave (transition: transform), el navegador animaba
+  // eso como si hubiera que girar casi una vuelta entera — ahi es cuando la pantalla parecia
+  // "volverse loca" y dar vueltas de golpe. Guardando un acumulado que nunca vuelve a 0, el
+  // numero que llega al CSS siempre sigue una linea continua y el giro visual es siempre el
+  // corto, para el lado que corresponde.
+  if(navRotacionAcumuladaNav === null){
+    navRotacionAcumuladaNav = -headingGrados;
+  }else{
+    const objetivo = -headingGrados;
+    const actualEnvuelto = ((navRotacionAcumuladaNav % 360) + 360) % 360;
+    let diferencia = ((objetivo - actualEnvuelto + 540) % 360) - 180;
+    navRotacionAcumuladaNav += diferencia;
+  }
   contenedor.style.transformOrigin = '50% 50%';
-  contenedor.style.transform = 'rotate(' + (-headingGrados) + 'deg) scale(2.0)';
+  contenedor.style.transform = 'rotate(' + navRotacionAcumuladaNav + 'deg) scale(2.0)';
   // Mantenemos sincronizada la rotacion "directa" (la que usa el gesto de dos dedos), para que
   // si arrancas a girar con la mano justo despues, no salte de golpe desde donde ya estaba.
   rotacionTactilPrincipal = -headingGrados;
@@ -4528,6 +4546,7 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   navAviso200Hecho = false;
   navUltimaPosParaHeadingMov = null;
   navUltimaRotacionMapa = null;
+  navRotacionAcumuladaNav = null;
   navTieneRutaValida = false;
   navRutaEsOffline = false;
   navSeguirUbicacion = true;
@@ -4626,6 +4645,7 @@ function cerrarNavegador(){
   // "rotate(0deg)") — si dejabamos el scale(2.0) de compensacion puesto, el mapa quedaba
   // con un zoom visual pegado despues de cerrar, aunque ya no estuviera rotado.
   rotacionTactilPrincipal = 0;
+  navRotacionAcumuladaNav = null;
   const elMapa = document.getElementById('map');
   if(elMapa) elMapa.style.transform = 'none';
   if(mapa){
