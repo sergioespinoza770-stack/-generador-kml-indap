@@ -5756,7 +5756,24 @@ function guardarPoligonosEnStorage(){
     const datos = poligonosSubidos.map(p => ({ id:p.id, nombre:p.nombre, puntos:p.puntos, color:p.color, visible:p.visible }));
     localStorage.setItem('generadorKml_poligonosSubidos', JSON.stringify(datos));
   }catch(e){
-    // Si el navegador bloquea localStorage en file://, seguimos funcionando solo en memoria
+    // Si el navegador bloquea localStorage en file://, seguimos funcionando solo en memoria.
+    // Pero si el motivo es que se llenó el espacio (muy probable con muchas fotos vinculadas
+    // a los puntos), antes esto fallaba en silencio sin avisar nada — el punto se veía en
+    // pantalla en la sesión actual pero no quedaba guardado, y al recargar desaparecía sin
+    // ningún mensaje. Ahora avisamos explícitamente para que no parezca que "no admite" puntos.
+    avisarEspacioLleno();
+  }
+}
+
+let avisoEspacioLlenoMostrado = false;
+function avisarEspacioLleno(){
+  const statusEl = document.getElementById('status');
+  if(!statusEl) return;
+  statusEl.className = 'status err';
+  statusEl.textContent = '⚠️ Se llenó el espacio de almacenamiento del navegador (probablemente por las fotos vinculadas a los puntos). Este punto puede no haber quedado guardado permanentemente. Recomendación: exportá/descargá lo que tengas ahora, y después borrá fotos de puntos viejos que ya no necesites para liberar espacio.';
+  if(!avisoEspacioLlenoMostrado){
+    avisoEspacioLlenoMostrado = true;
+    try{ if(navigator.vibrate) navigator.vibrate([80,40,80]); }catch(e){}
   }
 }
 
@@ -6567,7 +6584,10 @@ function guardarPuntosCampoEnStorage(){
     }else{
       localStorage.removeItem('generadorKml_puntosCampo');
     }
-  }catch(e){ /* sin espacio disponible: seguimos igual, solo no queda respaldo */ }
+  }catch(e){
+    // Antes esto fallaba en silencio; ahora avisamos, ver avisarEspacioLleno() más arriba.
+    avisarEspacioLleno();
+  }
 }
 
 function agregarPuntoCampo(lat, lon){
