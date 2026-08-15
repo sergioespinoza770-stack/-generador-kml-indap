@@ -2068,7 +2068,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div style="flex:1; min-width:0;">
       <div class="nav-nombre" id="navNombre" style="color:#1a1a1a; font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Buscando ubicación...</div>
       <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
-        <span class="nav-distancia" id="navDistanciaRuta" style="color:#c98a00; font-size:26px; font-weight:800;">calculando...</span>
+        <span class="nav-distancia" id="navDistanciaRuta" style="color:#c98a00; font-size:19px; font-weight:800;">calculando...</span>
+      </div>
+      <div id="navProximoGiroWrap" style="display:none; margin-top:2px;">
+        <span id="navProximoGiroTexto" style="color:#1a1a1a; font-size:13px; font-weight:700;"></span>
+        <span id="navProximoGiroDistancia" style="color:#1a73e8; font-size:15px; font-weight:800;"></span>
       </div>
       <span id="navDistancia" style="display:none;">— m</span>
       <span id="navDistanciaEtiqueta" style="display:none;">en línea recta</span>
@@ -4114,7 +4118,7 @@ function trazarRutaEnMiniMapa(lat, lon){
       const elDistRuta = document.getElementById('navDistanciaRuta');
       if(elDistRuta){
         const km = res.distanciaTotal / 1000;
-        elDistRuta.textContent = '🛣️ ' + (km >= 1 ? km.toFixed(2) + ' km' : Math.round(res.distanciaTotal) + ' m') + ' por camino';
+        elDistRuta.textContent = '🛣️ ' + (km >= 1 ? km.toFixed(2) + ' km' : Math.round(res.distanciaTotal) + ' m');
       }
       document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Seguí la línea azul.';
       if(!navAnuncioRutaHecho){
@@ -4237,6 +4241,28 @@ function revisarAvisosDeVoz(lat, lon, distTotalRecta){
       break;
     }
   }
+}
+
+// Muestra en el panel cuánto falta para el próximo cruce/desvío (no para el destino final) —
+// navPasos[navPasoActualIdx] es el punto de la próxima maniobra sin cruzar todavía (el índice
+// avanza en revisarAvisosDeVoz apenas se pasa un cruce). Si ya no quedan más giros (llegando
+// al destino) o no hay ruta calculada, se oculta este dato en vez de mostrar algo confuso.
+function actualizarProximoGiro(lat, lon){
+  const wrap = document.getElementById('navProximoGiroWrap');
+  const elTexto = document.getElementById('navProximoGiroTexto');
+  const elDist = document.getElementById('navProximoGiroDistancia');
+  if(!wrap || !elTexto || !elDist) return;
+
+  if(navPasos.length === 0 || navPasoActualIdx >= navPasos.length - 1){
+    wrap.style.display = 'none';
+    return;
+  }
+
+  const paso = navPasos[navPasoActualIdx];
+  const distAlGiro = distanciaMetros(lat, lon, paso.lat, paso.lon);
+  wrap.style.display = 'block';
+  elTexto.textContent = paso.texto + ':';
+  elDist.textContent = distAlGiro >= 1000 ? (distAlGiro/1000).toFixed(2) + ' km' : Math.round(distAlGiro) + ' m';
 }
 
 function abrirNavegador(){
@@ -4593,6 +4619,11 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
     const dist = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
 
     elDistancia.textContent = dist >= 1000 ? (dist/1000).toFixed(2) + ' km' : Math.round(dist) + ' m';
+
+    // Distancia hasta el próximo cruce/desvío (donde toca doblar), no hasta el destino final.
+    // navPasos[navPasoActualIdx] es justo el punto de la próxima maniobra sin cruzar todavía
+    // (ver revisarAvisosDeVoz, que avanza el índice apenas se pasa un cruce).
+    actualizarProximoGiro(lat, lon);
 
     // Rotar la PANTALLA del mapa segun hacia donde te estas moviendo realmente (no el norte fijo),
     // asi "arriba" siempre es "adelante" mientras avanzas — como en Waze/Google Maps.
