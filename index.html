@@ -1658,6 +1658,102 @@ svg.leaflet-image-layer.leaflet-interactive path {
     position:relative;
   }
 
+  /* ===== 3 etapas: Crear / Mis puntos / Navegar =====
+     La app tiene 3 momentos bien distintos (traer un punto, elegir uno de los guardados,
+     navegar hacia el) que antes convivian mezclados en una sola pantalla larga con scroll.
+     Ahora son 3 pestañas fijas abajo, como cualquier app de mapas — cada una muestra SOLO
+     el panel que le corresponde. El mapa y su barra de herramientas flotante (marcar, sacar
+     foto, preparar zona, etc.) se mantienen siempre visibles debajo, como mesa de trabajo
+     compartida entre las 3 — igual que Google Maps mantiene el mapa fijo mientras vas
+     cambiando entre buscar / direcciones / guardados. */
+  #barraEtapas{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:2000;
+    display:flex;
+    background:#fffdf5;
+    border-top:2px solid #ffc700;
+    box-shadow:0 -3px 14px rgba(0,0,0,0.12);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .etapa-tab{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    padding:9px 4px 8px;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    border-radius:0;
+    cursor:pointer;
+    font-family:var(--sans);
+    color:#8a8a86;
+    position:relative;
+  }
+  .etapa-tab-icono{ font-size:21px; line-height:1; }
+  .etapa-tab-texto{ font-size:11.5px; font-weight:700; }
+  .etapa-tab.activa{
+    color:#a3720a;
+  }
+  .etapa-tab.activa::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:18%;
+    right:18%;
+    height:3px;
+    background:#ffc700;
+    border-radius:0 0 4px 4px;
+  }
+  .etapa-tab-contador{
+    position:absolute;
+    top:4px;
+    right:22%;
+    background:#c0221a;
+    color:#fff;
+    font-size:10px;
+    font-weight:800;
+    min-width:16px;
+    height:16px;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 4px;
+  }
+  body{ padding-bottom:76px; } /* deja lugar para que la barra fija no tape el final del contenido */
+
+  #tabPuntos{
+    display:none;
+  }
+  body[data-etapa="crear"] #bloqueOficina{
+    display:block !important;
+  }
+  body[data-etapa="crear"] #btnAbrirOficina{
+    display:none !important;
+  }
+  body[data-etapa="puntos"] #tabPuntos{
+    display:block !important;
+  }
+  body[data-etapa="crear"] .buscar-ciudad-wrap,
+  body[data-etapa="puntos"] .buscar-ciudad-wrap,
+  body[data-etapa="puntos"] #bloqueOficina,
+  body[data-etapa="navegar"] #bloqueOficina,
+  body[data-etapa="navegar"] #btnAbrirOficina{
+    display:none !important;
+  }
+  /* Mientras se está navegando de verdad, la barra de etapas no hace falta —
+     el mapa ya ocupa casi toda la pantalla (ver body.nav-activa mas abajo). */
+  body.nav-activa #barraEtapas{
+    display:none;
+  }
+  body.nav-activa{ padding-bottom:0; }
+
   /* ===== Modo navegación activa: ocultamos lo que no hace falta mientras se navega
      (banner de trazar, etiqueta de previsualización, caja de buscar ciudad) y agrandamos
      el mapa lo más posible para que ocupe casi toda la pantalla. ===== */
@@ -2018,8 +2114,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="field kml-extra" id="kmlExtra">
     <label for="archivoKml">Seleccioná los archivos .kml o .kmz que necesites (Ctrl o Shift para elegir varios)</label>
     <input type="file" id="archivoKml" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple>
-    <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). Se cargan <strong>todos los puntos/polígonos</strong> que traiga cada archivo (no solo el primero), cada uno con su nombre. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Cuando el lápiz ✏️ no está activo, tocá cualquier punto/polígono en el mapa para ver su nombre, superficie, y navegar hacia él. Desde ahí también podés ponerle una <strong>categoría</strong> (con su propio color), una <strong>nota</strong>, y vincularle <strong>fotos</strong>.</p>
-    <div id="listaKmlSubidos" class="lista-kml"></div>
+    <p class="hint">Subí <strong>todos los archivos .kml o .kmz</strong> que necesites, sin límite (de Google Earth, KoboToolbox exportado a KML, un adjunto de Gmail, u otro). Se cargan <strong>todos los puntos/polígonos</strong> que traiga cada archivo (no solo el primero), cada uno con su nombre. Los .kmz (comprimidos) se descomprimen automáticamente en el momento. Quedan guardados en este navegador — si cerrás la pestaña y la volvés a abrir en el mismo celular/PC, siguen ahí, listos para consultar sin internet ni volver a subirlos. Apenas termine de cargar, andá a la pestaña <strong>📋 Mis puntos</strong> para verlos, navegar hacia ellos, o editarlos.</p>
   </div>
 
   <div class="row utm-extra" id="utmExtra">
@@ -2054,6 +2149,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="status" id="status"></div>
 
   </div><!-- /#bloqueOficina -->
+
+  <div id="tabPuntos" class="tab-contenido">
+    <div class="planos-offline-header" style="margin-bottom:4px;">
+      <strong>📋 Mis puntos guardados</strong>
+    </div>
+    <p class="hint" style="margin-top:0;">Acá están todos los puntos y polígonos que subiste o generaste, vengan de donde vengan. Tocá cualquiera en el mapa o en la lista para ver su nombre, superficie, agregarle categoría/nota/fotos, o navegar hacia él.</p>
+    <div id="listaKmlSubidos" class="lista-kml"></div>
+    <p class="hint" id="tabPuntosVacio" style="display:none; text-align:center; padding:18px 8px;">Todavía no tenés ningún punto guardado. Andá a la pestaña <strong>📥 Crear</strong> para traer coordenadas, subir un KML, o marcar uno tocando el mapa.</p>
+  </div>
 
   <div id="mapPanel">
     <div class="banner-trazar">
@@ -2209,6 +2313,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </p>
   <p style="text-align:center; margin-top:6px; font-family:var(--mono); font-size:10.5px; color:#c4c4c4;" id="versionApp"></p>
 </div>
+
+<nav id="barraEtapas" aria-label="Etapas de la app">
+  <button type="button" class="etapa-tab" id="tabBtnCrear" data-etapa="crear">
+    <span class="etapa-tab-icono">📥</span>
+    <span class="etapa-tab-texto">Crear</span>
+  </button>
+  <button type="button" class="etapa-tab" id="tabBtnPuntos" data-etapa="puntos">
+    <span class="etapa-tab-icono">📋</span>
+    <span class="etapa-tab-texto">Mis puntos</span>
+    <span class="etapa-tab-contador" id="etapaPuntosContador" style="display:none;">0</span>
+  </button>
+  <button type="button" class="etapa-tab" id="tabBtnNavegar" data-etapa="navegar">
+    <span class="etapa-tab-icono">🧭</span>
+    <span class="etapa-tab-texto">Navegar</span>
+  </button>
+</nav>
 
 <script>
 /* @preserve
@@ -4618,6 +4738,11 @@ function mostrarModalPreferenciaRuta(puntos, nombre){
 }
 
 function iniciarNavegacionHaciaConfirmada(puntos, nombre){
+  // Sin importar desde donde se haya disparado (lista de "Mis puntos", popup del mapa, o el
+  // buscador de la pestaña Navegar), nos aseguramos de estar parados en la pestaña "Navegar"
+  // para que el panel de navegacion sea lo primero que se vea.
+  if(typeof cambiarEtapa === 'function') cambiarEtapa('navegar');
+
   const m = obtenerMapa();
   const panel = document.getElementById('navInfoPanel');
   const elNombre = document.getElementById('navNombre');
@@ -5780,7 +5905,45 @@ function renderizarListaKml(){
     fila.appendChild(btnQuitar);
     cont.appendChild(fila);
   });
+  actualizarContadorEtapaPuntos();
 }
+
+// Mantiene sincronizado el numerito rojo de la pestaña "Mis puntos" y el aviso de "todavia
+// no tenes nada guardado" — se llama cada vez que la lista de puntos cambia.
+function actualizarContadorEtapaPuntos(){
+  const badge = document.getElementById('etapaPuntosContador');
+  const vacio = document.getElementById('tabPuntosVacio');
+  const total = (typeof poligonosSubidos !== 'undefined') ? poligonosSubidos.length : 0;
+  if(badge){
+    if(total > 0){ badge.style.display = 'flex'; badge.textContent = total > 99 ? '99+' : total; }
+    else{ badge.style.display = 'none'; }
+  }
+  if(vacio) vacio.style.display = total > 0 ? 'none' : 'block';
+}
+
+// Cambia entre las 3 etapas (Crear / Mis puntos / Navegar). Usamos un atributo en <body>
+// (igual que "nav-activa") para que el CSS decida que mostrar, en vez de tocar estilos
+// individuales desde JS — asi queda todo en un solo lugar (ver el bloque CSS de "3 etapas").
+let etapaActual = 'crear';
+function cambiarEtapa(nombre){
+  etapaActual = nombre;
+  document.body.setAttribute('data-etapa', nombre);
+  document.querySelectorAll('.etapa-tab').forEach(function(btn){
+    btn.classList.toggle('activa', btn.getAttribute('data-etapa') === nombre);
+  });
+  try{ localStorage.setItem('generadorKml_ultimaEtapa', nombre); }catch(e){}
+  // Al entrar a "Crear", si el usuario tenia elegida la pestaña "Subir KML" dentro del
+  // formulario, la lista ya no vive ahi (se mudo a "Mis puntos") — no hace falta hacer nada
+  // mas, el resto del formulario (coordenadas, UTM, etc.) sigue funcionando igual.
+  if(nombre === 'navegar'){
+    // Si el mapa quedo movido/rotado de una sesion de navegacion anterior, lo recentramos
+    // suave para que la pestaña de navegar siempre arranque mostrando algo util.
+    try{ obtenerMapa().invalidateSize(); }catch(e){}
+  }
+}
+document.querySelectorAll('.etapa-tab').forEach(function(btn){
+  btn.addEventListener('click', function(){ cambiarEtapa(btn.getAttribute('data-etapa')); });
+});
 
 function irAPoligonoKml(id){
   const m = obtenerMapa();
@@ -6878,6 +7041,23 @@ restaurarPuntosCampoDesdeStorage();
 
 // Al abrir la pagina, intentamos recuperar poligonos KML cargados en una sesion anterior
 cargarPoligonosDesdeStorage();
+
+// Etapa inicial: si ya tenes puntos guardados de antes, arrancamos directo en "Mis puntos"
+// (lo mas util para retomar donde quedaste); si es la primera vez o no hay nada guardado,
+// arrancamos en "Crear". Si guardaste una preferencia explicita navegando entre pestañas
+// en esta misma sesion del navegador, respetamos esa en vez de adivinar.
+(function elegirEtapaInicial(){
+  let etapaGuardada = null;
+  try{ etapaGuardada = localStorage.getItem('generadorKml_ultimaEtapa'); }catch(e){}
+  if(etapaGuardada === 'crear' || etapaGuardada === 'puntos' || etapaGuardada === 'navegar'){
+    cambiarEtapa(etapaGuardada);
+  }else if(poligonosSubidos.length > 0){
+    cambiarEtapa('puntos');
+  }else{
+    cambiarEtapa('crear');
+  }
+  actualizarContadorEtapaPuntos();
+})();
 
 // Mostramos el mapa de entrada, sin esperar a que se ingresen coordenadas —
 // asi se puede tocar el lapiz y marcar un punto/linea/poligono de inmediato.
