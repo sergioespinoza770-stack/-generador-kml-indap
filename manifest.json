@@ -1,7 +1,7 @@
 {
-  "name": "Navegación Terreno",
-  "short_name": "Navegación Terreno",
-  "description": "Integra crear tu punto o poligono de visita, navegar hasta el lugar con o sin señal, y tomar fotografias georreferenciadas.",
+  "name": "Kit Terreno",
+  "short_name": "Kit Terreno",
+  "description": "Kit de herramientas para el trabajo de campo: crear un punto o poligono, guardarlo como reservorio, navegar hasta el lugar con o sin señal, y tomar fotografias georreferenciadas.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
