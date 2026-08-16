@@ -1691,7 +1691,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     box-shadow:0 3px 12px rgba(0,0,0,0.25);
   }
   body.nav-activa #btnRecentrarNav{
-    display:flex;
+    display:flex !important;
   }
   #btnRecentrarNav.siguiendo{
     border-color:#1a73e8;
@@ -2098,7 +2098,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div id="navProximoGiroWrap" style="display:none; margin-top:2px;">
         <span id="navProximoGiroTexto" style="color:#1a1a1a; font-size:13px; font-weight:700;"></span>
-        <span id="navProximoGiroDistancia" style="color:#1a73e8; font-size:15px; font-weight:800;"></span>
+        <span id="navProximoGiroDistancia" style="color:#c0221a; font-size:15px; font-weight:800;"></span>
       </div>
       <span id="navDistancia" style="display:none;">— m</span>
       <span id="navDistanciaEtiqueta" style="display:none;">en línea recta</span>
@@ -3663,14 +3663,14 @@ function desplazarPuntoHaciaRumbo(lat, lon, rumboGrados, distanciaMetros){
 //   (5 km), porque a esa velocidad conviene ver mas camino por delante, no el detalle.
 // - En calle de ciudad, o sin ruta calculada todavia: de cerca (500 m) por defecto.
 function calcularEscalaZoomNav(lat, lon){
-  if(!navObjetivo) return 500;
+  if(!navObjetivo) return 1000;
   const distDestino = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
-  if(distDestino <= 3000) return 500;
+  if(distDestino <= 3000) return 1000;
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
     const pasoActual = navPasos[navPasoActualIdx];
     if(pareceRuta(pasoActual.nombreVia)) return 5000;
   }
-  return 500;
+  return 1000;
 }
 
 function puntoDeCamaraConMirada(lat, lon){
@@ -3718,6 +3718,7 @@ let navUltimoFetchRuta = 0;
 let navUltimaPosParaRuta = null;
 let navVozActiva = true;
 let navUltimoAvisoDistancia = null;
+let navUltimoAvisoGiroIdx = null; // evita repetir el aviso de voz del mismo giro mas de una vez
 let navAviso200Hecho = false;
 
 function elegirObjetivoNavegacion(){
@@ -4249,11 +4250,22 @@ function pareceRuta(nombreVia){
 
 function revisarAvisosDeVoz(lat, lon, distTotalRecta){
   // Avanzamos de maniobra en maniobra en silencio (esto lo sigue necesitando el zoom dinamico,
-  // para saber si estas en una ruta o en una calle de ciudad) — pero ya NO avisamos por voz
-  // en cada giro individual, eso quedo reemplazado por los 3 avisos de distancia de abajo.
+  // para saber si estas en una ruta o en una calle de ciudad).
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
     const paso = navPasos[navPasoActualIdx];
     const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
+
+    // Aviso por voz del proximo giro: una sola vez por maniobra (navUltimoAvisoGiroIdx evita
+    // repetirlo), a 300 metros de distancia, y SOLO fuera de ciudad — en calles de ciudad los
+    // cruces estan demasiado seguidos y satura de avisos constantes; en caminos/rutas rurales,
+    // donde los cruces estan bien espaciados, si tiene sentido avisar con anticipacion.
+    if(distAlPaso <= 300 && navUltimoAvisoGiroIdx !== navPasoActualIdx && navPasoActualIdx < navPasos.length - 1){
+      navUltimoAvisoGiroIdx = navPasoActualIdx;
+      if(pareceRuta(paso.nombreVia)){
+        hablar(paso.texto + ' en 300 metros.');
+      }
+    }
+
     if(distAlPaso < 15 && navPasoActualIdx < navPasos.length - 1){
       navPasoActualIdx++;
     }
@@ -4630,6 +4642,7 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   navUltimoFetchRuta = 0;
   navUltimaPosParaRuta = null;
   navUltimoAvisoDistancia = null;
+  navUltimoAvisoGiroIdx = null;
   navAviso200Hecho = false;
   navUltimaPosParaHeadingMov = null;
   navUltimaRotacionMapa = null;
