@@ -205,7 +205,7 @@
 const SUPABASE_URL = "https://bnzhqzhpnoxnlmivehwm.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_VUZqG6bDZYgCMZoxI5GtDA_AR7tMo8E";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Colores por categoría nivel 1, para las tarjetas y el mapa
 const COLOR_CATEGORIA = {
@@ -230,10 +230,10 @@ let fotoMeta = null;
 // AUTENTICACIÓN
 // ------------------------------------------------------------
 async function initAuth(){
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabaseClient.auth.getSession();
   usuarioActual = session?.user || null;
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
     usuarioActual = session?.user || null;
     actualizarUISegunLogin();
   });
@@ -251,7 +251,7 @@ function actualizarUISegunLogin(){
 }
 
 document.getElementById('btn-login-google').addEventListener('click', async () => {
-  await supabase.auth.signInWithOAuth({ provider: 'google' });
+  await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
 });
 
 // ------------------------------------------------------------
@@ -260,7 +260,7 @@ document.getElementById('btn-login-google').addEventListener('click', async () =
 async function cargarEntidades(tipo){
   const sel = document.getElementById('sel-entidad');
   sel.innerHTML = '<option value="">Cargando…</option>';
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('entidades')
     .select('id, nombre')
     .eq('tipo', tipo)
@@ -273,7 +273,7 @@ async function cargarEntidades(tipo){
 async function cargarCategorias(tipo){
   const sel = document.getElementById('sel-categoria');
   const columna = tipo === 'empresa' ? 'aplica_empresa' : (tipo === 'municipio' ? 'aplica_municipio' : 'aplica_gobierno');
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('categorias')
     .select('id, nivel1, nivel2')
     .eq(columna, true)
@@ -373,16 +373,16 @@ document.getElementById('form-opinion').addEventListener('submit', async (e) => 
   let fotoUrl = null;
   if(fotoMeta){
     const nombreArchivo = `${usuarioActual.id}/${Date.now()}_${fotoMeta.archivo.name}`;
-    const { data: subida, error: errSubida } = await supabase.storage
+    const { data: subida, error: errSubida } = await supabaseClient.storage
       .from('fotos-opiniones')
       .upload(nombreArchivo, fotoMeta.archivo);
     if(!errSubida){
-      const { data: pub } = supabase.storage.from('fotos-opiniones').getPublicUrl(nombreArchivo);
+      const { data: pub } = supabaseClient.storage.from('fotos-opiniones').getPublicUrl(nombreArchivo);
       fotoUrl = pub.publicUrl;
     }
   }
 
-  const { error } = await supabase.from('opiniones').insert({
+  const { error } = await supabaseClient.from('opiniones').insert({
     usuario_id: usuarioActual.id,
     pseudonimo: usuarioActual.user_metadata?.full_name || 'Usuario Opciu',
     entidad_id: entidadId,
@@ -438,7 +438,7 @@ async function cargarFeed(){
 
   // "Más urgente" pondera votos recientes (últimos 7 días);
   // "Más consolidada" usa el puntaje acumulado histórico.
-  let query = supabase.from('opiniones_con_votos').select('*');
+  let query = supabaseClient.from('opiniones_con_votos').select('*');
   if(ordenActual === 'urgente'){
     query = query.gte('creado_en', new Date(Date.now() - 7*86400000).toISOString())
                  .order('puntaje', { ascending: false });
@@ -488,7 +488,7 @@ async function votar(opinionId, tipo){
     alert('Inicia sesión para votar.');
     return;
   }
-  const { error } = await supabase.from('votos').upsert({
+  const { error } = await supabaseClient.from('votos').upsert({
     opinion_id: opinionId,
     usuario_id: usuarioActual.id,
     tipo: tipo
