@@ -119,9 +119,32 @@
     margin-top:10px; padding:9px 18px; background:var(--azul); color:#fff;
     border:none; border-radius:8px; font-size:13px; cursor:pointer;
   }
+
+  /* Pantalla de bienvenida */
+  #landing{
+    position:fixed; inset:0; z-index:2000; cursor:pointer;
+    background:#08315C; max-width:480px; margin:0 auto;
+  }
+  #landing img{
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .landing-hint{
+    position:absolute; bottom:18px; left:0; right:0; text-align:center;
+    color:rgba(255,255,255,0.75); font-size:12px; letter-spacing:1px;
+    animation:parpadeo 2s ease-in-out infinite;
+  }
+  @keyframes parpadeo{ 0%,100%{opacity:0.4;} 50%{opacity:0.9;} }
 </style>
 </head>
 <body>
+
+<!-- Pantalla de bienvenida: se muestra primero, toca en cualquier parte para entrar -->
+<div id="landing" onclick="cerrarBienvenida()">
+  <img src="opciu_bienvenida.png" alt="OPCIU - Opinión Ciudadana">
+  <div class="landing-hint">Toca para comenzar</div>
+</div>
+
+
 
 <header>
   <div class="logo">
@@ -527,6 +550,22 @@ function actualizarPinesMapa(opiniones){
       .addTo(capaPines);
   });
 }
+
+// ------------------------------------------------------------
+// PANTALLA DE BIENVENIDA
+// ------------------------------------------------------------
+function cerrarBienvenida(){
+  const landing = document.getElementById('landing');
+  landing.style.display = 'none';
+  try{ localStorage.setItem('opciu_bienvenida_vista', '1'); }catch(e){}
+}
+(function(){
+  try{
+    if(localStorage.getItem('opciu_bienvenida_vista')){
+      document.getElementById('landing').style.display = 'none';
+    }
+  }catch(e){}
+})();
 
 // ------------------------------------------------------------
 // INICIO
