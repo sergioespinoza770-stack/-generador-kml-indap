@@ -337,6 +337,27 @@ document.getElementById('btn-login-google').addEventListener('click', async () =
   });
 });
 
+document.getElementById('btn-perfil').addEventListener('click', async () => {
+  if(!usuarioActual){
+    alert('Aún no has iniciado sesión. Toca "Opinar" para hacerlo con tu cuenta de Google.');
+    return;
+  }
+  const opcion = confirm(
+    'Estás conectado como: ' + (pseudonimoActual || 'Vecino') +
+    '\n\nAceptar = Cerrar sesión\nCancelar = Seguir conectado'
+  );
+  if(opcion){
+    await supabaseClient.auth.signOut();
+    try{
+      const clave = 'opciu_pseudonimo_' + usuarioActual.id;
+      localStorage.removeItem(clave);
+    }catch(e){}
+    usuarioActual = null;
+    pseudonimoActual = null;
+    location.reload();
+  }
+});
+
 // ------------------------------------------------------------
 // CARGA DE ENTIDADES Y CATEGORÍAS
 // ------------------------------------------------------------
@@ -612,20 +633,11 @@ function actualizarPinesMapa(opiniones){
 }
 
 // ------------------------------------------------------------
-// PANTALLA DE BIENVENIDA
+// PANTALLA DE BIENVENIDA (se muestra siempre al entrar)
 // ------------------------------------------------------------
 function cerrarBienvenida(){
-  const landing = document.getElementById('landing');
-  landing.style.display = 'none';
-  try{ localStorage.setItem('opciu_bienvenida_vista', '1'); }catch(e){}
+  document.getElementById('landing').style.display = 'none';
 }
-(function(){
-  try{
-    if(localStorage.getItem('opciu_bienvenida_vista')){
-      document.getElementById('landing').style.display = 'none';
-    }
-  }catch(e){}
-})();
 
 // ------------------------------------------------------------
 // INICIO
