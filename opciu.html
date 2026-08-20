@@ -222,14 +222,16 @@
       </div>
 
       <label>Entidad</label>
-      <select id="sel-entidad" required>
+      <select id="sel-entidad">
         <option value="">Selecciona una entidad…</option>
       </select>
+      <input type="text" id="txt-entidad-libre" placeholder="¿No aparece? Escribe el nombre aquí" style="margin-top:6px;">
 
       <label>Categoría</label>
       <select id="sel-categoria" required>
         <option value="">Primero elige el tipo de entidad</option>
       </select>
+      <input type="text" id="txt-otro-especificar" placeholder="Especifica de qué se trata…" style="margin-top:6px; display:none;">
 
       <label>Tu opinión</label>
       <textarea id="txt-opinion" placeholder="Describe lo que ocurrió, con el mayor detalle posible…" required></textarea>
@@ -384,8 +386,17 @@ async function cargarCategorias(tipo){
     .order('nivel1');
   if(error){ console.error(error); return; }
   sel.innerHTML = '<option value="">Selecciona una categoría…</option>' +
-    data.map(c => `<option value="${c.id}">${c.nivel1} · ${c.nivel2}</option>`).join('');
+    data.map(c => `<option value="${c.id}" data-nivel1="${c.nivel1}">${c.nivel1} · ${c.nivel2}</option>`).join('');
 }
+
+// Muestra el campo "Especifica de qué se trata" solo cuando la categoría es "Otros"
+document.getElementById('sel-categoria').addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  const campoOtro = document.getElementById('txt-otro-especificar');
+  const esOtros = opt && opt.dataset.nivel1 === 'Otros';
+  campoOtro.style.display = esOtros ? 'block' : 'none';
+  if(!esOtros) campoOtro.value = '';
+});
 
 document.querySelectorAll('.tipo-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -406,13 +417,17 @@ function obtenerUbicacion(){
     info.textContent = '⚠ Tu navegador no soporta geolocalización';
     return;
   }
+  info.innerHTML = '📍 obteniendo tu ubicación…';
   navigator.geolocation.getCurrentPosition(pos => {
     ubicacionActual = { lat: pos.coords.latitude, lon: pos.coords.longitude };
     info.textContent = `📍 Ubicación capturada (±${Math.round(pos.coords.accuracy)} m)`;
     validarFormulario();
   }, () => {
-    info.textContent = '⚠ No se pudo obtener tu ubicación, actívala e inténtalo de nuevo';
-  });
+    info.innerHTML = '⚠ No se pudo obtener tu ubicación. Revisa el permiso en tu navegador ' +
+      '(ícono junto a la URL) y <button type="button" id="btn-reintentar-ubic" style="color:var(--azul);background:none;border:none;text-decoration:underline;cursor:pointer;font-size:12px;">reintenta aquí</button>';
+    const btn = document.getElementById('btn-reintentar-ubic');
+    if(btn) btn.addEventListener('click', obtenerUbicacion);
+  }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
 }
 
 // Extrae GPS y fecha/hora EXIF de la foto si están disponibles.
@@ -442,13 +457,21 @@ document.getElementById('btn-cerrar-form').addEventListener('click', () => {
   document.getElementById('overlay-form').classList.remove('activo');
 });
 
-['sel-entidad','sel-categoria','txt-opinion'].forEach(id => {
+['sel-entidad','txt-entidad-libre','sel-categoria','txt-otro-especificar','txt-opinion'].forEach(id => {
   document.getElementById(id).addEventListener('input', validarFormulario);
 });
 
+function categoriaEsOtros(){
+  const opt = document.getElementById('sel-categoria').selectedOptions[0];
+  return opt && opt.dataset.nivel1 === 'Otros';
+}
+
 function validarFormulario(){
-  const ok = document.getElementById('sel-entidad').value &&
-             document.getElementById('sel-categoria').value &&
+  const tieneEntidad = document.getElementById('sel-entidad').value ||
+                        document.getElementById('txt-entidad-libre').value.trim().length >= 2;
+  const tieneCategoria = document.getElementById('sel-categoria').value &&
+                          (!categoriaEsOtros() || document.getElementById('txt-otro-especificar').value.trim().length >= 3);
+  const ok = tieneEntidad && tieneCategoria &&
              document.getElementById('txt-opinion').value.trim().length >= 10 &&
              ubicacionActual && usuarioActual;
   document.getElementById('btn-publicar').disabled = !ok;
@@ -470,9 +493,32 @@ document.getElementById('form-opinion').addEventListener('submit', async (e) => 
     return;
   }
 
-  const entidadId = document.getElementById('sel-entidad').value;
+  let entidadId = document.getElementById('sel-entidad').value;
+  const entidadLibre = document.getElementById('txt-entidad-libre').value.trim();
+  const tipoActual = document.querySelector('.tipo-btn.sel')?.dataset.tipo;
+
+  // Si escribió el nombre en vez de elegir de la lista, se crea la entidad al vuelo
+  if(!entidadId && entidadLibre){
+    const { data: nueva, error: errNueva } = await supabaseClient
+      .from('entidades')
+      .insert({ nombre: entidadLibre, tipo: tipoActual })
+      .select('id')
+      .single();
+    if(errNueva){
+      errorEl.textContent = 'No se pudo registrar la entidad escrita. Intenta de nuevo.';
+      errorEl.style.display = 'block';
+      console.error(errNueva);
+      return;
+    }
+    entidadId = nueva.id;
+  }
+
   const categoriaId = document.getElementById('sel-categoria').value;
-  const texto = document.getElementById('txt-opinion').value.trim();
+  let texto = document.getElementById('txt-opinion').value.trim();
+  if(categoriaEsOtros()){
+    const especifica = document.getElementById('txt-otro-especificar').value.trim();
+    texto = `[${especifica}] ${texto}`;
+  }
 
   let fotoUrl = null;
   if(fotoMeta){
