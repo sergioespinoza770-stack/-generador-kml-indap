@@ -12,7 +12,7 @@
     --coral:#D85A30; --coral-bg:#FAECE7; --coral-tx:#712B13;
     --teal-bg:#E1F5EE; --teal-tx:#085041;
     --amber-bg:#FAEEDA; --amber-tx:#633806;
-    --bg:#F5F6F8; --card:#FFFFFF; --borde:#E3E5E9;
+    --bg:#EEF2F7; --card:#FFFFFF; --borde:#E3E5E9;
     --texto:#1A1B1E; --texto-sec:#6B6E75; --texto-mute:#9A9DA4;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
@@ -23,59 +23,79 @@
     display:flex; flex-direction:column;
   }
   header{
-    background:var(--card); border-bottom:1px solid var(--borde);
-    padding:14px 16px; display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(135deg, var(--azul-oscuro), var(--azul));
+    padding:16px 18px; display:flex; align-items:center; justify-content:space-between;
     position:sticky; top:0; z-index:500;
+    box-shadow:0 2px 10px rgba(12,68,124,0.25);
   }
-  .logo{font-size:18px; font-weight:700; color:var(--azul); display:flex; align-items:center; gap:6px;}
-  .logo .dots span{display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:2px;}
-  header .acciones{display:flex; gap:10px; align-items:center;}
-  header button.icon{
-    background:none; border:none; cursor:pointer; padding:6px;
-    color:var(--texto-sec); font-size:20px; line-height:1;
+  .logo{font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; gap:7px; letter-spacing:0.3px;}
+  .logo .dots span{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:2px;}
+  header .acciones{display:flex; gap:8px; align-items:center;}
+  .icon-lbl{
+    background:rgba(255,255,255,0.15); border:none; cursor:pointer;
+    color:#fff; border-radius:10px; padding:6px 10px;
+    display:flex; flex-direction:column; align-items:center; gap:1px;
   }
-  .tabs{display:flex; gap:8px; padding:10px 16px; background:var(--card); border-bottom:1px solid var(--borde); overflow-x:auto;}
+  .icon-lbl .ic{font-size:16px; line-height:1;}
+  .icon-lbl .lbl{font-size:9px; font-weight:600; line-height:1;}
+  .tabs{display:flex; gap:8px; padding:14px 16px 10px; background:var(--bg); overflow-x:auto;}
   .chip{
-    font-size:12px; padding:5px 12px; border-radius:999px; white-space:nowrap;
-    background:var(--bg); color:var(--texto-sec); border:none; cursor:pointer;
+    font-size:13px; padding:8px 16px; border-radius:999px; white-space:nowrap;
+    background:var(--card); color:var(--texto-sec); border:1px solid var(--borde); cursor:pointer;
+    font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.04);
   }
-  .chip.activo{background:#E6F1FB; color:var(--azul-oscuro); font-weight:600;}
+  .chip.activo{background:var(--azul); color:#fff; border-color:var(--azul); box-shadow:0 3px 8px rgba(24,119,216,0.3);}
+
+  .ayuda-banner{
+    margin:0 16px 12px; padding:12px 14px; background:#E6F1FB; border:1px solid #C9E1F7;
+    border-radius:12px; font-size:12.5px; line-height:1.5; color:var(--azul-oscuro);
+  }
+
 
   main{flex:1; overflow-y:auto;}
-  #vista-mapa{height:280px; width:100%; display:none;}
+  #vista-mapa{height:280px; width:100%; display:none; border-radius:16px; overflow:hidden; margin:0 16px 12px; box-shadow:0 2px 10px rgba(0,0,0,0.08);}
   #vista-mapa.activa{display:block;}
 
-  #feed{padding:0;}
+  #feed{padding:4px 16px 90px;}
   .opinion{
-    background:var(--card); padding:14px 16px; border-bottom:1px solid var(--borde);
-    cursor:pointer;
+    background:var(--card); padding:16px 18px; border-radius:16px;
+    margin-bottom:12px; cursor:pointer;
+    box-shadow:0 2px 8px rgba(20,30,50,0.06); border:1px solid rgba(20,30,50,0.04);
+    transition:box-shadow 0.15s ease, transform 0.15s ease;
   }
-  .opinion-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;}
-  .badge{font-size:11px; padding:3px 8px; border-radius:6px; font-weight:600;}
+  .opinion:active{transform:scale(0.99);}
+  .opinion-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:8px;}
+  .badge{font-size:11px; padding:4px 10px; border-radius:8px; font-weight:700; white-space:nowrap;}
   .badge-seguridad{background:var(--coral-bg); color:var(--coral-tx);}
   .badge-infraestructura{background:var(--teal-bg); color:var(--teal-tx);}
   .badge-atencion{background:var(--amber-bg); color:var(--amber-tx);}
   .badge-default{background:#EEEDFE; color:#3C3489;}
-  .fecha{font-size:11px; color:var(--texto-mute);}
-  .texto-opinion{font-size:14px; line-height:1.5; margin-bottom:6px;}
-  .meta{font-size:12px; color:var(--texto-sec); margin-bottom:8px;}
-  .votos-row{display:flex; align-items:center; gap:14px; font-size:13px;}
+  .fecha{font-size:11px; color:var(--texto-mute); white-space:nowrap; flex-shrink:0;}
+  .texto-opinion{font-size:14.5px; line-height:1.55; margin-bottom:8px; color:var(--texto);}
+  .meta{font-size:12.5px; color:var(--texto-sec); margin-bottom:12px; font-weight:500;}
+  .votos-row{display:flex; align-items:center; gap:8px; font-size:13px; padding-top:10px; border-top:1px solid #F0F1F4;}
   .votos-row button{
-    background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px;
-    font-size:13px; color:var(--texto-sec); padding:4px 0;
+    background:var(--bg); border:none; cursor:pointer; display:flex; align-items:center; gap:5px;
+    font-size:13px; color:var(--texto-sec); padding:6px 12px; border-radius:10px; font-weight:600;
   }
-  .votos-row button.up.marcado{color:var(--verde); font-weight:600;}
-  .votos-row button.down.marcado{color:var(--coral); font-weight:600;}
-  .foto-tag{display:flex; align-items:center; gap:4px; color:var(--texto-mute); font-size:12px;}
+  .votos-row button.up.marcado{background:#E5F7F0; color:var(--verde);}
+  .votos-row button.down.marcado{background:var(--coral-bg); color:var(--coral);}
+  .foto-tag{display:flex; align-items:center; gap:4px; color:var(--texto-mute); font-size:12px; margin-left:auto;}
 
-  .vacio{padding:40px 20px; text-align:center; color:var(--texto-sec); font-size:14px;}
+  .vacio{padding:70px 30px; text-align:center; color:var(--texto-sec); font-size:14.5px; line-height:1.6;}
+  .vacio::before{
+    content:"💬"; display:block; font-size:40px; margin-bottom:14px; opacity:0.5;
+  }
 
   .fab{
-    position:fixed; bottom:20px; left:50%; transform:translateX(calc(-1 * min(240px, 50vw) + 20px));
-    width:56px; height:56px; border-radius:50%; background:var(--azul); color:#fff;
-    border:none; font-size:28px; cursor:pointer; box-shadow:0 4px 12px rgba(24,119,216,0.35);
-    z-index:600; display:flex; align-items:center; justify-content:center;
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    height:52px; border-radius:26px; padding:0 22px;
+    background:linear-gradient(135deg, var(--azul), var(--azul-oscuro)); color:#fff;
+    border:none; cursor:pointer; box-shadow:0 6px 18px rgba(24,119,216,0.4);
+    z-index:600; display:flex; align-items:center; justify-content:center; gap:8px;
   }
+  .fab .fab-mas{font-size:22px; line-height:1;}
+  .fab .fab-txt{font-size:15px; font-weight:700;}
 
   .overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000;
@@ -149,19 +169,27 @@
 <header>
   <div class="logo">
     <span class="dots">
-      <span style="background:var(--azul)"></span><span style="background:var(--verde)"></span><span style="background:var(--rosa)"></span><span style="background:var(--amarillo)"></span>
+      <span style="background:#4FD1A5"></span><span style="background:#F2789E"></span><span style="background:#FFCC5C"></span><span style="background:#8ED6FF"></span>
     </span>
-    opciu
+    OPCIU
   </div>
   <div class="acciones">
-    <button class="icon" id="btn-toggle-mapa" title="Ver mapa">📍</button>
-    <button class="icon" id="btn-perfil" title="Perfil">👤</button>
+    <button class="icon-lbl" id="btn-toggle-mapa" title="Ver mapa">
+      <span class="ic">📍</span><span class="lbl">Mapa</span>
+    </button>
+    <button class="icon-lbl" id="btn-perfil" title="Mi cuenta">
+      <span class="ic">👤</span><span class="lbl">Cuenta</span>
+    </button>
   </div>
 </header>
 
 <div class="tabs">
   <button class="chip activo" data-orden="urgente">Más urgente</button>
   <button class="chip" data-orden="consolidada">Más consolidada</button>
+</div>
+
+<div class="ayuda-banner">
+  📢 Aquí ves los problemas reportados por tu comunidad. Toca <b>Opinar</b> abajo para contar el tuyo, o vota 👍👎 en los que ya existen.
 </div>
 
 <main>
@@ -171,7 +199,7 @@
   </div>
 </main>
 
-<button class="fab" id="btn-nueva">+</button>
+<button class="fab" id="btn-nueva"><span class="fab-mas">+</span><span class="fab-txt">Opinar</span></button>
 
 <!-- Formulario para publicar opinión -->
 <div class="overlay" id="overlay-form">
