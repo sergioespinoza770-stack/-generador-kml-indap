@@ -276,6 +276,7 @@ let mapa = null;
 let capaPines = null;
 let ubicacionActual = null;
 let fotoMeta = null;
+let pseudonimoActual = null;
 
 // ------------------------------------------------------------
 // AUTENTICACIÓN
@@ -283,12 +284,40 @@ let fotoMeta = null;
 async function initAuth(){
   const { data: { session } } = await supabaseClient.auth.getSession();
   usuarioActual = session?.user || null;
+  if(usuarioActual) asegurarPseudonimo();
 
   supabaseClient.auth.onAuthStateChange((_event, session) => {
     usuarioActual = session?.user || null;
+    if(usuarioActual) asegurarPseudonimo();
     actualizarUISegunLogin();
   });
   actualizarUISegunLogin();
+}
+
+// Nunca usamos el nombre real de Google en público: pedimos un pseudónimo
+// elegido por la persona, y lo guardamos localmente para no preguntarlo cada vez.
+function asegurarPseudonimo(){
+  if(!usuarioActual) return;
+  const clave = 'opciu_pseudonimo_' + usuarioActual.id;
+  let guardado = null;
+  try{ guardado = localStorage.getItem(clave); }catch(e){}
+
+  if(guardado){
+    pseudonimoActual = guardado;
+    return;
+  }
+
+  let elegido = '';
+  while(!elegido || elegido.trim().length < 3){
+    elegido = window.prompt(
+      'Elige un pseudónimo público (no tu nombre real). Ej: "VecinoLautaro23"',
+      ''
+    );
+    if(elegido === null){ elegido = 'Vecino' + Math.floor(Math.random()*9000+1000); break; }
+    elegido = elegido.trim();
+  }
+  pseudonimoActual = elegido;
+  try{ localStorage.setItem(clave, elegido); }catch(e){}
 }
 
 function actualizarUISegunLogin(){
@@ -302,7 +331,10 @@ function actualizarUISegunLogin(){
 }
 
 document.getElementById('btn-login-google').addEventListener('click', async () => {
-  await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
 });
 
 // ------------------------------------------------------------
@@ -435,7 +467,7 @@ document.getElementById('form-opinion').addEventListener('submit', async (e) => 
 
   const { error } = await supabaseClient.from('opiniones').insert({
     usuario_id: usuarioActual.id,
-    pseudonimo: usuarioActual.user_metadata?.full_name || 'Usuario Opciu',
+    pseudonimo: pseudonimoActual || 'Vecino',
     entidad_id: entidadId,
     categoria_id: categoriaId,
     texto: texto,
