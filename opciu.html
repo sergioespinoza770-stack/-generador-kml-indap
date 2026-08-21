@@ -53,7 +53,12 @@
 
 
   main{flex:1; overflow-y:auto;}
-  #vista-mapa{height:280px; width:100%; display:none; border-radius:16px; overflow:hidden; margin:0 16px 12px; box-shadow:0 2px 10px rgba(0,0,0,0.08);}
+  #vista-mapa{height:280px; width:100%; display:none; border-radius:16px; overflow:hidden; margin:0 16px 12px; box-shadow:0 2px 10px rgba(0,0,0,0.08); position:relative;}
+  #btn-recentrar{
+    position:absolute; bottom:12px; right:12px; z-index:450;
+    width:38px; height:38px; border-radius:50%; background:#fff; border:1px solid var(--borde);
+    box-shadow:0 2px 8px rgba(0,0,0,0.15); font-size:17px; cursor:pointer;
+  }
   #vista-mapa.activa{display:block;}
 
   #feed{padding:4px 16px 90px;}
@@ -193,7 +198,9 @@
 </div>
 
 <main>
-  <div id="vista-mapa"></div>
+  <div id="vista-mapa">
+    <button id="btn-recentrar" title="Centrar en mi ubicación">📍</button>
+  </div>
   <div id="feed">
     <div class="vacio">Cargando opiniones…</div>
   </div>
@@ -497,20 +504,34 @@ document.getElementById('form-opinion').addEventListener('submit', async (e) => 
   const entidadLibre = document.getElementById('txt-entidad-libre').value.trim();
   const tipoActual = document.querySelector('.tipo-btn.sel')?.dataset.tipo;
 
-  // Si escribió el nombre en vez de elegir de la lista, se crea la entidad al vuelo
+  // Si escribió el nombre en vez de elegir de la lista: primero buscamos si ya
+  // existe una entidad con ese nombre (sin importar mayúsculas) para no duplicar
+  // el mismo negocio cada vez que alguien lo escribe distinto.
   if(!entidadId && entidadLibre){
-    const { data: nueva, error: errNueva } = await supabaseClient
+    const { data: existente } = await supabaseClient
       .from('entidades')
-      .insert({ nombre: entidadLibre, tipo: tipoActual })
       .select('id')
-      .single();
-    if(errNueva){
-      errorEl.textContent = 'No se pudo registrar la entidad escrita. Intenta de nuevo.';
-      errorEl.style.display = 'block';
-      console.error(errNueva);
-      return;
+      .eq('tipo', tipoActual)
+      .ilike('nombre', entidadLibre)
+      .limit(1)
+      .maybeSingle();
+
+    if(existente){
+      entidadId = existente.id;
+    } else {
+      const { data: nueva, error: errNueva } = await supabaseClient
+        .from('entidades')
+        .insert({ nombre: entidadLibre, tipo: tipoActual })
+        .select('id')
+        .single();
+      if(errNueva){
+        errorEl.textContent = 'No se pudo registrar la entidad escrita. Intenta de nuevo.';
+        errorEl.style.display = 'block';
+        console.error(errNueva);
+        return;
+      }
+      entidadId = nueva.id;
     }
-    entidadId = nueva.id;
   }
 
   const categoriaId = document.getElementById('sel-categoria').value;
@@ -656,14 +677,24 @@ document.getElementById('btn-toggle-mapa').addEventListener('click', () => {
   vista.classList.toggle('activa');
   feed.style.display = vista.classList.contains('activa') ? 'none' : 'block';
   if(vista.classList.contains('activa') && !mapa){
-    mapa = L.map('vista-mapa').setView([-38.53, -72.44], 13); // Lautaro por defecto
+    mapa = L.map('vista-mapa').setView([-38.53, -72.44], 13); // Lautaro, mientras se obtiene tu ubicación real
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap'
     }).addTo(mapa);
     capaPines = L.layerGroup().addTo(mapa);
+    centrarMapaEnMiUbicacion();
   }
   if(mapa) setTimeout(() => mapa.invalidateSize(), 200);
 });
+
+function centrarMapaEnMiUbicacion(){
+  if(!navigator.geolocation || !mapa) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    mapa.setView([pos.coords.latitude, pos.coords.longitude], 15);
+  }, () => { /* si falla, el mapa se queda centrado en Lautaro */ });
+}
+
+document.getElementById('btn-recentrar')?.addEventListener('click', centrarMapaEnMiUbicacion);
 
 function actualizarPinesMapa(opiniones){
   if(!capaPines) return;
