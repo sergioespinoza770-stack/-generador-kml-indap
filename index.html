@@ -1895,7 +1895,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   #btnRecentrarNav{
     position:absolute;
-    bottom:16px;
+    bottom:96px;
     right:16px;
     z-index:600;
     width:50px;
@@ -3757,11 +3757,13 @@ function obtenerMapa(){
       registrarInteraccionManual('principal');
       return modoNavegacionActivo ? rotacionTactilPrincipal : 0;
     }, function(nuevaRotacion){
-      if(!modoNavegacionActivo) return; // fuera de navegacion, ignoramos el giro (solo queda el zoom del gesto)
-      rotacionTactilPrincipal = nuevaRotacion;
-      aplicarRotacionPrincipal(nuevaRotacion);
-      navUltimaRotacionMapa = -nuevaRotacion; // asi la rotacion automatica por rumbo retoma suave despues
-      navRotacionAcumuladaNav = -nuevaRotacion; // idem, para que el proximo giro automatico no salte (navRotacionAcumuladaNav guarda el rumbo, no la rotacion CSS directa)
+      // Desactivado a propósito: usar dos dedos para pellizcar/hacer zoom terminaba
+      // interpretándose también como un giro brusco (casi nadie pellizca con los dedos en
+      // una línea perfectamente horizontal, así que cualquier zoom normal generaba un cambio
+      // de ángulo que hacía "girar loca" la pantalla). Mientras se navega, el giro del mapa
+      // ya lo maneja solo el rumbo real (ver actualizarRotacionMapaNav) — los dos dedos ahora
+      // solo hacen zoom, sin tocar la rotación.
+      registrarInteraccionManual('principal');
     });
   }
   document.getElementById('mapPanel').style.display = 'block';
@@ -3952,19 +3954,42 @@ function desplazarPuntoHaciaRumbo(lat, lon, rumboGrados, distanciaMetros){
 //   (5 km), porque a esa velocidad conviene ver mas camino por delante, no el detalle.
 // - En calle de ciudad, o sin ruta calculada todavia: de cerca (500 m) por defecto.
 function calcularEscalaZoomNav(lat, lon){
-  if(!navObjetivo) return 1000;
-  const distDestino = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]);
-  if(distDestino <= 3000) return 1000;
+  // Zoom dinamico segun el avance dentro del tramo actual (desde el ultimo cruce hasta el
+  // proximo). En "crucero" (primeros 50% del tramo) se ve un radio amplio de 2 km, para tener
+  // contexto del camino. Pasado el 50% de avance, el zoom empieza a acercarse progresivamente
+  // — mientras mas cerca del giro, mas detalle — hasta un radio bien cercano justo al llegar
+  // al cruce. Apenas se cruza (el indice de paso avanza), vuelve solo al radio de 2 km, porque
+  // paso.distancia pasa a ser la del tramo siguiente y el progreso arranca de nuevo en 0.
+  const RADIO_CRUCERO = 2000;
+  const RADIO_CERCA_DEL_GIRO = 400;
+
   if(navPasos.length > 0 && navPasoActualIdx < navPasos.length){
-    const pasoActual = navPasos[navPasoActualIdx];
-    if(pareceRuta(pasoActual.nombreVia)) return 5000;
+    const paso = navPasos[navPasoActualIdx];
+    const distAlGiro = distanciaMetros(lat, lon, paso.lat, paso.lon);
+    const distTotalTramo = paso.distancia || 0;
+    if(distTotalTramo > 0){
+      const avance = 1 - (distAlGiro / distTotalTramo); // 0 al empezar el tramo, 1 justo al cruce
+      if(avance > 0.5){
+        const t = Math.min(1, (avance - 0.5) / 0.5); // 0..1 dentro de la segunda mitad del tramo
+        return RADIO_CRUCERO - t * (RADIO_CRUCERO - RADIO_CERCA_DEL_GIRO);
+      }
+    }
   }
-  return 1000;
+  return RADIO_CRUCERO;
 }
 
 function puntoDeCamaraConMirada(lat, lon){
   if(navUltimaRotacionMapa === null) return [lat, lon];
-  return desplazarPuntoHaciaRumbo(lat, lon, navUltimaRotacionMapa, 125);
+  // Antes el desplazamiento hacia adelante era un numero FIJO de metros (125 m) — a un zoom
+  // amplio (2 km de radio) eso apenas se notaba, y la posicion terminaba viendose cerca del
+  // centro o incluso arriba de la pantalla en vez de abajo. Ahora el desplazamiento es una
+  // PROPORCION del radio visible actual, asi que sea cual sea el nivel de zoom en cada momento
+  // (crucero a 2 km, o acercandose a un cruce), la posicion siempre cae mas o menos en el mismo
+  // lugar de la pantalla: el tercio de abajo, dejando los 2/3 de arriba despejados para ver
+  // el camino que viene.
+  const radioVisible = calcularEscalaZoomNav(lat, lon);
+  const offset = radioVisible * 0.35;
+  return desplazarPuntoHaciaRumbo(lat, lon, navUltimaRotacionMapa, offset);
 }
 
 function calcularRumbo(lat1, lon1, lat2, lon2){
@@ -4254,7 +4279,7 @@ function calcularRutaOffline(latOrigen, lonOrigen, latDestino, lonDestino){
 
 // Preferencia de ruta: 'corta' (menor distancia, por defecto) o 'rapida' (menor tiempo estimado).
 // Se guarda en el navegador, así se acuerda la próxima vez sin tener que elegirla de nuevo.
-let preferenciaRuta = localStorage.getItem('generadorKml_preferenciaRuta') || 'corta';
+let preferenciaRuta = localStorage.getItem('generadorKml_preferenciaRuta') || 'rapida';
 
 function actualizarBotonesPreferenciaRuta(){
   const btnCorta = document.getElementById('btnRutaCorta');
@@ -4296,18 +4321,49 @@ function obtenerRutaOSRM(lat1, lon1, lat2, lon2){
     if(data.code !== 'Ok' || !data.routes || data.routes.length === 0){
       throw new Error('Sin ruta trazable por camino hasta ese punto');
     }
-    // De las alternativas que devuelve el servicio, elegimos segun la preferencia guardada:
-    // "corta" = menor distancia total (por defecto, prioriza el camino mas corto por sobre
-    // el mejor pavimentado); "rapida" = menor tiempo estimado (prioriza velocidad de viaje,
-    // aunque sea un camino mas largo en distancia).
-    let ruta = data.routes[0];
-    for(let i=1; i<data.routes.length; i++){
-      if(preferenciaRuta === 'rapida'){
-        if(data.routes[i].duration < ruta.duration) ruta = data.routes[i];
-      }else{
-        if(data.routes[i].distance < ruta.distance) ruta = data.routes[i];
+
+    let ruta;
+    const distDestinoRecta = distanciaMetros(lat1, lon1, lat2, lon2);
+
+    if(distDestinoRecta <= 5000 && data.routes.length > 1){
+      // Últimos 5 km antes del predio: acá ya no importa tanto "corta" vs "rápida" (eso es
+      // para el tramo largo por asfalto/ripio) — lo que importa es de verdad LLEGAR, así que
+      // en vez de aplicar ciegamente una sola preferencia, comparamos TODAS las alternativas
+      // que devuelve el servicio (huellas, caminos de tierra, rodeos) y elegimos la que menos
+      // se apoya en tramos sin nombre/sin clasificar — esos son los que más seguido resultan
+      // ser huellas mal mapeadas que en el terreno real no son transitables. Un camino real,
+      // aunque sea de tierra, casi siempre tiene alguna referencia en el mapa (nombre o número
+      // de ruta); un tramo fantasma casi nunca la tiene.
+      let mejorPuntaje = Infinity;
+      ruta = data.routes[0];
+      data.routes.forEach(function(candidata){
+        let distSinNombre = 0;
+        candidata.legs[0].steps.forEach(function(paso){
+          if(!paso.name && !paso.ref) distSinNombre += paso.distance;
+        });
+        // Puntaje: metros sin nombre pesan fuerte (lo que mas queremos evitar), la distancia
+        // total pesa poco (solo para desempatar entre candidatas igual de confiables).
+        const puntaje = distSinNombre * 3 + candidata.distance;
+        if(puntaje < mejorPuntaje){
+          mejorPuntaje = puntaje;
+          ruta = candidata;
+        }
+      });
+    }else{
+      // Tramo largo (mas de 5 km al predio, o solo vino una alternativa): acá si aplica la
+      // preferencia guardada — "corta" = menor distancia total (por defecto, prioriza el
+      // camino mas corto por sobre el mejor pavimentado); "rapida" = menor tiempo estimado
+      // (prioriza velocidad de viaje, aunque sea un camino mas largo en distancia).
+      ruta = data.routes[0];
+      for(let i=1; i<data.routes.length; i++){
+        if(preferenciaRuta === 'rapida'){
+          if(data.routes[i].duration < ruta.duration) ruta = data.routes[i];
+        }else{
+          if(data.routes[i].distance < ruta.distance) ruta = data.routes[i];
+        }
       }
     }
+
     const coords = ruta.geometry.coordinates.map(c => [c[1], c[0]]); // lon,lat -> lat,lon
     const pasos = [];
     ruta.legs[0].steps.forEach(function(paso){
@@ -4339,17 +4395,13 @@ function trazarRutaEnMiniMapa(lat, lon){
   const m = obtenerMapa();
   const esPrimeraVez = !navMarcadorYo;
 
-  // Primer anuncio por voz: nombre del destino, direccion cardinal y distancia en linea recta.
-  // Se dice apenas se tiene la primera posicion GPS, sin esperar a que llegue la ruta por camino.
+  // Antes acá se anunciaba por voz "Arrancando navegación hacia..." apenas se tenía la primera
+  // posición GPS. Se sacó a pedido: confundía en terreno, sobre todo porque podía volver a
+  // sonar cada vez que se recuperaba señal después de perderla, como si la navegación se
+  // hubiera reiniciado de cero. navAnuncioInicialHecho se sigue marcando igual, así ningún
+  // otro aviso queda esperando a que "el primero" se dispare.
   if(!navAnuncioInicialHecho && navObjetivo){
     navAnuncioInicialHecho = true;
-    const rumboInicial = calcularRumbo(lat, lon, navObjetivo[0], navObjetivo[1]);
-    const dirCardinal = nombreCardinal(rumboInicial);
-    const distRectaKm = distanciaMetros(lat, lon, navObjetivo[0], navObjetivo[1]) / 1000;
-    const distTxt = distRectaKm >= 1
-      ? distRectaKm.toFixed(1).replace('.', ',') + ' kilómetros'
-      : Math.round(distRectaKm*1000) + ' metros';
-    hablar('Arrancando navegación hacia ' + navNombreDestino + '. Está hacia el ' + dirCardinal + ', a ' + distTxt + ' en línea recta. Calculando la ruta por camino...');
   }
 
   if(!navMarcadorYo){
@@ -4412,6 +4464,7 @@ function trazarRutaEnMiniMapa(lat, lon){
       if(navCapaRuta) m.removeLayer(navCapaRuta);
       navCapaRuta = L.polyline(res.coords, { color:'#1a73e8', weight:5, opacity:0.85 }).addTo(m);
       navRutaEsOffline = false;
+      actualizarIndicadoresDeConexion(); // refresca el indicador ya mismo: si veniamos de ruta offline, vuelve a "En línea"
       // Recentramos en tu posicion actual con el mismo zoom cercano de siempre — la ruta nueva
       // arranca siempre desde donde estas parado, asi que se ve igual en esa vista de cerca.
       // Salvo que estes mirando el mapa a tu manera (tocado hace menos de 10s): ahi no lo movemos.
@@ -4439,7 +4492,7 @@ function trazarRutaEnMiniMapa(lat, lon){
         const km = res.distanciaTotal / 1000;
         elDistRuta.textContent = '🛣️ ' + (km >= 1 ? km.toFixed(2) + ' km' : Math.round(res.distanciaTotal) + ' m');
       }
-      document.getElementById('navEstado').textContent = 'Ruta actualizada: ' + Math.round(res.distanciaTotal) + ' m. Sigue la línea azul.';
+      document.getElementById('navEstado').textContent = 'Sigue la línea azul.';
       if(!navAnuncioRutaHecho){
         navAnuncioRutaHecho = true;
         const distKm = res.distanciaTotal / 1000;
@@ -4464,7 +4517,15 @@ function trazarRutaEnMiniMapa(lat, lon){
         navDistanciaTotalRuta = rutaOffline.distanciaTotal;
         navTieneRutaValida = true;
         navPasos = [];
-        document.getElementById('navEstado').textContent = 'Sin señal — usando ruta aproximada por los caminos guardados (' + Math.round(rutaOffline.distanciaTotal) + ' m). Línea morada punteada.';
+        actualizarIndicadoresDeConexion(); // refresca el indicador ya mismo, no esperamos al evento online/offline del navegador
+        // El numero grande de arriba tambien tiene que reflejar la ruta aproximada offline —
+        // antes se quedaba con el valor viejo (o "calculando...") mientras estabas sin señal.
+        const elDistRutaOffline = document.getElementById('navDistanciaRuta');
+        if(elDistRutaOffline){
+          const kmOffline = rutaOffline.distanciaTotal / 1000;
+          elDistRutaOffline.textContent = '🛣️ ' + (kmOffline >= 1 ? kmOffline.toFixed(2) + ' km' : Math.round(rutaOffline.distanciaTotal) + ' m');
+        }
+        document.getElementById('navEstado').textContent = 'Sin señal — usando ruta aproximada por los caminos guardados. Línea morada punteada.';
         if(!navAnuncioRutaHecho){
           navAnuncioRutaHecho = true;
           hablar('Sin señal. Trazando ruta aproximada con los caminos guardados.');
@@ -4545,13 +4606,13 @@ function revisarAvisosDeVoz(lat, lon, distTotalRecta){
     const distAlPaso = distanciaMetros(lat, lon, paso.lat, paso.lon);
 
     // Aviso por voz del proximo giro: una sola vez por maniobra (navUltimoAvisoGiroIdx evita
-    // repetirlo), a 300 metros de distancia, y SOLO fuera de ciudad — en calles de ciudad los
+    // repetirlo), a 500 metros de distancia, y SOLO fuera de ciudad — en calles de ciudad los
     // cruces estan demasiado seguidos y satura de avisos constantes; en caminos/rutas rurales,
     // donde los cruces estan bien espaciados, si tiene sentido avisar con anticipacion.
-    if(distAlPaso <= 300 && navUltimoAvisoGiroIdx !== navPasoActualIdx && navPasoActualIdx < navPasos.length - 1){
+    if(distAlPaso <= 500 && navUltimoAvisoGiroIdx !== navPasoActualIdx && navPasoActualIdx < navPasos.length - 1){
       navUltimoAvisoGiroIdx = navPasoActualIdx;
       if(pareceRuta(paso.nombreVia)){
-        hablar(paso.texto + ' en 300 metros.');
+        hablar(paso.texto + ' en 500 metros.');
       }
     }
 
@@ -4669,9 +4730,26 @@ function actualizarRotacionMapaNav(pos){
     headingCrudo = pos.coords.heading;
   }else if(navUltimaPosParaHeadingMov){
     const dMov = distanciaMetros(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
-    if(dMov > 8){ // umbral mas exigente que antes: menos saltos por el ruido normal del GPS
+    // Umbral de movimiento antes de calcular el rumbo por diferencia de posición: antes era
+    // fijo en 8m, lo que hacía esperar de más incluso con GPS muy preciso. Ahora se ajusta según
+    // la precisión que reporta el GPS en este momento (pos.coords.accuracy) — con buena señal
+    // (precisión de pocos metros) el umbral baja, para que gire apenas empezás a moverte; con
+    // señal mala (precisión de 20-30m o más) el umbral sube, para no confundir el error de
+    // medición con movimiento real y evitar que vuelva a "girar loca" por ruido del GPS.
+    const precision = (typeof pos.coords.accuracy === 'number' && !isNaN(pos.coords.accuracy)) ? pos.coords.accuracy : 15;
+    const umbralMovimiento = Math.min(15, Math.max(3, precision * 1.2));
+    if(dMov > umbralMovimiento){
       headingCrudo = calcularRumbo(navUltimaPosParaHeadingMov[0], navUltimaPosParaHeadingMov[1], lat, lon);
     }
+  }else{
+    // BUG REAL que se encontró: si el celular nunca entrega "heading" por GPS (pasa en muchos
+    // Android — el dato viene vacío salvo con cierto proveedor de ubicación), y esta variable
+    // nunca se sembraba con un primer punto de referencia, el calculo de rumbo por movimiento
+    // (el "plan B" de aca abajo) jamas tenia con que comparar — quedaba esperando para siempre
+    // un "antes" que nunca llegaba. Resultado: el mapa no giraba NUNCA en esos celulares, ni
+    // aunque camines cientos de metros. Sembramos el primer punto apenas arranca la navegación,
+    // para que el calculo por movimiento tenga desde el vamos algo con que comparar.
+    navUltimaPosParaHeadingMov = [lat, lon];
   }
 
   if(headingCrudo !== null){
@@ -6840,7 +6918,7 @@ function mostrarDestinoGuardado(){
 }
 // Numero de version visible, para confirmar rapido si el celular tiene la ultima version
 // puesta o una vieja en cache, sin tener que hacer todo un proceso de verificacion.
-const APP_VERSION = 'v2026.08.08-1';
+const APP_VERSION = 'v2026.08.21-1';
 const elVersion = document.getElementById('versionApp');
 if(elVersion) elVersion.textContent = APP_VERSION;
 
@@ -7247,16 +7325,24 @@ function actualizarIndicadoresDeConexion(){
     }
   }
 
-  // Icono de señal persistente (verde = en linea / rojo = navegacion offline), en el mapa principal y en el navegador
-  [
-    { punto:'puntoSeñal', texto:'textoSeñal' },
-    { punto:'puntoSeñalNav', texto:'textoSeñalNav' },
-  ].forEach(function(par){
-    const punto = document.getElementById(par.punto);
-    const texto = document.getElementById(par.texto);
-    if(punto) punto.className = 'punto-señal' + (conectado ? '' : ' sin-conexion');
-    if(texto) texto.textContent = conectado ? 'En línea' : 'Navegación offline';
-  });
+  // Icono de señal persistente (verde = en linea / rojo = navegacion offline), en el mapa principal
+  const puntoGeneral = document.getElementById('puntoSeñal');
+  const textoGeneral = document.getElementById('textoSeñal');
+  if(puntoGeneral) puntoGeneral.className = 'punto-señal' + (conectado ? '' : ' sin-conexion');
+  if(textoGeneral) textoGeneral.textContent = conectado ? 'En línea' : 'Navegación offline';
+
+  // El indicador DEL PANEL DE NAVEGACION es distinto: ademas de si el celular tiene señal,
+  // considera si la ruta que se esta mostrando AHORA MISMO es la aproximada por caminos
+  // guardados (linea morada punteada, navRutaEsOffline) — eso puede pasar aunque el celular
+  // SI tenga señal (4G/wifi), si el servidor de rutas no respondio a tiempo. Antes este
+  // indicador solo miraba si el celular tenia señal, y por eso seguia diciendo "En línea"
+  // con la ruta morada en pantalla, lo cual confundía.
+  const navMostrandoOffline = (typeof navRutaEsOffline !== 'undefined') && navRutaEsOffline;
+  const navSinSeñalDeVerdad = !conectado || navMostrandoOffline;
+  const puntoNav = document.getElementById('puntoSeñalNav');
+  const textoNav = document.getElementById('textoSeñalNav');
+  if(puntoNav) puntoNav.className = 'punto-señal' + (navSinSeñalDeVerdad ? ' sin-conexion' : '');
+  if(textoNav) textoNav.textContent = navSinSeñalDeVerdad ? 'Navegación offline' : 'En línea';
 
   // Banner global, visible en toda la app, sin que el usuario tenga que tocar nada:
   // aparece en rojo apenas se pierde la señal, y en verde un momento cuando se recupera.
