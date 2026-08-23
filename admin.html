@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPCIU · Panel de administrador</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --azul:#1877D8; --azul-oscuro:#0C447C;
+    --coral:#D85A30; --coral-bg:#FAECE7; --coral-tx:#712B13;
+    --teal-bg:#E1F5EE; --teal-tx:#085041;
+    --amber-bg:#FAEEDA; --amber-tx:#633806;
+    --bg:#EEF2F7; --card:#FFFFFF; --borde:#E3E5E9;
+    --texto:#1A1B1E; --texto-sec:#6B6E75; --texto-mute:#9A9DA4;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--texto); min-height:100vh;
+  }
+  header{
+    background:linear-gradient(135deg, var(--azul-oscuro), var(--azul));
+    padding:16px 24px; display:flex; align-items:center; justify-content:space-between;
+    box-shadow:0 2px 10px rgba(12,68,124,0.25); position:sticky; top:0; z-index:200;
+  }
+  .logo{font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;}
+  .logo .tag{font-size:12px; font-weight:500; opacity:0.85;}
+  header .info-user{color:#fff; font-size:13px; display:flex; align-items:center; gap:12px;}
+  header button{
+    background:rgba(255,255,255,0.15); color:#fff; border:none; padding:8px 14px;
+    border-radius:8px; font-size:13px; cursor:pointer; font-weight:600;
+  }
+
+  #pantalla-login{
+    max-width:420px; margin:80px auto; background:var(--card); border-radius:16px;
+    padding:36px 30px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  }
+  #pantalla-login h2{margin-bottom:10px;}
+  #pantalla-login p{color:var(--texto-sec); font-size:14px; margin-bottom:22px; line-height:1.5;}
+  #pantalla-login button{
+    background:var(--azul); color:#fff; border:none; padding:12px 24px;
+    border-radius:10px; font-size:14px; font-weight:700; cursor:pointer;
+  }
+
+  main{max-width:1100px; margin:0 auto; padding:24px 20px 60px; display:none;}
+  main.activo{display:block;}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:24px;}
+  .kpi{background:var(--card); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(20,30,50,0.06);}
+  .kpi .valor{font-size:28px; font-weight:800; color:var(--azul-oscuro);}
+  .kpi .etiqueta{font-size:12.5px; color:var(--texto-sec); margin-top:4px;}
+
+  .paneles{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;}
+  @media (max-width:800px){ .paneles{grid-template-columns:1fr;} }
+  .panel{background:var(--card); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(20,30,50,0.06);}
+  .panel h3{font-size:14px; margin-bottom:14px; color:var(--texto);}
+  .panel canvas{max-height:240px;}
+
+  #mapa-admin{height:320px; border-radius:14px; margin-bottom:24px; box-shadow:0 2px 8px rgba(20,30,50,0.06);}
+
+  .filtros{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center;}
+  .filtros select, .filtros input{
+    padding:8px 12px; border:1px solid var(--borde); border-radius:8px; font-size:13px; background:var(--card);
+  }
+  .filtros button{
+    background:var(--azul-oscuro); color:#fff; border:none; padding:9px 16px;
+    border-radius:8px; font-size:13px; cursor:pointer; font-weight:600; margin-left:auto;
+  }
+
+  table{width:100%; border-collapse:collapse; background:var(--card); border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(20,30,50,0.06);}
+  thead{background:var(--bg);}
+  th{text-align:left; padding:10px 12px; font-size:11.5px; color:var(--texto-sec); text-transform:uppercase; letter-spacing:0.3px;}
+  td{padding:10px 12px; font-size:13px; border-top:1px solid #F0F1F4; vertical-align:top;}
+  .badge-mini{font-size:10.5px; padding:2px 7px; border-radius:6px; font-weight:700; white-space:nowrap;}
+  .b-seguridad{background:var(--coral-bg); color:var(--coral-tx);}
+  .b-infra{background:var(--teal-bg); color:var(--teal-tx);}
+  .b-atencion{background:var(--amber-bg); color:var(--amber-tx);}
+  .b-default{background:#EEEDFE; color:#3C3489;}
+  .texto-corto{max-width:260px;}
+  .votos-mini{white-space:nowrap; font-size:12px; color:var(--texto-sec);}
+  .tabla-wrap{overflow-x:auto;}
+  .vacio-tabla{padding:30px; text-align:center; color:var(--texto-sec); font-size:13px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">OPCIU <span class="tag">· Panel de administrador</span></div>
+  <div class="info-user" id="info-user"></div>
+</header>
+
+<div id="pantalla-login">
+  <h2>Acceso restringido</h2>
+  <p>Este panel es solo para el administrador de OPCIU. Inicia sesión con la cuenta autorizada.</p>
+  <button id="btn-login-admin">Continuar con Google</button>
+  <p id="msg-acceso" style="color:#A32D2D; margin-top:14px; display:none;"></p>
+</div>
+
+<main id="main-admin">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="paneles">
+    <div class="panel">
+      <h3>Opiniones por categoría</h3>
+      <canvas id="chart-categorias"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Entidades con más opiniones</h3>
+      <canvas id="chart-entidades"></canvas>
+    </div>
+  </div>
+
+  <div id="mapa-admin"></div>
+
+  <div class="filtros">
+    <select id="f-tipo">
+      <option value="">Todos los tipos</option>
+      <option value="empresa">Empresa</option>
+      <option value="municipio">Municipio</option>
+      <option value="gobierno">Gobierno</option>
+    </select>
+    <select id="f-estado">
+      <option value="">Todos los estados</option>
+      <option value="abierta">Abierta</option>
+      <option value="resuelta">Resuelta</option>
+    </select>
+    <input type="text" id="f-texto" placeholder="Buscar en el texto o entidad…">
+    <button id="btn-exportar">⬇ Exportar CSV</button>
+  </div>
+
+  <div class="tabla-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Entidad</th><th>Categoría</th><th>Opinión</th>
+          <th>Pseudónimo</th><th>Votos</th><th>Foto</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpo-tabla"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const SUPABASE_URL = "https://bnzhqzhpnoxnlmivehwm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_VUZqG6bDZYgCMZoxI5GtDA_AR7tMo8E";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Correo autorizado como administrador de OPCIU
+const CORREO_ADMIN = "sergio.espinoza770@gmail.com";
+
+let todasLasOpiniones = [];
+let chartCategorias = null;
+let chartEntidades = null;
+let mapaAdmin = null;
+
+const COLOR_CATEGORIA = {
+  "Seguridad": "b-seguridad", "Infraestructura y entorno": "b-infra",
+  "Fauna urbana": "b-infra", "Transporte público": "b-infra",
+  "Atención y servicio": "b-atencion", "Producto y prestación": "b-seguridad",
+  "Transparencia y gestión": "b-default", "Otros": "b-default"
+};
+
+async function initAdmin(){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  manejarSesion(session);
+  supabaseClient.auth.onAuthStateChange((_e, session) => manejarSesion(session));
+}
+
+function manejarSesion(session){
+  const usuario = session?.user;
+  const main = document.getElementById('main-admin');
+  const login = document.getElementById('pantalla-login');
+  const infoUser = document.getElementById('info-user');
+  const msg = document.getElementById('msg-acceso');
+
+  if(usuario && usuario.email === CORREO_ADMIN){
+    login.style.display = 'none';
+    main.classList.add('activo');
+    infoUser.innerHTML = usuario.email + ' <button id="btn-logout-admin">Salir</button>';
+    document.getElementById('btn-logout-admin').addEventListener('click', async () => {
+      await supabaseClient.auth.signOut();
+      location.reload();
+    });
+    cargarDatos();
+  } else if(usuario && usuario.email !== CORREO_ADMIN){
+    main.classList.remove('activo');
+    login.style.display = 'block';
+    msg.textContent = 'La cuenta ' + usuario.email + ' no tiene acceso a este panel.';
+    msg.style.display = 'block';
+  } else {
+    main.classList.remove('activo');
+    login.style.display = 'block';
+  }
+}
+
+document.getElementById('btn-login-admin').addEventListener('click', async () => {
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+});
+
+async function cargarDatos(){
+  const { data, error } = await supabaseClient
+    .from('opiniones_con_votos')
+    .select('*')
+    .order('creado_en', { ascending: false })
+    .limit(500);
+  if(error){ console.error(error); return; }
+  todasLasOpiniones = data || [];
+  renderKPIs();
+  renderGraficos();
+  renderMapa();
+  renderTabla();
+}
+
+function renderKPIs(){
+  const total = todasLasOpiniones.length;
+  const hace7dias = Date.now() - 7*86400000;
+  const ultimos7 = todasLasOpiniones.filter(o => new Date(o.creado_en).getTime() > hace7dias).length;
+  const entidadesUnicas = new Set(todasLasOpiniones.map(o => o.entidad_id)).size;
+  const totalVotos = todasLasOpiniones.reduce((s,o) => s + (o.votos_positivos||0) + (o.votos_negativos||0), 0);
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="valor">${total}</div><div class="etiqueta">Opiniones totales</div></div>
+    <div class="kpi"><div class="valor">${ultimos7}</div><div class="etiqueta">Últimos 7 días</div></div>
+    <div class="kpi"><div class="valor">${entidadesUnicas}</div><div class="etiqueta">Entidades con reportes</div></div>
+    <div class="kpi"><div class="valor">${totalVotos}</div><div class="etiqueta">Votos totales</div></div>
+  `;
+}
+
+function renderGraficos(){
+  const porCategoria = {};
+  todasLasOpiniones.forEach(o => {
+    porCategoria[o.categoria_nivel1] = (porCategoria[o.categoria_nivel1]||0) + 1;
+  });
+  const catLabels = Object.keys(porCategoria);
+  const catValores = Object.values(porCategoria);
+
+  if(chartCategorias) chartCategorias.destroy();
+  chartCategorias = new Chart(document.getElementById('chart-categorias'), {
+    type: 'bar',
+    data: { labels: catLabels, datasets: [{ data: catValores, backgroundColor: '#1877D8', borderRadius: 6 }] },
+    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+  });
+
+  const porEntidad = {};
+  todasLasOpiniones.forEach(o => {
+    porEntidad[o.entidad_nombre] = (porEntidad[o.entidad_nombre]||0) + 1;
+  });
+  const topEntidades = Object.entries(porEntidad).sort((a,b) => b[1]-a[1]).slice(0,8);
+
+  if(chartEntidades) chartEntidades.destroy();
+  chartEntidades = new Chart(document.getElementById('chart-entidades'), {
+    type: 'bar',
+    data: {
+      labels: topEntidades.map(e => e[0]),
+      datasets: [{ data: topEntidades.map(e => e[1]), backgroundColor: '#0C447C', borderRadius: 6 }]
+    },
+    options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}} }
+  });
+}
+
+function renderMapa(){
+  if(!mapaAdmin){
+    mapaAdmin = L.map('mapa-admin').setView([-38.53, -72.44], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaAdmin);
+  }
+  mapaAdmin.eachLayer(l => { if(l instanceof L.CircleMarker) mapaAdmin.removeLayer(l); });
+  todasLasOpiniones.forEach(o => {
+    if(!o.lat || !o.lon) return;
+    L.circleMarker([o.lat, o.lon], { radius:6, color:'#1877D8', fillColor:'#1877D8', fillOpacity:0.6, weight:1 })
+      .bindPopup(`<b>${o.categoria_nivel1}</b><br>${o.entidad_nombre}<br><small>${o.texto.slice(0,80)}</small>`)
+      .addTo(mapaAdmin);
+  });
+}
+
+function claseBadge(nivel1){ return COLOR_CATEGORIA[nivel1] || 'b-default'; }
+
+function aplicarFiltros(lista){
+  const tipo = document.getElementById('f-tipo').value;
+  const estado = document.getElementById('f-estado').value;
+  const texto = document.getElementById('f-texto').value.trim().toLowerCase();
+  return lista.filter(o => {
+    if(tipo && o.entidad_tipo !== tipo) return false;
+    if(estado && o.estado !== estado) return false;
+    if(texto && !(o.texto.toLowerCase().includes(texto) || o.entidad_nombre.toLowerCase().includes(texto))) return false;
+    return true;
+  });
+}
+
+function renderTabla(){
+  const filtradas = aplicarFiltros(todasLasOpiniones);
+  const cuerpo = document.getElementById('cuerpo-tabla');
+  if(!filtradas.length){
+    cuerpo.innerHTML = `<tr><td colspan="8" class="vacio-tabla">No hay opiniones que coincidan con el filtro.</td></tr>`;
+    return;
+  }
+  cuerpo.innerHTML = filtradas.map(o => `
+    <tr>
+      <td>${new Date(o.creado_en).toLocaleDateString('es-CL')}</td>
+      <td>${o.entidad_nombre}</td>
+      <td><span class="badge-mini ${claseBadge(o.categoria_nivel1)}">${o.categoria_nivel1} · ${o.categoria_nivel2}</span></td>
+      <td class="texto-corto">${o.texto}</td>
+      <td>${o.pseudonimo}</td>
+      <td class="votos-mini">👍${o.votos_positivos} 👎${o.votos_negativos}</td>
+      <td>${o.foto_url ? `<a href="${o.foto_url}" target="_blank">Ver</a>` : '—'}</td>
+      <td>${o.estado}</td>
+    </tr>
+  `).join('');
+}
+
+['f-tipo','f-estado','f-texto'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTabla);
+});
+
+document.getElementById('btn-exportar').addEventListener('click', () => {
+  const filtradas = aplicarFiltros(todasLasOpiniones);
+  const encabezados = ['Fecha','Entidad','Tipo','Categoria','Subcategoria','Opinion','Pseudonimo','Lat','Lon','VotosPositivos','VotosNegativos','Estado'];
+  const filas = filtradas.map(o => [
+    new Date(o.creado_en).toLocaleString('es-CL'),
+    o.entidad_nombre, o.entidad_tipo, o.categoria_nivel1, o.categoria_nivel2,
+    '"' + o.texto.replace(/"/g,'""') + '"',
+    o.pseudonimo, o.lat, o.lon, o.votos_positivos, o.votos_negativos, o.estado
+  ]);
+  const csv = [encabezados.join(','), ...filas.map(f => f.join(','))].join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `opciu_opiniones_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+initAdmin();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Opciu · Opinión Ciudadana</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --azul:#1877D8; --azul-oscuro:#0C447C;
+    --verde:#1D9E75; --rosa:#D4537E; --amarillo:#EF9F27;
+    --coral:#D85A30; --coral-bg:#FAECE7; --coral-tx:#712B13;
+    --teal-bg:#E1F5EE; --teal-tx:#085041;
+    --amber-bg:#FAEEDA; --amber-tx:#633806;
+    --bg:#EEF2F7; --card:#FFFFFF; --borde:#E3E5E9;
+    --texto:#1A1B1E; --texto-sec:#6B6E75; --texto-mute:#9A9DA4;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--texto);
+    max-width:480px; margin:0 auto; min-height:100vh;
+    display:flex; flex-direction:column;
+  }
+  header{
+    background:linear-gradient(135deg, var(--azul-oscuro), var(--azul));
+    padding:16px 18px; display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:500;
+    box-shadow:0 2px 10px rgba(12,68,124,0.25);
+  }
+  .logo{font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; gap:7px; letter-spacing:0.3px;}
+  .logo .dots span{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:2px;}
+  header .acciones{display:flex; gap:8px; align-items:center;}
+  .icon-lbl{
+    background:rgba(255,255,255,0.15); border:none; cursor:pointer;
+    color:#fff; border-radius:10px; padding:6px 10px;
+    display:flex; flex-direction:column; align-items:center; gap:1px;
+  }
+  .icon-lbl .ic{font-size:16px; line-height:1;}
+  .icon-lbl .lbl{font-size:9px; font-weight:600; line-height:1;}
+  .tabs{display:flex; gap:8px; padding:14px 16px 10px; background:var(--bg); overflow-x:auto;}
+  .chip{
+    font-size:13px; padding:8px 16px; border-radius:999px; white-space:nowrap;
+    background:var(--card); color:var(--texto-sec); border:1px solid var(--borde); cursor:pointer;
+    font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  }
+  .chip.activo{background:var(--azul); color:#fff; border-color:var(--azul); box-shadow:0 3px 8px rgba(24,119,216,0.3);}
+
+  .ayuda-banner{
+    margin:0 16px 12px; padding:12px 14px; background:#E6F1FB; border:1px solid #C9E1F7;
+    border-radius:12px; font-size:12.5px; line-height:1.5; color:var(--azul-oscuro);
+  }
+
+
+  main{flex:1; overflow-y:auto;}
+  #vista-mapa{height:280px; width:100%; display:none; border-radius:16px; overflow:hidden; margin:0 16px 12px; box-shadow:0 2px 10px rgba(0,0,0,0.08); position:relative;}
+  #btn-recentrar{
+    position:absolute; bottom:12px; right:12px; z-index:450;
+    width:38px; height:38px; border-radius:50%; background:#fff; border:1px solid var(--borde);
+    box-shadow:0 2px 8px rgba(0,0,0,0.15); font-size:17px; cursor:pointer;
+  }
+  #vista-mapa.activa{display:block;}
+
+  #feed{padding:4px 16px 90px;}
+  .opinion{
+    background:var(--card); padding:16px 18px; border-radius:16px;
+    margin-bottom:12px; cursor:pointer;
+    box-shadow:0 2px 8px rgba(20,30,50,0.06); border:1px solid rgba(20,30,50,0.04);
+    transition:box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .opinion:active{transform:scale(0.99);}
+  .opinion-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:8px;}
+  .badge{font-size:11px; padding:4px 10px; border-radius:8px; font-weight:700; white-space:nowrap;}
+  .badge-seguridad{background:var(--coral-bg); color:var(--coral-tx);}
+  .badge-infraestructura{background:var(--teal-bg); color:var(--teal-tx);}
+  .badge-atencion{background:var(--amber-bg); color:var(--amber-tx);}
+  .badge-default{background:#EEEDFE; color:#3C3489;}
+  .fecha{font-size:11px; color:var(--texto-mute); white-space:nowrap; flex-shrink:0;}
+  .texto-opinion{font-size:14.5px; line-height:1.55; margin-bottom:8px; color:var(--texto);}
+  .meta{font-size:12.5px; color:var(--texto-sec); margin-bottom:12px; font-weight:500;}
+  .votos-row{display:flex; align-items:center; gap:8px; font-size:13px; padding-top:10px; border-top:1px solid #F0F1F4;}
+  .votos-row button{
+    background:var(--bg); border:none; cursor:pointer; display:flex; align-items:center; gap:5px;
+    font-size:13px; color:var(--texto-sec); padding:6px 12px; border-radius:10px; font-weight:600;
+  }
+  .votos-row button.up.marcado{background:#E5F7F0; color:var(--verde);}
+  .votos-row button.down.marcado{background:var(--coral-bg); color:var(--coral);}
+  .foto-tag{display:flex; align-items:center; gap:4px; color:var(--texto-mute); font-size:12px; margin-left:auto;}
+
+  .vacio{padding:70px 30px; text-align:center; color:var(--texto-sec); font-size:14.5px; line-height:1.6;}
+  .vacio::before{
+    content:"💬"; display:block; font-size:40px; margin-bottom:14px; opacity:0.5;
+  }
+
+  .fab{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    height:52px; border-radius:26px; padding:0 22px;
+    background:linear-gradient(135deg, var(--azul), var(--azul-oscuro)); color:#fff;
+    border:none; cursor:pointer; box-shadow:0 6px 18px rgba(24,119,216,0.4);
+    z-index:600; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .fab .fab-mas{font-size:22px; line-height:1;}
+  .fab .fab-txt{font-size:15px; font-weight:700;}
+
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .overlay.activo{display:flex;}
+  .hoja{
+    background:var(--card); width:100%; max-width:480px; border-radius:18px 18px 0 0;
+    max-height:88vh; overflow-y:auto; padding:20px;
+  }
+  .hoja h2{font-size:17px; margin-bottom:16px;}
+  label{font-size:13px; font-weight:600; color:var(--texto-sec); display:block; margin:14px 0 6px;}
+  select, textarea, input[type=file], input[type=text]{
+    width:100%; padding:10px 12px; border:1px solid var(--borde); border-radius:8px;
+    font-size:14px; font-family:inherit; background:var(--bg);
+  }
+  textarea{min-height:80px; resize:vertical;}
+  .buscador-entidad{position:relative;}
+  .sugerencias{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:50;
+    background:#fff; border:1px solid var(--borde); border-radius:10px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.12); max-height:220px; overflow-y:auto; display:none;
+  }
+  .sugerencias.activa{display:block;}
+  .sug-item{padding:10px 14px; font-size:14px; cursor:pointer; border-bottom:1px solid #F0F1F4;}
+  .sug-item:last-child{border-bottom:none;}
+  .sug-item:hover, .sug-item.resaltada{background:var(--bg);}
+  .sug-item .sug-nueva{color:var(--azul); font-weight:600;}
+  .sug-vacio{padding:12px 14px; font-size:13px; color:var(--texto-sec);}
+  .tipo-btns{display:flex; gap:8px;}
+  .tipo-btn{
+    flex:1; padding:10px; border-radius:8px; border:1.5px solid var(--borde);
+    background:var(--bg); font-size:13px; text-align:center; cursor:pointer; color:var(--texto-sec);
+  }
+  .tipo-btn.sel{border-color:var(--azul); background:#E6F1FB; color:var(--azul-oscuro); font-weight:600;}
+  .ubicacion-info{font-size:12px; color:var(--texto-sec); margin-top:6px; display:flex; align-items:center; gap:6px;}
+  .btn-primario{
+    width:100%; padding:13px; background:var(--azul); color:#fff; border:none;
+    border-radius:10px; font-size:15px; font-weight:600; cursor:pointer; margin-top:18px;
+  }
+  .btn-primario:disabled{background:var(--borde); color:var(--texto-mute); cursor:not-allowed;}
+  .btn-cerrar{
+    position:absolute; top:16px; right:16px; background:none; border:none;
+    font-size:20px; color:var(--texto-sec); cursor:pointer;
+  }
+  .hoja-contenedor{position:relative;}
+  .error-inline{color:#A32D2D; font-size:12px; margin-top:4px;}
+  .login-msg{
+    background:var(--bg); border-radius:10px; padding:14px; text-align:center;
+    font-size:13px; color:var(--texto-sec); margin-bottom:14px;
+  }
+  .login-msg button{
+    margin-top:10px; padding:9px 18px; background:var(--azul); color:#fff;
+    border:none; border-radius:8px; font-size:13px; cursor:pointer;
+  }
+
+  /* Pantalla de bienvenida */
+  #landing{
+    position:fixed; inset:0; z-index:2000; cursor:pointer;
+    background:#08315C; max-width:480px; margin:0 auto;
+  }
+  #landing img{
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .landing-hint{
+    position:absolute; bottom:18px; left:0; right:0; text-align:center;
+    color:rgba(255,255,255,0.75); font-size:12px; letter-spacing:1px;
+    animation:parpadeo 2s ease-in-out infinite;
+  }
+  @keyframes parpadeo{ 0%,100%{opacity:0.4;} 50%{opacity:0.9;} }
+</style>
+</head>
+<body>
+
+<!-- Pantalla de bienvenida: se muestra primero, toca en cualquier parte para entrar -->
+<div id="landing" onclick="cerrarBienvenida()">
+  <img src="opciu_bienvenida.png" alt="OPCIU - Opinión Ciudadana">
+  <div class="landing-hint">Toca para comenzar</div>
+</div>
+
+
+
+<header>
+  <div class="logo">
+    <span class="dots">
+      <span style="background:#4FD1A5"></span><span style="background:#F2789E"></span><span style="background:#FFCC5C"></span><span style="background:#8ED6FF"></span>
+    </span>
+    OPCIU
+  </div>
+  <div class="acciones">
+    <button class="icon-lbl" id="btn-toggle-mapa" title="Ver mapa">
+      <span class="ic">📍</span><span class="lbl">Mapa</span>
+    </button>
+    <button class="icon-lbl" id="btn-perfil" title="Mi cuenta">
+      <span class="ic">👤</span><span class="lbl">Cuenta</span>
+    </button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="chip activo" data-orden="urgente">Más urgente</button>
+  <button class="chip" data-orden="consolidada">Más consolidada</button>
+</div>
+
+<div class="ayuda-banner">
+  📢 Aquí ves los problemas reportados por tu comunidad. Toca <b>Opinar</b> abajo para contar el tuyo, o vota 👍👎 en los que ya existen.
+</div>
+
+<main>
+  <div id="vista-mapa">
+    <button id="btn-recentrar" title="Centrar en mi ubicación">📍</button>
+  </div>
+  <div id="feed">
+    <div class="vacio">Cargando opiniones…</div>
+  </div>
+</main>
+
+<button class="fab" id="btn-nueva"><span class="fab-mas">+</span><span class="fab-txt">Opinar</span></button>
+
+<!-- Formulario para publicar opinión -->
+<div class="overlay" id="overlay-form">
+  <div class="hoja hoja-contenedor">
+    <button class="btn-cerrar" id="btn-cerrar-form">✕</button>
+    <h2>Nueva opinión</h2>
+
+    <div id="bloque-login" class="login-msg" style="display:none;">
+      Necesitas iniciar sesión para publicar.
+      <br>
+      <button id="btn-login-google">Continuar con Google</button>
+    </div>
+
+    <form id="form-opinion">
+      <label>¿A quién va dirigida?</label>
+      <div class="tipo-btns">
+        <div class="tipo-btn" data-tipo="empresa">Empresa</div>
+        <div class="tipo-btn" data-tipo="municipio">Municipio</div>
+        <div class="tipo-btn" data-tipo="gobierno">Gobierno</div>
+      </div>
+
+      <label>Entidad</label>
+      <div class="buscador-entidad">
+        <input type="text" id="input-entidad" placeholder="Escribe para buscar (ej: Lautaro, Líder, CGE)…" autocomplete="off">
+        <div id="sugerencias-entidad" class="sugerencias"></div>
+      </div>
+
+      <label>Categoría</label>
+      <select id="sel-categoria" required>
+        <option value="">Primero elige el tipo de entidad</option>
+      </select>
+      <input type="text" id="txt-otro-especificar" placeholder="Especifica de qué se trata…" style="margin-top:6px; display:none;">
+
+      <label>Tu opinión</label>
+      <textarea id="txt-opinion" placeholder="Describe lo que ocurrió, con el mayor detalle posible…" required></textarea>
+
+      <label>Foto (opcional, se guarda con GPS y hora)</label>
+      <input type="file" id="input-foto" accept="image/*" capture="environment">
+      <div class="ubicacion-info" id="info-foto"></div>
+
+      <div class="ubicacion-info" id="info-ubicacion">📍 obteniendo tu ubicación…</div>
+      <div class="error-inline" id="error-form" style="display:none;"></div>
+
+      <button type="submit" class="btn-primario" id="btn-publicar" disabled>Publicar</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ============================================================
+// CONFIGURACIÓN — reemplaza con los datos de tu proyecto Supabase
+// (Project Settings > API en el dashboard de Supabase)
+// ============================================================
+const SUPABASE_URL = "https://bnzhqzhpnoxnlmivehwm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_VUZqG6bDZYgCMZoxI5GtDA_AR7tMo8E";
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Colores por categoría nivel 1, para las tarjetas y el mapa
+const COLOR_CATEGORIA = {
+  "Seguridad": {clase:"badge-seguridad", pin:"#D85A30"},
+  "Infraestructura y entorno": {clase:"badge-infraestructura", pin:"#1D9E75"},
+  "Atención y servicio": {clase:"badge-atencion", pin:"#EF9F27"},
+  "Fauna urbana": {clase:"badge-infraestructura", pin:"#1D9E75"},
+  "Transporte público": {clase:"badge-infraestructura", pin:"#1D9E75"},
+  "Producto y prestación": {clase:"badge-seguridad", pin:"#D85A30"},
+  "Transparencia y gestión": {clase:"badge-default", pin:"#7F77DD"},
+  "Otros": {clase:"badge-default", pin:"#888780"}
+};
+
+let usuarioActual = null;
+let ordenActual = "urgente";
+let mapa = null;
+let capaPines = null;
+let ubicacionActual = null;
+let fotoMeta = null;
+let pseudonimoActual = null;
+
+// ------------------------------------------------------------
+// AUTENTICACIÓN
+// ------------------------------------------------------------
+async function initAuth(){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  usuarioActual = session?.user || null;
+  if(usuarioActual) asegurarPseudonimo();
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    usuarioActual = session?.user || null;
+    if(usuarioActual) asegurarPseudonimo();
+    actualizarUISegunLogin();
+  });
+  actualizarUISegunLogin();
+}
+
+// Nunca usamos el nombre real de Google en público: pedimos un pseudónimo
+// elegido por la persona, y lo guardamos localmente para no preguntarlo cada vez.
+function asegurarPseudonimo(){
+  if(!usuarioActual) return;
+  const clave = 'opciu_pseudonimo_' + usuarioActual.id;
+  let guardado = null;
+  try{ guardado = localStorage.getItem(clave); }catch(e){}
+
+  if(guardado){
+    pseudonimoActual = guardado;
+    return;
+  }
+
+  let elegido = '';
+  while(!elegido || elegido.trim().length < 3){
+    elegido = window.prompt(
+      'Elige un pseudónimo público (no tu nombre real). Ej: "VecinoLautaro23"',
+      ''
+    );
+    if(elegido === null){ elegido = 'Vecino' + Math.floor(Math.random()*9000+1000); break; }
+    elegido = elegido.trim();
+  }
+  pseudonimoActual = elegido;
+  try{ localStorage.setItem(clave, elegido); }catch(e){}
+}
+
+function actualizarUISegunLogin(){
+  const bloqueLogin = document.getElementById('bloque-login');
+  const form = document.getElementById('form-opinion');
+  if(usuarioActual){
+    bloqueLogin.style.display = 'none';
+  } else {
+    bloqueLogin.style.display = 'block';
+  }
+}
+
+document.getElementById('btn-login-google').addEventListener('click', async () => {
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+});
+
+document.getElementById('btn-perfil').addEventListener('click', async () => {
+  if(!usuarioActual){
+    alert('Aún no has iniciado sesión. Toca "Opinar" para hacerlo con tu cuenta de Google.');
+    return;
+  }
+  const opcion = confirm(
+    'Estás conectado como: ' + (pseudonimoActual || 'Vecino') +
+    '\n\nAceptar = Cerrar sesión\nCancelar = Seguir conectado'
+  );
+  if(opcion){
+    await supabaseClient.auth.signOut();
+    try{
+      const clave = 'opciu_pseudonimo_' + usuarioActual.id;
+      localStorage.removeItem(clave);
+    }catch(e){}
+    usuarioActual = null;
+    pseudonimoActual = null;
+    location.reload();
+  }
+});
+
+// ------------------------------------------------------------
+// CARGA DE ENTIDADES Y CATEGORÍAS
+// ------------------------------------------------------------
+let entidadIdSeleccionada = null;
+let tipoEntidadActual = null;
+let temporizadorBusqueda = null;
+
+const inputEntidad = document.getElementById('input-entidad');
+const cajaSugerencias = document.getElementById('sugerencias-entidad');
+
+function resetearBuscadorEntidad(){
+  entidadIdSeleccionada = null;
+  inputEntidad.value = '';
+  cajaSugerencias.classList.remove('activa');
+  cajaSugerencias.innerHTML = '';
+}
+
+inputEntidad.addEventListener('input', () => {
+  entidadIdSeleccionada = null; // si vuelve a escribir, ya no vale la selección anterior
+  validarFormulario();
+  clearTimeout(temporizadorBusqueda);
+  const texto = inputEntidad.value.trim();
+  if(texto.length < 2){
+    cajaSugerencias.classList.remove('activa');
+    return;
+  }
+  temporizadorBusqueda = setTimeout(() => buscarEntidades(texto), 250);
+});
+
+inputEntidad.addEventListener('focus', () => {
+  if(inputEntidad.value.trim().length >= 2) cajaSugerencias.classList.add('activa');
+});
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.buscador-entidad')) cajaSugerencias.classList.remove('activa');
+});
+
+async function buscarEntidades(texto){
+  if(!tipoEntidadActual) return;
+  const { data, error } = await supabaseClient
+    .from('entidades')
+    .select('id, nombre')
+    .eq('tipo', tipoEntidadActual)
+    .ilike('nombre', `%${texto}%`)
+    .order('nombre')
+    .limit(8);
+  if(error){ console.error(error); return; }
+
+  let html = '';
+  if(data && data.length){
+    html += data.map(e =>
+      `<div class="sug-item" data-id="${e.id}" data-nombre="${e.nombre.replace(/"/g,'&quot;')}">${e.nombre}</div>`
+    ).join('');
+  } else {
+    html += `<div class="sug-vacio">No encontramos coincidencias.</div>`;
+  }
+  html += `<div class="sug-item sug-crear" data-nombre="${texto.replace(/"/g,'&quot;')}">
+             <span class="sug-nueva">+ Usar "${texto}" como nueva entidad</span>
+           </div>`;
+  cajaSugerencias.innerHTML = html;
+  cajaSugerencias.classList.add('activa');
+
+  cajaSugerencias.querySelectorAll('.sug-item').forEach(item => {
+    item.addEventListener('click', () => {
+      inputEntidad.value = item.dataset.nombre;
+      entidadIdSeleccionada = item.dataset.id || null; // null si es "crear nueva"
+      cajaSugerencias.classList.remove('activa');
+      validarFormulario();
+    });
+  });
+}
+
+async function cargarCategorias(tipo){
+  const sel = document.getElementById('sel-categoria');
+  const columna = tipo === 'empresa' ? 'aplica_empresa' : (tipo === 'municipio' ? 'aplica_municipio' : 'aplica_gobierno');
+  const { data, error } = await supabaseClient
+    .from('categorias')
+    .select('id, nivel1, nivel2')
+    .eq(columna, true)
+    .order('nivel1');
+  if(error){ console.error(error); return; }
+  sel.innerHTML = '<option value="">Selecciona una categoría…</option>' +
+    data.map(c => `<option value="${c.id}" data-nivel1="${c.nivel1}">${c.nivel1} · ${c.nivel2}</option>`).join('');
+}
+
+// Muestra el campo "Especifica de qué se trata" solo cuando la categoría es "Otros"
+document.getElementById('sel-categoria').addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  const campoOtro = document.getElementById('txt-otro-especificar');
+  const esOtros = opt && opt.dataset.nivel1 === 'Otros';
+  campoOtro.style.display = esOtros ? 'block' : 'none';
+  if(!esOtros) campoOtro.value = '';
+});
+
+document.querySelectorAll('.tipo-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    tipoEntidadActual = btn.dataset.tipo;
+    resetearBuscadorEntidad();
+    cargarCategorias(tipoEntidadActual);
+    validarFormulario();
+  });
+});
+
+// ------------------------------------------------------------
+// UBICACIÓN Y FOTO (georreferenciación con fecha/hora)
+// ------------------------------------------------------------
+function obtenerUbicacion(){
+  const info = document.getElementById('info-ubicacion');
+  if(!navigator.geolocation){
+    info.textContent = '⚠ Tu navegador no soporta geolocalización';
+    return;
+  }
+  info.innerHTML = '📍 obteniendo tu ubicación…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    ubicacionActual = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    info.textContent = `📍 Ubicación capturada (±${Math.round(pos.coords.accuracy)} m)`;
+    validarFormulario();
+  }, () => {
+    info.innerHTML = '⚠ No se pudo obtener tu ubicación. Revisa el permiso en tu navegador ' +
+      '(ícono junto a la URL) y <button type="button" id="btn-reintentar-ubic" style="color:var(--azul);background:none;border:none;text-decoration:underline;cursor:pointer;font-size:12px;">reintenta aquí</button>';
+    const btn = document.getElementById('btn-reintentar-ubic');
+    if(btn) btn.addEventListener('click', obtenerUbicacion);
+  }, { enableHighAccuracy:true, timeout:10000, maximumAge:0 });
+}
+
+// Extrae GPS y fecha/hora EXIF de la foto si están disponibles.
+// Nota: para producción conviene una librería como exif-js; aquí se deja
+// el punto exacto donde se integra, con fallback a la hora de subida.
+document.getElementById('input-foto').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const info = document.getElementById('info-foto');
+  if(!file){ fotoMeta = null; info.textContent = ''; return; }
+  fotoMeta = {
+    archivo: file,
+    fecha: new Date().toISOString(),
+    lat: ubicacionActual ? ubicacionActual.lat : null,
+    lon: ubicacionActual ? ubicacionActual.lon : null
+  };
+  info.innerHTML = `📷 Foto lista · se guardará con GPS y hora`;
+});
+
+// ------------------------------------------------------------
+// FORMULARIO: abrir / cerrar / validar / publicar
+// ------------------------------------------------------------
+document.getElementById('btn-nueva').addEventListener('click', () => {
+  document.getElementById('overlay-form').classList.add('activo');
+  obtenerUbicacion();
+});
+document.getElementById('btn-cerrar-form').addEventListener('click', () => {
+  document.getElementById('overlay-form').classList.remove('activo');
+});
+
+['input-entidad','sel-categoria','txt-otro-especificar','txt-opinion'].forEach(id => {
+  document.getElementById(id).addEventListener('input', validarFormulario);
+});
+
+function categoriaEsOtros(){
+  const opt = document.getElementById('sel-categoria').selectedOptions[0];
+  return opt && opt.dataset.nivel1 === 'Otros';
+}
+
+function validarFormulario(){
+  const tieneEntidad = document.getElementById('input-entidad').value.trim().length >= 2;
+  const tieneCategoria = document.getElementById('sel-categoria').value &&
+                          (!categoriaEsOtros() || document.getElementById('txt-otro-especificar').value.trim().length >= 3);
+  const ok = tieneEntidad && tieneCategoria &&
+             document.getElementById('txt-opinion').value.trim().length >= 10 &&
+             ubicacionActual && usuarioActual;
+  document.getElementById('btn-publicar').disabled = !ok;
+}
+
+document.getElementById('form-opinion').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('error-form');
+  errorEl.style.display = 'none';
+
+  if(!usuarioActual){
+    errorEl.textContent = 'Inicia sesión antes de publicar.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if(!ubicacionActual){
+    errorEl.textContent = 'No tenemos tu ubicación aún, espera un momento.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  let entidadId = entidadIdSeleccionada;
+  const entidadTexto = document.getElementById('input-entidad').value.trim();
+  const tipoActual = tipoEntidadActual;
+
+  // Si no se eligió una sugerencia existente, buscamos por si ya existe una
+  // entidad con ese nombre (sin importar mayúsculas) antes de crear una nueva,
+  // para no duplicar el mismo lugar cada vez que alguien lo escribe distinto.
+  if(!entidadId && entidadTexto){
+    const { data: existente } = await supabaseClient
+      .from('entidades')
+      .select('id')
+      .eq('tipo', tipoActual)
+      .ilike('nombre', entidadTexto)
+      .limit(1)
+      .maybeSingle();
+
+    if(existente){
+      entidadId = existente.id;
+    } else {
+      const { data: nueva, error: errNueva } = await supabaseClient
+        .from('entidades')
+        .insert({ nombre: entidadTexto, tipo: tipoActual })
+        .select('id')
+        .single();
+      if(errNueva){
+        errorEl.textContent = 'No se pudo registrar la entidad escrita. Intenta de nuevo.';
+        errorEl.style.display = 'block';
+        console.error(errNueva);
+        return;
+      }
+      entidadId = nueva.id;
+    }
+  }
+
+  const categoriaId = document.getElementById('sel-categoria').value;
+  let texto = document.getElementById('txt-opinion').value.trim();
+  if(categoriaEsOtros()){
+    const especifica = document.getElementById('txt-otro-especificar').value.trim();
+    texto = `[${especifica}] ${texto}`;
+  }
+
+  let fotoUrl = null;
+  if(fotoMeta){
+    const nombreArchivo = `${usuarioActual.id}/${Date.now()}_${fotoMeta.archivo.name}`;
+    const { data: subida, error: errSubida } = await supabaseClient.storage
+      .from('fotos-opiniones')
+      .upload(nombreArchivo, fotoMeta.archivo);
+    if(!errSubida){
+      const { data: pub } = supabaseClient.storage.from('fotos-opiniones').getPublicUrl(nombreArchivo);
+      fotoUrl = pub.publicUrl;
+    }
+  }
+
+  const { error } = await supabaseClient.from('opiniones').insert({
+    usuario_id: usuarioActual.id,
+    pseudonimo: pseudonimoActual || 'Vecino',
+    entidad_id: entidadId,
+    categoria_id: categoriaId,
+    texto: texto,
+    lat: ubicacionActual.lat,
+    lon: ubicacionActual.lon,
+    foto_url: fotoUrl,
+    foto_lat: fotoMeta?.lat || null,
+    foto_lon: fotoMeta?.lon || null,
+    foto_fecha: fotoMeta?.fecha || null
+  });
+
+  if(error){
+    errorEl.textContent = 'No se pudo publicar. Intenta de nuevo.';
+    errorEl.style.display = 'block';
+    console.error(error);
+    return;
+  }
+
+  document.getElementById('overlay-form').classList.remove('activo');
+  document.getElementById('form-opinion').reset();
+  document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('sel'));
+  resetearBuscadorEntidad();
+  tipoEntidadActual = null;
+  document.getElementById('sel-categoria').innerHTML = '<option value="">Primero elige el tipo de entidad</option>';
+  document.getElementById('txt-otro-especificar').style.display = 'none';
+  fotoMeta = null;
+  cargarFeed();
+});
+
+// ------------------------------------------------------------
+// FEED (ranking por votos, con las dos vistas: urgente / consolidada)
+// ------------------------------------------------------------
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('activo'));
+    chip.classList.add('activo');
+    ordenActual = chip.dataset.orden;
+    cargarFeed();
+  });
+});
+
+function tiempoRelativo(fechaISO){
+  const diffMs = Date.now() - new Date(fechaISO).getTime();
+  const horas = Math.floor(diffMs / 3600000);
+  if(horas < 1) return 'hace unos minutos';
+  if(horas < 24) return `hace ${horas}h`;
+  return `hace ${Math.floor(horas/24)}d`;
+}
+
+function claseBadge(nivel1){
+  return (COLOR_CATEGORIA[nivel1] || COLOR_CATEGORIA["Otros"]).clase;
+}
+
+async function cargarFeed(){
+  const cont = document.getElementById('feed');
+
+  // "Más urgente" pondera votos recientes (últimos 7 días);
+  // "Más consolidada" usa el puntaje acumulado histórico.
+  let query = supabaseClient.from('opiniones_con_votos').select('*');
+  if(ordenActual === 'urgente'){
+    query = query.gte('creado_en', new Date(Date.now() - 7*86400000).toISOString())
+                 .order('puntaje', { ascending: false });
+  } else {
+    query = query.order('puntaje', { ascending: false });
+  }
+
+  const { data, error } = await query.limit(30);
+  if(error){
+    cont.innerHTML = `<div class="vacio">No se pudo cargar el feed. Revisa la configuración de Supabase.</div>`;
+    console.error(error);
+    return;
+  }
+  if(!data || data.length === 0){
+    cont.innerHTML = `<div class="vacio">Todavía no hay opiniones publicadas.<br>Sé el primero en opinar.</div>`;
+    return;
+  }
+
+  cont.innerHTML = data.map(o => `
+    <div class="opinion" data-id="${o.id}">
+      <div class="opinion-top">
+        <span class="badge ${claseBadge(o.categoria_nivel1)}">${o.categoria_nivel1} · ${o.categoria_nivel2}</span>
+        <span class="fecha">${tiempoRelativo(o.creado_en)}</span>
+      </div>
+      <p class="texto-opinion">${o.texto}</p>
+      <p class="meta">${o.entidad_nombre}</p>
+      <div class="votos-row">
+        <button class="up" data-tipo="positivo" data-op="${o.id}">👍 ${o.votos_positivos}</button>
+        <button class="down" data-tipo="negativo" data-op="${o.id}">👎 ${o.votos_negativos}</button>
+        ${o.foto_url ? `<span class="foto-tag">📷 georreferenciada</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.votos-row button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      votar(btn.dataset.op, btn.dataset.tipo);
+    });
+  });
+
+  actualizarPinesMapa(data);
+}
+
+async function votar(opinionId, tipo){
+  if(!usuarioActual){
+    alert('Inicia sesión para votar.');
+    return;
+  }
+  const { error } = await supabaseClient.from('votos').upsert({
+    opinion_id: opinionId,
+    usuario_id: usuarioActual.id,
+    tipo: tipo
+  }, { onConflict: 'opinion_id,usuario_id' });
+  if(error){ console.error(error); return; }
+  cargarFeed();
+}
+
+// ------------------------------------------------------------
+// MAPA (Leaflet) — misma lógica que Navegación Terreno
+// ------------------------------------------------------------
+document.getElementById('btn-toggle-mapa').addEventListener('click', () => {
+  const vista = document.getElementById('vista-mapa');
+  const feed = document.getElementById('feed');
+  vista.classList.toggle('activa');
+  feed.style.display = vista.classList.contains('activa') ? 'none' : 'block';
+  if(vista.classList.contains('activa') && !mapa){
+    mapa = L.map('vista-mapa').setView([-38.53, -72.44], 13); // Lautaro, mientras se obtiene tu ubicación real
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(mapa);
+    capaPines = L.layerGroup().addTo(mapa);
+    centrarMapaEnMiUbicacion();
+  }
+  if(mapa) setTimeout(() => mapa.invalidateSize(), 200);
+});
+
+function centrarMapaEnMiUbicacion(){
+  if(!navigator.geolocation || !mapa) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    mapa.setView([pos.coords.latitude, pos.coords.longitude], 15);
+  }, () => { /* si falla, el mapa se queda centrado en Lautaro */ });
+}
+
+document.getElementById('btn-recentrar')?.addEventListener('click', centrarMapaEnMiUbicacion);
+
+function actualizarPinesMapa(opiniones){
+  if(!capaPines) return;
+  capaPines.clearLayers();
+  opiniones.forEach(o => {
+    const color = (COLOR_CATEGORIA[o.categoria_nivel1] || COLOR_CATEGORIA["Otros"]).pin;
+    const radio = Math.min(6 + Math.round(o.votos_positivos / 10), 16);
+    L.circleMarker([o.lat, o.lon], {
+      radius: radio, color: color, fillColor: color, fillOpacity: 0.7, weight: 1.5
+    }).bindPopup(`<b>${o.categoria_nivel1} · ${o.categoria_nivel2}</b><br>${o.texto}<br><small>${o.entidad_nombre}</small>`)
+      .addTo(capaPines);
+  });
+}
+
+// ------------------------------------------------------------
+// PANTALLA DE BIENVENIDA (se muestra siempre al entrar)
+// ------------------------------------------------------------
+function cerrarBienvenida(){
+  document.getElementById('landing').style.display = 'none';
+}
+
+// ------------------------------------------------------------
+// INICIO
+// ------------------------------------------------------------
+initAuth();
+cargarFeed();
+</script>
+
+</body>
+</html>
