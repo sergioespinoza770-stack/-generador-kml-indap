@@ -3422,7 +3422,14 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
 // devuelve listas vacias y el plano se genera igual, solo sin esos rotulos.
 function obtenerViasYLugaresOverpass(bounds){
   const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
-  const consulta = '[out:json][timeout:20];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bbox + '););out geom;';
+  // Para localidades usamos un bbox mas ancho (bounds x5) que para caminos: en zona rural es
+  // comun que no haya ningun pueblo/villorrio con nombre DENTRO de la vista exacta del mapa,
+  // pero igual sirve mostrar cual es el sector/localidad mas cercana como referencia.
+  const altoLat = bounds.getNorth() - bounds.getSouth();
+  const anchoLon = bounds.getEast() - bounds.getWest();
+  const bboxLugares = (bounds.getSouth() - altoLat*2) + ',' + (bounds.getWest() - anchoLon*2) + ',' +
+                       (bounds.getNorth() + altoLat*2) + ',' + (bounds.getEast() + anchoLon*2);
+  const consulta = '[out:json][timeout:20];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + '););out geom;';
   const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
 
   const controlador = new AbortController();
@@ -3518,19 +3525,29 @@ function generarMapaTerreno(){
           if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
         });
         ctx.stroke();
-        // Rotula cada camino una sola vez (en su punto medio), y evita apilar el mismo
-        // nombre muchas veces cuando OSM trae el camino cortado en varios tramos seguidos.
+        // Rotula cada camino una sola vez, y evita apilar el mismo nombre muchas veces cuando
+        // OSM trae el camino cortado en varios tramos seguidos. El punto medio DE TODA la via
+        // (que a veces sigue mucho mas alla de la vista) puede caer fuera del lienzo — por eso
+        // filtramos primero a los puntos que SI caen dentro del area capturada, y etiquetamos
+        // ahi; si ningun punto de esta via cae dentro de la vista, no se rotula (igual se ve
+        // la linea punteada si cruza el borde).
         if(nombresYaPuestos.indexOf(via.nombre) === -1){
-          nombresYaPuestos.push(via.nombre);
-          const medio = via.puntos[Math.floor(via.puntos.length/2)];
-          const xy = pixelDe(medio[0], medio[1]);
-          ctx.font = 'bold 13px sans-serif';
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
-          const anchoTexto = ctx.measureText(via.nombre).width;
-          ctx.fillRect(xy[0] - 4, xy[1] - 16, anchoTexto + 8, 20);
-          ctx.fillStyle = '#fff';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(via.nombre, xy[0], xy[1] - 6);
+          const puntosEnVista = via.puntos.filter(function(p){
+            const xy = pixelDe(p[0], p[1]);
+            return xy[0] >= 0 && xy[0] <= canvas.width && xy[1] >= alturaBarra && xy[1] <= canvas.height;
+          });
+          if(puntosEnVista.length > 0){
+            nombresYaPuestos.push(via.nombre);
+            const medio = puntosEnVista[Math.floor(puntosEnVista.length/2)];
+            const xy = pixelDe(medio[0], medio[1]);
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            const anchoTexto = ctx.measureText(via.nombre).width;
+            ctx.fillRect(xy[0] - 4, xy[1] - 16, anchoTexto + 8, 20);
+            ctx.fillStyle = '#fff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(via.nombre, xy[0], xy[1] - 6);
+          }
         }
       });
       ctx.setLineDash([]);
@@ -3581,19 +3598,27 @@ function generarMapaTerreno(){
         }
 
         // --- Superficie total del poligono (solo si es un poligono cerrado, 3+ puntos) ---
+        // Va JUSTO DEBAJO del poligono (no centrada adentro) para no taparlo ni pisar las
+        // etiquetas de medida de los segmentos, que quedan sobre los bordes.
         if(puntosCampo.length >= 3){
           const areaHa = calcularAreaHa(puntosCampo);
-          const centro = centroide(puntosCampo);
-          const xyCentro = pixelDe(centro[0], centro[1]);
+          let maxYPoligono = -Infinity, sumaX = 0;
+          puntosCampo.forEach(function(p){
+            const xy = pixelDe(p[0], p[1]);
+            if(xy[1] > maxYPoligono) maxYPoligono = xy[1];
+            sumaX += xy[0];
+          });
+          const xCentro = sumaX / puntosCampo.length;
+          const yEtiqueta = maxYPoligono + 26*escalaMarcador;
           const textoArea = '~' + areaHa.toFixed(2) + ' ha';
           ctx.font = 'bold ' + Math.round(18*escalaMarcador) + 'px sans-serif';
           const anchoArea = ctx.measureText(textoArea).width;
           ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(xyCentro[0] - anchoArea/2 - 10, xyCentro[1] - 16*escalaMarcador, anchoArea + 20, 32*escalaMarcador);
+          ctx.fillRect(xCentro - anchoArea/2 - 10, yEtiqueta - 16*escalaMarcador, anchoArea + 20, 32*escalaMarcador);
           ctx.fillStyle = '#ffc700';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(textoArea, xyCentro[0], xyCentro[1]);
+          ctx.fillText(textoArea, xCentro, yEtiqueta);
           ctx.textAlign = 'left';
         }
       }
