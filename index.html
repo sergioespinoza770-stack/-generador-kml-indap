@@ -860,6 +860,37 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .tipo-opt input{
     display:none;
   }
+  /* Boton aparte de "subir KML/KMZ para navegar" — mas robusto y con su propio color (verde,
+     distinto del amarillo de los 4 formatos de coordenadas) para que se lea como un paso
+     distinto: primero eliges como vas a generar el KML, y por separado subes uno ya existente. */
+  .kml-cta{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    width:100%;
+    margin:14px 0 18px 0;
+    min-width:0;
+    padding:16px;
+    font-size:14px;
+    border-width:2.5px;
+    border-color:#3fa66b;
+    background:#eef8f1;
+    color:#1e7a45;
+    box-shadow:0 3px 12px rgba(63,166,107,0.18);
+  }
+  .kml-cta .emoji-boton{
+    font-size:19px;
+  }
+  .kml-cta:hover{
+    border-color:#2f8555;
+  }
+  .kml-cta.activo{
+    background:linear-gradient(135deg, #3fa66b, #57c084);
+    border-color:#1e7a45;
+    color:#fff;
+    box-shadow:0 4px 14px rgba(63,166,107,0.4);
+  }
   .utm-extra{
     display:none;
   }
@@ -1227,15 +1258,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:#3fa66b;
   }
   /* "Mi ubicacion" es casi siempre el primer toque al llegar al potrero — la destacamos con
-     mas peso visual (fondo lleno en vez de solo el borde) para que sea la mas notoria del grupo. */
+     el amarillo insignia de la app (fondo lleno en vez de solo el borde), para que sea la mas
+     notoria del grupo de un vistazo. */
   .btn-icono.inicio{
-    background:linear-gradient(135deg, #eaf3ff, #ffffff);
-    border-color:#1a73e8;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    border-color:var(--accent-dark);
     border-width:2.5px;
-    box-shadow:0 3px 14px rgba(26,115,232,0.28);
+    box-shadow:0 3px 14px rgba(255,199,0,0.4);
   }
   .btn-icono.inicio .texto-boton{
-    color:#0c447c;
+    color:var(--accent-text);
   }
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
@@ -2228,7 +2260,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <p class="hint">Este nombre queda como nombre del archivo .kml y también como nombre del polígono adentro de Google Earth — usa un nombre distinto para cada predio así, si abres varios KML juntos, se distinguen fácil por nombre en el panel de "Lugares".</p>
   </div>
 
-  <label style="margin-bottom:8px;">Tipo de coordenadas</label>
+  <label style="margin-bottom:8px;">Ingrese tipo de coordenadas</label>
   <div class="tipo-selector">
     <label class="tipo-opt activo" id="optGeo">
       <input type="radio" name="tipoCoord" value="geo" checked>
@@ -2242,13 +2274,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <input type="radio" name="tipoCoord" value="sirsds">
       Formato SIG (lon,lat,0)
     </label>
-    <label class="tipo-opt" id="optKml">
-      <input type="radio" name="tipoCoord" value="kml">
-      Subir KML o KMZ, para navegar
-    </label>
     <span id="tabsPlantillas" style="display:contents;"></span>
     <button type="button" id="btnNuevaPlantilla" class="tipo-opt" style="cursor:pointer; border-style:dashed; background:transparent; color:var(--accent-dark); font-weight:700;">➕ Mi propio formato</button>
   </div>
+
+  <!-- Boton aparte, mas robusto, debajo de los 4 formatos de coordenadas: subir un KML/KMZ no es
+       "otro formato de coordenadas" como los de arriba, es un paso distinto (traer un archivo ya
+       listo para navegar) — separarlo asi dejar mas claro el orden logico de uso de la app. -->
+  <label class="tipo-opt kml-cta" id="optKml">
+    <input type="radio" name="tipoCoord" value="kml">
+    <span class="emoji-boton" aria-hidden="true">📤</span>
+    <span>Subir KML o KMZ, para navegar</span>
+  </label>
 
 <div id="modalPlantilla" style="display:none; position:fixed; inset:0; z-index:5500; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px;">
   <div style="background:#fff; border-radius:14px; padding:20px; max-width:460px; width:100%; max-height:88vh; overflow-y:auto; font-family:var(--sans, sans-serif);">
