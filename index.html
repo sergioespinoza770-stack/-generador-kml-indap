@@ -3464,6 +3464,10 @@ function generarMapaTerreno(){
     }
 
     // --- Poligono/linea/puntos que se esten trazando ahora en modo campo (si hay) ---
+    // El grosor y el radio del marcador se escalan con el tamaño real del canvas generado
+    // (que depende del zoom/resolucion con que estabas mirando el mapa), para que el punto
+    // se note claro sea cual sea el nivel de detalle de esta captura en particular.
+    const escalaMarcador = Math.max(1, canvas.width / 700);
     if(puntosCampo && puntosCampo.length >= 1){
       if(puntosCampo.length >= 2){
         ctx.beginPath();
@@ -3473,55 +3477,70 @@ function generarMapaTerreno(){
         });
         if(puntosCampo.length >= 3){
           ctx.closePath();
-          ctx.fillStyle = 'rgba(255,199,0,0.18)';
+          ctx.fillStyle = 'rgba(255,199,0,0.22)';
           ctx.fill();
         }
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 6 * escalaMarcador;
         ctx.strokeStyle = '#ffc700';
         ctx.stroke();
       }
       puntosCampo.forEach(function(p){
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
-        ctx.arc(xy[0], xy[1], 7, 0, 2*Math.PI);
+        ctx.arc(xy[0], xy[1], 15 * escalaMarcador, 0, 2*Math.PI);
         ctx.fillStyle = '#fff';
         ctx.fill();
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 5 * escalaMarcador;
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
       });
     }
 
-    // --- Grilla de coordenadas: lineas de longitud (verticales) y latitud (horizontales) ---
+    // --- Grilla en UTM: lineas de Este (verticales) y Norte (horizontales) ---
+    // Como el area capturada es chica (unos cientos de metros a pocos km), aproximamos cada
+    // linea como recta usando un solo punto de referencia (centro) para la conversion UTM -> lat/lon
+    // — la convergencia de meridianos en ese rango es minima y no se nota en el plano final.
+    const oeste = bounds.getWest(), este = bounds.getEast();
+    const norte = bounds.getNorth(), sur = bounds.getSouth();
+    const latCentro = (norte + sur) / 2, lonCentro = (oeste + este) / 2;
+    const metrosPorPixel = 156543.03392 * Math.cos(latCentro * Math.PI/180) / Math.pow(2, zoom);
+
+    const utmNO = latLonToUtm(norte, oeste);
+    const utmSE = latLonToUtm(sur, este);
+    const utmCentro = latLonToUtm(latCentro, lonCentro);
+    const minE = Math.min(utmNO.este, utmSE.este), maxE = Math.max(utmNO.este, utmSE.este);
+    const minN = Math.min(utmNO.norte, utmSE.norte), maxN = Math.max(utmNO.norte, utmSE.norte);
+
+    let intervaloUtm = 10;
+    [10,20,50,100,200,500,1000,2000,5000].forEach(function(o){
+      if(o / metrosPorPixel <= 220) intervaloUtm = o;
+    });
+
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 1;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillStyle = '#fff';
     ctx.textBaseline = 'top';
-    const oeste = bounds.getWest(), este = bounds.getEast();
-    const norte = bounds.getNorth(), sur = bounds.getSouth();
-    for(let i = 1; i <= 3; i++){
-      const lon = oeste + (este - oeste) * (i/4);
-      const xy = pixelDe(0, lon);
+
+    for(let e = Math.ceil(minE/intervaloUtm)*intervaloUtm; e <= maxE; e += intervaloUtm){
+      const ll = utmToLatLon(e, utmCentro.norte, utmCentro.huso, utmCentro.hemisferio === 'S');
+      const xy = pixelDe(ll[0], ll[1]);
       ctx.beginPath();
       ctx.moveTo(xy[0], 0);
       ctx.lineTo(xy[0], canvas.height);
       ctx.stroke();
-      ctx.fillText(lon.toFixed(5) + '°', xy[0] + 4, 4);
+      ctx.fillText(Math.round(e) + 'E', xy[0] + 4, 4);
     }
-    for(let i = 1; i <= 3; i++){
-      const lat = norte - (norte - sur) * (i/4);
-      const xy = pixelDe(lat, 0);
+    for(let n = Math.ceil(minN/intervaloUtm)*intervaloUtm; n <= maxN; n += intervaloUtm){
+      const ll = utmToLatLon(utmCentro.este, n, utmCentro.huso, utmCentro.hemisferio === 'S');
+      const xy = pixelDe(ll[0], ll[1]);
       ctx.beginPath();
       ctx.moveTo(0, xy[1]);
       ctx.lineTo(canvas.width, xy[1]);
       ctx.stroke();
-      ctx.fillText(lat.toFixed(5) + '°', 4, xy[1] + 4);
+      ctx.fillText(Math.round(n) + 'N', 4, xy[1] + 4);
     }
-
-    // --- Escala grafica (calculada para la latitud central de esta vista, formula Web Mercator) ---
-    const latCentro = (norte + sur) / 2;
-    const metrosPorPixel = 156543.03392 * Math.cos(latCentro * Math.PI/180) / Math.pow(2, zoom);
+    // --- Escala grafica (mismo metrosPorPixel ya calculado arriba para la grilla UTM) ---
     let metrosBarra = 10;
     [10,20,50,100,200,500,1000,2000,5000,10000].forEach(function(o){
       if(o / metrosPorPixel <= 180) metrosBarra = o;
@@ -3542,40 +3561,42 @@ function generarMapaTerreno(){
     ctx.fillText((metrosBarra >= 1000 ? (metrosBarra/1000) + ' km' : metrosBarra + ' m'), escalaX, escalaY - 4);
 
     // --- Flecha de norte, arriba a la derecha (el mapa siempre queda norte-arriba en esta captura) ---
-    const nx = canvas.width - 40, ny = 70;
+    const nx = canvas.width - 60, ny = 96;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.beginPath();
-    ctx.arc(nx, ny, 26, 0, 2*Math.PI);
+    ctx.arc(nx, ny, 42, 0, 2*Math.PI);
     ctx.fill();
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(nx, ny - 16);
-    ctx.lineTo(nx - 8, ny + 8);
-    ctx.lineTo(nx, ny + 2);
-    ctx.lineTo(nx + 8, ny + 8);
+    ctx.moveTo(nx, ny - 26);
+    ctx.lineTo(nx - 13, ny + 13);
+    ctx.lineTo(nx, ny + 3);
+    ctx.lineTo(nx + 13, ny + 13);
     ctx.closePath();
     ctx.fill();
-    ctx.font = 'bold 13px sans-serif';
+    ctx.font = 'bold 20px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText('N', nx, ny + 12);
+    ctx.fillText('N', nx, ny + 18);
     ctx.textAlign = 'left';
 
-    // --- Barra superior con titulo, fecha y hora de generacion ---
+    // --- Barra superior con titulo (centrado), fecha y hora de generacion, y huso UTM ---
     const ahora = new Date();
     const fechaTexto = ahora.toLocaleDateString('es-CL') + ' ' + ahora.toLocaleTimeString('es-CL');
-    const alturaBarra = 46;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    const alturaBarra = 74;
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
     ctx.fillRect(0, 0, canvas.width, alturaBarra);
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffc700';
-    ctx.font = 'bold 20px sans-serif';
+    ctx.font = 'bold 30px sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Plano de terreno — Kit Terreno', 14, alturaBarra*0.36);
+    ctx.fillText('Plano de terreno — Kit Terreno', canvas.width/2, alturaBarra*0.36);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(fechaTexto, 14, alturaBarra*0.76);
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio, canvas.width/2, alturaBarra*0.78);
+    ctx.textAlign = 'left';
 
     canvas.toBlob(function(blob){
       if(!blob){
