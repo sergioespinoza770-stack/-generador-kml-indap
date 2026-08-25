@@ -4198,15 +4198,32 @@ function obtenerMapa(){
 
     mapa.on('click', function(e){
       if(!modoMedicionActivo) return;
-      // Poligono ya cerrado (3+ vertices) y tocaste AFUERA de el: se interpreta como "ya
-      // termine" — se apaga el modo solo, sin agregar un vertice de mas, para que puedas
-      // desplazarte libre o arrancar un punto/poligono nuevo de inmediato.
-      if(puntosCampo.length >= 3 && !puntoDentroDePoligonoCampo(e.latlng, puntosCampo)){
+      agregarPuntoCampo(e.latlng.lat, e.latlng.lng);
+    });
+
+    // Doble clic/doble toque: termina el polígono (o línea) a propósito, sin importar si el
+    // siguiente vértice real habría quedado "afuera" de la forma actual — eso hacía fallar
+    // formas cóncavas con la regla anterior. El segundo clic del doble clic ya alcanzó a
+    // agregar su propio vértice (agregarPuntoCampo via el 'click' de arriba) antes de que el
+    // navegador dispare 'dblclick' — lo sacamos (punto Y marcador), porque no es un vértice
+    // real, es solo la señal de "termine".
+    mapa.on('dblclick', function(e){
+      if(!modoMedicionActivo) return;
+      if(puntosCampo.length > 0){
+        puntosCampo.pop();
+        const marcadorSobrante = marcadoresVerticesCampo.pop();
+        if(marcadorSobrante) mapa.removeLayer(marcadorSobrante);
+      }
+      redibujarPoligonoCampo(mapa);
+      actualizarInfoCampo();
+      actualizarTextareaDesdeCampo();
+      guardarPuntosCampoEnStorage();
+      if(puntosCampo.length >= 3){
         desactivarModoMedicion();
         document.getElementById('campoInfo').textContent = 'Poligono cerrado. Toca "Crea punto o polígono" para trazar uno nuevo.';
-        return;
+      }else{
+        document.getElementById('campoInfo').textContent = 'Necesitas al menos 3 vertices para cerrar un poligono. Sigue tocando el mapa.';
       }
-      agregarPuntoCampo(e.latlng.lat, e.latlng.lng);
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
@@ -7499,28 +7516,34 @@ function anunciarUbicacionEncontrada(lat, lon){
 }
 
 document.getElementById('btnModoCampo').addEventListener('click', function(){
-  obtenerMapa();
+  const m = obtenerMapa();
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
   modoMedicionActivo = !modoMedicionActivo;
   const boton = document.getElementById('btnModoCampo');
   if(modoMedicionActivo){
     boton.classList.add('activo');
-    boton.title = 'Midiendo... toca el mapa en cada vértice (toca aquí de nuevo para parar)';
-    document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden.';
+    boton.title = 'Midiendo... toca el mapa en cada vértice (doble clic o toca aquí de nuevo para cerrar)';
+    document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden. Doble clic para cerrar el poligono.';
+    // Mientras se traza, el doble clic sirve para CERRAR el poligono — desactivamos el zoom
+    // por doble clic nativo de Leaflet, si no cada cierre tambien haria zoom de golpe.
+    m.doubleClickZoom.disable();
   }else{
     boton.classList.remove('activo');
     boton.title = 'Dibuja el polígono tocando el mapa';
+    m.doubleClickZoom.enable();
   }
 });
 
 // Apaga el modo "crear punto/poligono" SIN el scroll ni el mensaje de bienvenida que usa el
 // boton (eso solo tiene sentido cuando lo tocas vos mismo) — se usa cuando el cierre del modo
-// lo dispara un TOQUE en el mapa (ver mas abajo), no el boton.
+// lo dispara un doble clic en el mapa (ver mas abajo), no el boton.
 function desactivarModoMedicion(){
   modoMedicionActivo = false;
   const boton = document.getElementById('btnModoCampo');
   boton.classList.remove('activo');
   boton.title = 'Dibuja el polígono tocando el mapa';
+  const m = obtenerMapa();
+  m.doubleClickZoom.enable();
 }
 
 // Prueba clasica de punto-en-poligono (ray casting) usando los mismos puntosCampo — para
