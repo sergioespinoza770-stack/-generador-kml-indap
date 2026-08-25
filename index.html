@@ -1277,18 +1277,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
-  /* "Mi ubicacion" es casi siempre el primer toque al llegar al potrero — la destacamos con
-     el amarillo insignia de la app (fondo lleno en vez de solo el borde), para que sea la mas
-     notoria del grupo de un vistazo. */
-  .btn-icono.inicio{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
-    border-color:var(--accent-dark);
-    border-width:2.5px;
-    box-shadow:0 3px 14px rgba(255,199,0,0.4);
-  }
-  .btn-icono.inicio .texto-boton{
-    color:var(--accent-text);
-  }
+  /* "Mi ubicacion" ya no queda amarillo en reposo — ese color se confundia con "activado".
+     Ahora en reposo es igual de neutro que el resto de los botones, y solo se distingue
+     cuando de verdad esta activo (verde, via .btn-icono.activo mas abajo). */
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
     opacity:0.55;
