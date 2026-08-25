@@ -3573,32 +3573,38 @@ function generarMapaTerreno(){
           ctx.fillStyle = 'rgba(255,199,0,0.22)';
           ctx.fill();
         }
-        ctx.lineWidth = 6 * escalaMarcador;
+        ctx.lineWidth = 3.5 * escalaMarcador;
         ctx.strokeStyle = '#ffc700';
         ctx.stroke();
 
         // --- Medida (en metros) de cada segmento, sobre su punto medio ---
+        // Sin caja/recuadro (solo el numero, con un contorno oscuro para que se lea igual
+        // sobre cualquier fondo) y con letra chica — asi no se amontona cuando hay muchos
+        // vertices juntos. Los tramos MUY cortos en la imagen ni siquiera se rotulan: el
+        // numero no cabria de forma legible ahi y solo suma ruido visual; esos tramos se ven
+        // igual en el trazo amarillo, solo sin su numero encima.
+        const UMBRAL_PIXELES_PARA_ROTULAR = 34;
+        ctx.font = 'bold ' + Math.max(10, Math.round(11*escalaMarcador)) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         const cantidadTramos = puntosCampo.length >= 3 ? puntosCampo.length : puntosCampo.length - 1;
         for(let i = 0; i < cantidadTramos; i++){
           const p1 = puntosCampo[i];
           const p2 = puntosCampo[(i + 1) % puntosCampo.length];
+          const xy1 = pixelDe(p1[0], p1[1]);
+          const xy2 = pixelDe(p2[0], p2[1]);
+          const largoPixeles = Math.hypot(xy2[0]-xy1[0], xy2[1]-xy1[1]);
+          if(largoPixeles < UMBRAL_PIXELES_PARA_ROTULAR) continue;
           const largoM = distanciaMetros(p1[0], p1[1], p2[0], p2[1]);
           const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
-          const medioLat = (p1[0] + p2[0]) / 2, medioLon = (p1[1] + p2[1]) / 2;
-          const xy = pixelDe(medioLat, medioLon);
-          ctx.font = 'bold ' + Math.round(13*escalaMarcador) + 'px sans-serif';
-          const anchoTexto = ctx.measureText(largoTxt).width;
+          const mx = (xy1[0]+xy2[0])/2, my = (xy1[1]+xy2[1])/2;
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+          ctx.strokeText(largoTxt, mx, my);
           ctx.fillStyle = '#fff';
-          ctx.fillRect(xy[0] - anchoTexto/2 - 5, xy[1] - 11*escalaMarcador, anchoTexto + 10, 22*escalaMarcador);
-          ctx.strokeStyle = '#ffc700';
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(xy[0] - anchoTexto/2 - 5, xy[1] - 11*escalaMarcador, anchoTexto + 10, 22*escalaMarcador);
-          ctx.fillStyle = '#5a4a10';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(largoTxt, xy[0], xy[1]);
-          ctx.textAlign = 'left';
+          ctx.fillText(largoTxt, mx, my);
         }
+        ctx.textAlign = 'left';
 
         // --- Superficie total del poligono (solo si es un poligono cerrado, 3+ puntos) ---
         // Va JUSTO DEBAJO del poligono (no centrada adentro) para no taparlo ni pisar las
@@ -3612,12 +3618,12 @@ function generarMapaTerreno(){
             sumaX += xy[0];
           });
           const xCentro = sumaX / puntosCampo.length;
-          const yEtiqueta = maxYPoligono + 26*escalaMarcador;
+          const yEtiqueta = maxYPoligono + 24*escalaMarcador;
           const textoArea = '~' + areaHa.toFixed(2) + ' ha';
-          ctx.font = 'bold ' + Math.round(18*escalaMarcador) + 'px sans-serif';
+          ctx.font = 'bold ' + Math.round(16*escalaMarcador) + 'px sans-serif';
           const anchoArea = ctx.measureText(textoArea).width;
           ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(xCentro - anchoArea/2 - 10, yEtiqueta - 16*escalaMarcador, anchoArea + 20, 32*escalaMarcador);
+          ctx.fillRect(xCentro - anchoArea/2 - 10, yEtiqueta - 14*escalaMarcador, anchoArea + 20, 28*escalaMarcador);
           ctx.fillStyle = '#ffc700';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -3625,13 +3631,16 @@ function generarMapaTerreno(){
           ctx.textAlign = 'left';
         }
       }
+      // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
+      // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
+      // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
       puntosCampo.forEach(function(p){
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
-        ctx.arc(xy[0], xy[1], 15 * escalaMarcador, 0, 2*Math.PI);
+        ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
         ctx.fillStyle = '#fff';
         ctx.fill();
-        ctx.lineWidth = 5 * escalaMarcador;
+        ctx.lineWidth = 2.5 * escalaMarcador;
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
       });
