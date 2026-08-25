@@ -3416,6 +3416,39 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
 // poligono/puntos que se esten trazando — lista para descargar de inmediato, sin pasos extra.
 // JPG y no PDF a proposito: no depende de cargar ninguna libreria extra, pesa poco y se
 // comparte directo por WhatsApp, que es el uso mas comun en terreno.
+// Trae, en una sola consulta liviana, los caminos CON NOMBRE y las localidades (pueblos,
+// aldeas) dentro del area visible — para poder rotular caminos principales y mostrar el
+// sector/localidad mas cercana en el plano generado. Si falla (sin señal, timeout, etc.)
+// devuelve listas vacias y el plano se genera igual, solo sin esos rotulos.
+function obtenerViasYLugaresOverpass(bounds){
+  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  const consulta = '[out:json][timeout:20];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bbox + '););out geom;';
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
+
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 15000);
+
+  return fetch(url, { signal: controlador.signal }).then(function(resp){
+    clearTimeout(timeoutId);
+    if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
+    return resp.json();
+  }).then(function(data){
+    const vias = [];
+    const lugares = [];
+    (data.elements || []).forEach(function(el){
+      if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
+        vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
+      }else if(el.type === 'node' && el.tags && el.tags.name){
+        lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
+      }
+    });
+    return { vias: vias, lugares: lugares };
+  }).catch(function(){
+    clearTimeout(timeoutId);
+    return { vias: [], lugares: [] };
+  });
+}
+
 function generarMapaTerreno(){
   const m = obtenerMapa();
   const estado = document.getElementById('campoInfo');
@@ -3435,32 +3468,72 @@ function generarMapaTerreno(){
     return;
   }
 
-  if(estado) estado.textContent = 'Generando el mapa...';
+  if(estado) estado.textContent = 'Generando el mapa (imagen, caminos y localidades cercanas)...';
 
   const canvas = document.createElement('canvas');
   canvas.width = tilesX * 256;
   canvas.height = tilesY * 256;
   const ctx = canvas.getContext('2d');
 
-  const promesas = [];
+  const promesasTiles = [];
   for(let ty = minY; ty <= maxY; ty++){
     for(let tx = minX; tx <= maxX; tx++){
       const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
       const px = (tx - minX) * 256;
       const py = (ty - minY) * 256;
-      promesas.push(cargarTeselaConReintentos(url, 3).then(function(img){
+      promesasTiles.push(cargarTeselaConReintentos(url, 3).then(function(img){
         if(img) ctx.drawImage(img, px, py, 256, 256);
       }));
     }
   }
+  // La consulta de caminos/localidades se lanza EN PARALELO con la descarga de teselas
+  // (no una despues de la otra), para no duplicar el tiempo de espera.
+  const promesaVias = obtenerViasYLugaresOverpass(bounds);
 
-  Promise.all(promesas).then(function(){
+  Promise.all([Promise.all(promesasTiles), promesaVias]).then(function(resultados){
+    const datosVia = resultados[1];
     // Convierte lat/lon a coordenadas de pixel dentro de ESTE canvas (mismo sistema que las teselas).
     function pixelDe(lat, lon){
       const gx = (lon + 180) / 360 * Math.pow(2, zoom) * 256;
       const latRad = lat * Math.PI / 180;
       const gy = (1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom) * 256;
       return [gx - minX*256, gy - minY*256];
+    }
+
+    // Alto de la barra de titulo — se define ACA (no mas abajo) porque la grilla la necesita
+    // para no poner sus etiquetas justo donde después queda tapado por la barra superior.
+    const alturaBarra = 74;
+
+    // --- Caminos con nombre de la zona (si la consulta a OpenStreetMap respondio a tiempo) ---
+    if(datosVia.vias.length > 0){
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.setLineDash([10, 6]);
+      const nombresYaPuestos = [];
+      datosVia.vias.slice(0, 25).forEach(function(via){
+        if(via.puntos.length < 2) return;
+        ctx.beginPath();
+        via.puntos.forEach(function(p, i){
+          const xy = pixelDe(p[0], p[1]);
+          if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+        });
+        ctx.stroke();
+        // Rotula cada camino una sola vez (en su punto medio), y evita apilar el mismo
+        // nombre muchas veces cuando OSM trae el camino cortado en varios tramos seguidos.
+        if(nombresYaPuestos.indexOf(via.nombre) === -1){
+          nombresYaPuestos.push(via.nombre);
+          const medio = via.puntos[Math.floor(via.puntos.length/2)];
+          const xy = pixelDe(medio[0], medio[1]);
+          ctx.font = 'bold 13px sans-serif';
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          const anchoTexto = ctx.measureText(via.nombre).width;
+          ctx.fillRect(xy[0] - 4, xy[1] - 16, anchoTexto + 8, 20);
+          ctx.fillStyle = '#fff';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(via.nombre, xy[0], xy[1] - 6);
+        }
+      });
+      ctx.setLineDash([]);
     }
 
     // --- Poligono/linea/puntos que se esten trazando ahora en modo campo (si hay) ---
@@ -3483,6 +3556,46 @@ function generarMapaTerreno(){
         ctx.lineWidth = 6 * escalaMarcador;
         ctx.strokeStyle = '#ffc700';
         ctx.stroke();
+
+        // --- Medida (en metros) de cada segmento, sobre su punto medio ---
+        const cantidadTramos = puntosCampo.length >= 3 ? puntosCampo.length : puntosCampo.length - 1;
+        for(let i = 0; i < cantidadTramos; i++){
+          const p1 = puntosCampo[i];
+          const p2 = puntosCampo[(i + 1) % puntosCampo.length];
+          const largoM = distanciaMetros(p1[0], p1[1], p2[0], p2[1]);
+          const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+          const medioLat = (p1[0] + p2[0]) / 2, medioLon = (p1[1] + p2[1]) / 2;
+          const xy = pixelDe(medioLat, medioLon);
+          ctx.font = 'bold ' + Math.round(13*escalaMarcador) + 'px sans-serif';
+          const anchoTexto = ctx.measureText(largoTxt).width;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(xy[0] - anchoTexto/2 - 5, xy[1] - 11*escalaMarcador, anchoTexto + 10, 22*escalaMarcador);
+          ctx.strokeStyle = '#ffc700';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(xy[0] - anchoTexto/2 - 5, xy[1] - 11*escalaMarcador, anchoTexto + 10, 22*escalaMarcador);
+          ctx.fillStyle = '#5a4a10';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(largoTxt, xy[0], xy[1]);
+          ctx.textAlign = 'left';
+        }
+
+        // --- Superficie total del poligono (solo si es un poligono cerrado, 3+ puntos) ---
+        if(puntosCampo.length >= 3){
+          const areaHa = calcularAreaHa(puntosCampo);
+          const centro = centroide(puntosCampo);
+          const xyCentro = pixelDe(centro[0], centro[1]);
+          const textoArea = '~' + areaHa.toFixed(2) + ' ha';
+          ctx.font = 'bold ' + Math.round(18*escalaMarcador) + 'px sans-serif';
+          const anchoArea = ctx.measureText(textoArea).width;
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          ctx.fillRect(xyCentro[0] - anchoArea/2 - 10, xyCentro[1] - 16*escalaMarcador, anchoArea + 20, 32*escalaMarcador);
+          ctx.fillStyle = '#ffc700';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(textoArea, xyCentro[0], xyCentro[1]);
+          ctx.textAlign = 'left';
+        }
       }
       puntosCampo.forEach(function(p){
         const xy = pixelDe(p[0], p[1]);
@@ -3526,19 +3639,20 @@ function generarMapaTerreno(){
       const ll = utmToLatLon(e, utmCentro.norte, utmCentro.huso, utmCentro.hemisferio === 'S');
       const xy = pixelDe(ll[0], ll[1]);
       ctx.beginPath();
-      ctx.moveTo(xy[0], 0);
+      ctx.moveTo(xy[0], alturaBarra);
       ctx.lineTo(xy[0], canvas.height);
       ctx.stroke();
-      ctx.fillText(Math.round(e) + 'E', xy[0] + 4, 4);
+      // La etiqueta va justo DEBAJO de la barra de titulo, nunca encima (ahi quedaria tapada).
+      ctx.fillText(Math.round(e) + 'E', xy[0] + 4, alturaBarra + 4);
     }
     for(let n = Math.ceil(minN/intervaloUtm)*intervaloUtm; n <= maxN; n += intervaloUtm){
       const ll = utmToLatLon(utmCentro.este, n, utmCentro.huso, utmCentro.hemisferio === 'S');
       const xy = pixelDe(ll[0], ll[1]);
       ctx.beginPath();
-      ctx.moveTo(0, xy[1]);
+      ctx.moveTo(0, Math.max(xy[1], alturaBarra));
       ctx.lineTo(canvas.width, xy[1]);
       ctx.stroke();
-      ctx.fillText(Math.round(n) + 'N', 4, xy[1] + 4);
+      ctx.fillText(Math.round(n) + 'N', 4, Math.max(xy[1] + 4, alturaBarra + 4));
     }
     // --- Escala grafica (mismo metrosPorPixel ya calculado arriba para la grilla UTM) ---
     let metrosBarra = 10;
@@ -3582,10 +3696,20 @@ function generarMapaTerreno(){
     ctx.fillText('N', nx, ny + 18);
     ctx.textAlign = 'left';
 
-    // --- Barra superior con titulo (centrado), fecha y hora de generacion, y huso UTM ---
+    // --- Sector/localidad mas cercana al centro de esta vista (si la consulta la trajo) ---
+    let sectorTexto = '';
+    if(datosVia.lugares.length > 0){
+      let masCercano = null, distMinima = Infinity;
+      datosVia.lugares.forEach(function(lugar){
+        const d = distanciaMetros(latCentro, lonCentro, lugar.lat, lugar.lon);
+        if(d < distMinima){ distMinima = d; masCercano = lugar; }
+      });
+      if(masCercano) sectorTexto = '   ·   Sector: ' + masCercano.nombre;
+    }
+
+    // --- Barra superior con titulo (centrado), fecha y hora de generacion, huso UTM y sector ---
     const ahora = new Date();
     const fechaTexto = ahora.toLocaleDateString('es-CL') + ' ' + ahora.toLocaleTimeString('es-CL');
-    const alturaBarra = 74;
     ctx.fillStyle = 'rgba(0,0,0,0.62)';
     ctx.fillRect(0, 0, canvas.width, alturaBarra);
     ctx.textAlign = 'center';
@@ -3595,7 +3719,7 @@ function generarMapaTerreno(){
     ctx.fillText('Plano de terreno — Kit Terreno', canvas.width/2, alturaBarra*0.36);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 17px sans-serif';
-    ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio, canvas.width/2, alturaBarra*0.78);
+    ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio + sectorTexto, canvas.width/2, alturaBarra*0.78);
     ctx.textAlign = 'left';
 
     canvas.toBlob(function(blob){
