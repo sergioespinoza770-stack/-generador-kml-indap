@@ -4198,6 +4198,14 @@ function obtenerMapa(){
 
     mapa.on('click', function(e){
       if(!modoMedicionActivo) return;
+      // Poligono ya cerrado (3+ vertices) y tocaste AFUERA de el: se interpreta como "ya
+      // termine" — se apaga el modo solo, sin agregar un vertice de mas, para que puedas
+      // desplazarte libre o arrancar un punto/poligono nuevo de inmediato.
+      if(puntosCampo.length >= 3 && !puntoDentroDePoligonoCampo(e.latlng, puntosCampo)){
+        desactivarModoMedicion();
+        document.getElementById('campoInfo').textContent = 'Poligono cerrado. Toca "Crea punto o polígono" para trazar uno nuevo.';
+        return;
+      }
       agregarPuntoCampo(e.latlng.lat, e.latlng.lng);
     });
 
@@ -7504,6 +7512,31 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
     boton.title = 'Dibuja el polígono tocando el mapa';
   }
 });
+
+// Apaga el modo "crear punto/poligono" SIN el scroll ni el mensaje de bienvenida que usa el
+// boton (eso solo tiene sentido cuando lo tocas vos mismo) — se usa cuando el cierre del modo
+// lo dispara un TOQUE en el mapa (ver mas abajo), no el boton.
+function desactivarModoMedicion(){
+  modoMedicionActivo = false;
+  const boton = document.getElementById('btnModoCampo');
+  boton.classList.remove('activo');
+  boton.title = 'Dibuja el polígono tocando el mapa';
+}
+
+// Prueba clasica de punto-en-poligono (ray casting) usando los mismos puntosCampo — para
+// distinguir un toque "adentro" (seguis viendo/revisando el potrero ya trazado) de uno
+// "afuera" (ya terminaste, hay que soltar el lapiz solo).
+function puntoDentroDePoligonoCampo(latlng, puntos){
+  let dentro = false;
+  for(let i = 0, j = puntos.length - 1; i < puntos.length; j = i++){
+    const yi = puntos[i][0], xi = puntos[i][1];
+    const yj = puntos[j][0], xj = puntos[j][1];
+    const interseca = ((yi > latlng.lat) !== (yj > latlng.lat)) &&
+      (latlng.lng < (xj - xi) * (latlng.lat - yi) / (yj - yi) + xi);
+    if(interseca) dentro = !dentro;
+  }
+  return dentro;
+}
 
 // Muestra la medida (en metros) de cada segmento del poligono/linea que se esta trazando,
 // como una pequeña etiqueta flotando sobre el punto medio de ese tramo — asi el usuario ve
