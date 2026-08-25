@@ -3420,30 +3420,42 @@ function obtenerViasYLugaresOverpass(bounds){
   const anchoLon = bounds.getEast() - bounds.getWest();
   const bboxLugares = (bounds.getSouth() - altoLat*2) + ',' + (bounds.getWest() - anchoLon*2) + ',' +
                        (bounds.getNorth() + altoLat*2) + ',' + (bounds.getEast() + anchoLon*2);
-  const consulta = '[out:json][timeout:20];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + '););out geom;';
-  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(consulta);
+  const consulta = '[out:json][timeout:25];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + '););out geom;';
+  const query = encodeURIComponent(consulta);
 
-  const controlador = new AbortController();
-  const timeoutId = setTimeout(function(){ controlador.abort(); }, 15000);
+  // El servidor publico de Overpass a veces demora bastante (tiene mucha carga en horas punta):
+  // el limite de espera del lado del navegador tiene que ser MAYOR al "timeout" pedido en la
+  // propia consulta (25s), si no el navegador corta la espera antes de que el servidor
+  // siquiera llegue a responder — eso era lo que estaba pasando antes (se cortaba a los 15s).
+  function intentarUrl(url){
+    const controlador = new AbortController();
+    const timeoutId = setTimeout(function(){ controlador.abort(); }, 30000);
+    return fetch(url, { signal: controlador.signal }).then(function(resp){
+      clearTimeout(timeoutId);
+      if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
+      return resp.json();
+    }).finally(function(){ clearTimeout(timeoutId); });
+  }
 
-  return fetch(url, { signal: controlador.signal }).then(function(resp){
-    clearTimeout(timeoutId);
-    if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
-    return resp.json();
-  }).then(function(data){
-    const vias = [];
-    const lugares = [];
-    (data.elements || []).forEach(function(el){
-      if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
-        vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
-      }else if(el.type === 'node' && el.tags && el.tags.name){
-        lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
-      }
-    });
-    return { vias: vias, lugares: lugares };
-  }).catch(function(){
-    clearTimeout(timeoutId);
-    return { vias: [], lugares: [] };
+  // Si el servidor principal falla o no responde a tiempo, probamos un espejo antes de
+  // rendirnos — asi no dependemos de que un solo servidor publico este disponible.
+  return intentarUrl('https://overpass-api.de/api/interpreter?data=' + query)
+    .catch(function(){
+      return intentarUrl('https://overpass.kumi.systems/api/interpreter?data=' + query);
+    })
+    .then(function(data){
+      const vias = [];
+      const lugares = [];
+      (data.elements || []).forEach(function(el){
+        if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
+          vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
+        }else if(el.type === 'node' && el.tags && el.tags.name){
+          lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
+        }
+      });
+      return { vias: vias, lugares: lugares, ok: true };
+    }).catch(function(){
+      return { vias: [], lugares: [], ok: false };
   });
 }
 
@@ -3752,7 +3764,8 @@ function generarMapaTerreno(){
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      if(estado) estado.textContent = 'Mapa generado y descargado: ' + nombreArchivo;
+      const avisoVias = datosVia.ok ? '' : ' (sin caminos/sector: no se pudo consultar OpenStreetMap — revisa la señal e intenta de nuevo)';
+      if(estado) estado.textContent = 'Mapa generado y descargado: ' + nombreArchivo + avisoVias;
     }, 'image/jpeg', 0.9);
   });
 }
