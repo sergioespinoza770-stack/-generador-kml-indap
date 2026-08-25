@@ -1239,6 +1239,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:var(--accent-dark);
     box-shadow:0 0 0 4px rgba(255,199,0,0.35);
   }
+  /* El boton de "crear punto/poligono" usa VERDE en vez del amarillo generico de .activo —
+     asi se distingue claramente de "estoy seleccionado" (amarillo, como los otros toggles) y
+     se lee como "estoy dibujando ahora mismo". Al desactivarlo vuelve solo a .btn-icono base
+     (blanco con borde amarillo), su estado original de siempre. */
+  .btn-icono.dibujar.activo{
+    background:linear-gradient(135deg, #3fa66b, #57c084);
+    border-color:#1e7a45;
+    box-shadow:0 0 0 4px rgba(63,166,107,0.35);
+  }
+  .btn-icono.dibujar.activo .texto-boton{
+    color:#fff;
+  }
   .btn-icono.peligro{
     border-color:#e0776b;
   }
@@ -2446,8 +2458,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono inicio" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">
           <span class="emoji-boton">📍</span><span class="texto-boton">Mi<br>ubicación</span>
         </button>
-        <button type="button" class="btn-icono" id="btnModoCampo" title="Dibuja el polígono tocando el mapa" aria-label="Dibuja el polígono tocando el mapa">
-          <span class="emoji-boton">✏️</span><span class="texto-boton">Dibuja<br>acá</span>
+        <button type="button" class="btn-icono dibujar" id="btnModoCampo" title="Dibuja el polígono tocando el mapa" aria-label="Dibuja el polígono tocando el mapa">
+          <span class="emoji-boton">✏️</span><span class="texto-boton">Crea punto<br>o polígono</span>
         </button>
         <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">
           <span class="emoji-boton">↩️</span><span class="texto-boton">Deshacer</span>
@@ -7069,19 +7081,13 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
   modoMedicionActivo = !modoMedicionActivo;
   const boton = document.getElementById('btnModoCampo');
-  const textoBoton = boton.querySelector('.texto-boton');
-  const emojiBoton = boton.querySelector('.emoji-boton');
   if(modoMedicionActivo){
     boton.classList.add('activo');
     boton.title = 'Midiendo... toca el mapa en cada vértice (toca aquí de nuevo para parar)';
-    if(textoBoton) textoBoton.textContent = 'Activado';
-    if(emojiBoton) emojiBoton.textContent = '✅';
     document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden.';
   }else{
     boton.classList.remove('activo');
     boton.title = 'Dibuja el polígono tocando el mapa';
-    if(textoBoton) textoBoton.textContent = 'Desactivado';
-    if(emojiBoton) emojiBoton.textContent = '✏️';
   }
 });
 
