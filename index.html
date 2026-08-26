@@ -1265,6 +1265,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.exportar{
     border-color:#3fa66b;
   }
+  /* "Subir KML/KMZ" dentro del panel del mapa — mismo verde que su version en la pestaña
+     Crear, para que se reconozca como la misma accion este donde este. */
+  .btn-icono.kml-cta-mapa{
+    border-color:#3fa66b;
+    background:#eef8f1;
+  }
   .btn-icono.navegar{
     border-color:#1a73e8;
   }
@@ -2474,6 +2480,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono dibujar" id="btnModoCampo" title="Dibuja el polígono tocando el mapa" aria-label="Dibuja el polígono tocando el mapa">
           <span class="emoji-boton">✏️</span><span class="texto-boton">Crea punto<br>o polígono</span>
         </button>
+        <button type="button" class="btn-icono kml-cta-mapa" id="btnSubirKmlMapa" title="Subir un KML o KMZ directo desde el mapa, para navegar" aria-label="Subir KML o KMZ">
+          <span class="emoji-boton">📤</span><span class="texto-boton">Subir<br>KML/KMZ</span>
+        </button>
         <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">
           <span class="emoji-boton">↩️</span><span class="texto-boton">Deshacer</span>
         </button>
@@ -2481,7 +2490,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <span class="emoji-boton">🗑️</span><span class="texto-boton">Borrar</span>
         </button>
         <button type="button" class="btn-icono exportar" id="btnExportarCampo" style="display:none;" title="Exportar este polígono como KML" aria-label="Exportar KML">
-          <span class="emoji-boton">⬇️</span><span class="texto-boton">Descargar</span>
+          <span class="emoji-boton">⬇️</span><span class="texto-boton">Descargar<br>KML</span>
         </button>
         <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">
           <span class="emoji-boton">🧭</span><span class="texto-boton">Llevarme<br>ahí</span>
@@ -7249,6 +7258,13 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
 
 document.getElementById('archivoKml').addEventListener('change', function(e){
   procesarArchivosKml(e.target.files, function(){ e.target.value = ''; });
+});
+
+// El boton "Subir KML/KMZ" del panel del mapa (pestaña Navegar) usa el MISMO input de archivo
+// que la pestaña Crear — asi no duplicamos logica de procesamiento, solo abrimos el selector
+// de archivos directo desde donde estas viendo el mapa, sin tener que cambiar de pestaña.
+document.getElementById('btnSubirKmlMapa').addEventListener('click', function(){
+  document.getElementById('archivoKml').click();
 });
 
 // ---------- Arrastrar y soltar archivos .kml/.kmz directo sobre la ventana ----------
