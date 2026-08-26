@@ -1271,6 +1271,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:#3fa66b;
     background:#eef8f1;
   }
+  /* Boton "Más": agrupa los 4 botones de uso ocasional (Subir KML, Generar Mapa, Sin señal,
+     Preparar zona) — se ven gris/neutro en vez de un color de acento, para que no compita
+     visualmente con los botones de accion real; solo es un interruptor de "mostrar mas". */
+  .btn-icono.mas-opciones{
+    border-color:#b8b6a8;
+    background:#f4f3ee;
+    color:#5a5a5a;
+  }
+  .btn-icono.mas-opciones.activo{
+    background:linear-gradient(135deg, #e2e0d5, #f4f3ee);
+    border-color:#8a8a7a;
+    box-shadow:none;
+  }
+  .btn-icono.mas-opciones.activo .texto-boton{
+    color:#333;
+  }
   .btn-icono.navegar{
     border-color:#1a73e8;
   }
@@ -1574,6 +1590,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
     .nav-mapa-wrap{ height:65vh; min-height:320px; }
     .tipo-selector{ flex-direction:column; }
     .tipo-opt{ min-width:0; }
+    /* En el telefono, la columna de botones sobre el mapa (Mi ubicacion, Crea punto,
+       Subir KML, Deshacer, Borrar, Descargar, Llevarme ahi, Generar Mapa, Sin señal...)
+       puede llegar a ser mas alta que la pantalla entera cuando estan todos visibles a la
+       vez (trazando un poligono) — se "caen" fuera de lo que se alcanza a ver. Pasarlos a
+       2 columnas mas chicas corta esa altura casi a la mitad, sin esconder ningun boton. */
+    .toolbar-campo{
+      display:grid;
+      grid-template-columns:repeat(2, 1fr);
+      gap:6px;
+      top:8px;
+      right:8px;
+    }
+    .toolbar-campo .btn-icono{
+      width:60px;
+      height:52px;
+      border-radius:11px;
+      gap:1px;
+    }
+    .toolbar-campo .emoji-boton{
+      font-size:16px;
+    }
+    .toolbar-campo .texto-boton{
+      font-size:9px;
+    }
   }
   .zona-arrastrar{
     display:none;
@@ -2480,9 +2520,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono dibujar" id="btnModoCampo" title="Dibuja el polígono tocando el mapa" aria-label="Dibuja el polígono tocando el mapa">
           <span class="emoji-boton">✏️</span><span class="texto-boton">Crea punto<br>o polígono</span>
         </button>
-        <button type="button" class="btn-icono kml-cta-mapa" id="btnSubirKmlMapa" title="Subir un KML o KMZ directo desde el mapa, para navegar" aria-label="Subir KML o KMZ">
-          <span class="emoji-boton">📤</span><span class="texto-boton">Subir<br>KML/KMZ</span>
-        </button>
         <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">
           <span class="emoji-boton">↩️</span><span class="texto-boton">Deshacer</span>
         </button>
@@ -2495,15 +2532,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">
           <span class="emoji-boton">🧭</span><span class="texto-boton">Llevarme<br>ahí</span>
         </button>
-        <button type="button" class="btn-icono camara" id="btnGeneradorMapa" title="Genera un plano JPG con norte, escala, grilla y coordenadas" aria-label="Generar mapa">
-          <span class="emoji-boton">🗺️</span><span class="texto-boton">Generar<br>Mapa</span>
+        <!-- Los 4 botones de uso ocasional (no los tocas en cada tramo, sino una vez por
+             visita o ni eso) quedan agrupados y escondidos por defecto detras de "Más".
+             display:contents en el wrapper cuando esta expandido hace que sus botones se
+             acomoden como si fueran hijos directos de .toolbar-campo (mismo flex/grid de
+             siempre) — no es una fila aparte, se integran en el mismo orden. -->
+        <button type="button" class="btn-icono mas-opciones" id="btnMasOpciones" title="Ver más opciones" aria-label="Ver más opciones">
+          <span class="emoji-boton">⋯</span><span class="texto-boton">Más</span>
         </button>
-        <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
-          <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
-        </button>
-        <button type="button" class="btn-icono descargar-zona" id="btnPrepararZona" title="Descargar esta zona para usar sin señal" aria-label="Preparar zona sin señal">
-          <span class="emoji-boton">📦</span><span class="texto-boton">Preparar<br>zona</span>
-        </button>
+        <div id="grupoMasOpciones" style="display:none;">
+          <button type="button" class="btn-icono kml-cta-mapa" id="btnSubirKmlMapa" title="Subir un KML o KMZ directo desde el mapa, para navegar" aria-label="Subir KML o KMZ">
+            <span class="emoji-boton">📤</span><span class="texto-boton">Subir<br>KML/KMZ</span>
+          </button>
+          <button type="button" class="btn-icono camara" id="btnGeneradorMapa" title="Genera un plano JPG con norte, escala, grilla y coordenadas" aria-label="Generar mapa">
+            <span class="emoji-boton">🗺️</span><span class="texto-boton">Generar<br>Mapa</span>
+          </button>
+          <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
+            <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
+          </button>
+          <button type="button" class="btn-icono descargar-zona" id="btnPrepararZona" title="Descargar esta zona para usar sin señal" aria-label="Preparar zona sin señal">
+            <span class="emoji-boton">📦</span><span class="texto-boton">Preparar<br>zona</span>
+          </button>
+        </div>
       </div>
       <button type="button" id="btnRecentrarNav" title="Volver a mi ubicación actual" aria-label="Volver a mi ubicación actual" style="display:none;">📍</button>
       <div class="indicador-señal" id="indicadorSeñal"><span class="punto-señal" id="puntoSeñal"></span><span id="textoSeñal">En línea</span></div>
@@ -7265,6 +7315,18 @@ document.getElementById('archivoKml').addEventListener('change', function(e){
 // de archivos directo desde donde estas viendo el mapa, sin tener que cambiar de pestaña.
 document.getElementById('btnSubirKmlMapa').addEventListener('click', function(){
   document.getElementById('archivoKml').click();
+});
+
+// "Más": esconde/muestra los 4 botones de uso ocasional. display:contents (no "block") hace
+// que, al expandir, esos botones se acomoden como si fueran hijos directos de .toolbar-campo
+// (mismo orden dentro del mismo flex/grid) — no aparecen como una fila aparte pegada abajo.
+document.getElementById('btnMasOpciones').addEventListener('click', function(){
+  const grupo = document.getElementById('grupoMasOpciones');
+  const boton = this;
+  const expandido = grupo.style.display === 'contents';
+  grupo.style.display = expandido ? 'none' : 'contents';
+  boton.querySelector('.texto-boton').textContent = expandido ? 'Más' : 'Menos';
+  boton.classList.toggle('activo', !expandido);
 });
 
 // ---------- Arrastrar y soltar archivos .kml/.kmz directo sobre la ventana ----------
