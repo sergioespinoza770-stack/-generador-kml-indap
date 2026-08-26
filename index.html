@@ -2222,7 +2222,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <div class="wrap">
   <h1>Kit Terreno</h1>
-  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, y tomar fotografías georreferenciadas — todo junto, sin depender de conexión.</p>
+  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, tomar fotografías georreferenciadas, y ahora también generar el plano de terreno — todo junto, sin depender de conexión.</p>
 
   <!-- Pantalla de inicio: 3 tarjetas grandes, tipo dashboard moderno. Tocarlas "despliega"
        esa etapa a pantalla completa (ver cambiarEtapa) — la app arranca siempre acá, y cada
@@ -2486,8 +2486,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">
           <span class="emoji-boton">🧭</span><span class="texto-boton">Llevarme<br>ahí</span>
         </button>
-        <button type="button" class="btn-icono camara" id="btnGeneradorMapa" title="Genera un plano JPG con norte, escala, grilla y coordenadas" aria-label="Generador de mapa">
-          <span class="emoji-boton">🗺️</span><span class="texto-boton">Generador<br>de mapa</span>
+        <button type="button" class="btn-icono camara" id="btnGeneradorMapa" title="Genera un plano JPG con norte, escala, grilla y coordenadas" aria-label="Generar mapa">
+          <span class="emoji-boton">🗺️</span><span class="texto-boton">Generar<br>Mapa</span>
         </button>
         <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
           <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
@@ -3481,9 +3481,15 @@ function generarMapaTerreno(){
   if(estado) estado.textContent = 'Generando el mapa (imagen, caminos y localidades cercanas)...';
 
   const canvas = document.createElement('canvas');
+  const alturaFirma = Math.max(120, Math.min(240, Math.round(tilesX * 256 * 0.16)));
   canvas.width = tilesX * 256;
-  canvas.height = tilesY * 256;
+  canvas.height = tilesY * 256 + alturaFirma;
   const ctx = canvas.getContext('2d');
+  // El pie de firma queda en blanco por defecto: pintamos todo el canvas de blanco ANTES de
+  // las teselas, porque un canvas nuevo es transparente y al exportar a JPG (que no tiene
+  // transparencia) esa franja de abajo saldria negra si no la pintamos primero.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const promesasTiles = [];
   for(let ty = minY; ty <= maxY; ty++){
@@ -3646,6 +3652,28 @@ function generarMapaTerreno(){
       });
     }
 
+    // --- Tu ubicacion actual (el punto azul), si "Mi ubicacion" esta activo y cae dentro de
+    // esta vista — el mismo estilo de punto que usa Leaflet/Google Maps para que se reconozca
+    // de inmediato como "estoy parado aca", y no se confunda con los vertices del poligono.
+    if(marcadorUbicacion){
+      const ll = marcadorUbicacion.getLatLng();
+      if(ll.lat <= bounds.getNorth() && ll.lat >= bounds.getSouth() && ll.lng >= bounds.getWest() && ll.lng <= bounds.getEast()){
+        const xy = pixelDe(ll.lat, ll.lng);
+        const radioHalo = 14 * escalaMarcador;
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], radioHalo, 0, 2*Math.PI);
+        ctx.fillStyle = 'rgba(26,115,232,0.25)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 7 * escalaMarcador, 0, 2*Math.PI);
+        ctx.fillStyle = '#1a73e8';
+        ctx.fill();
+        ctx.lineWidth = 2.5 * escalaMarcador;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+      }
+    }
+
     // --- Grilla en UTM: lineas de Este (verticales) y Norte (horizontales) ---
     // Como el area capturada es chica (unos cientos de metros a pocos km), aproximamos cada
     // linea como recta usando un solo punto de referencia (centro) para la conversion UTM -> lat/lon
@@ -3758,6 +3786,61 @@ function generarMapaTerreno(){
     ctx.font = 'bold 17px sans-serif';
     ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio + sectorTexto, canvas.width/2, alturaBarra*0.78);
     ctx.textAlign = 'left';
+
+    // --- Pie de firma: espacio para completar a mano Nombre, RUT, Telefono y Firma del
+    // profesional que respalda este plano — linea en blanco debajo de la imagen del mapa,
+    // fuera del area satelital, para no tapar nada del terreno. ---
+    const yFirma = tilesY * 256;
+    const fPad = Math.max(14, Math.min(30, Math.round(canvas.width * 0.025)));
+    const fFuente = Math.max(13, Math.min(22, Math.round(canvas.width * 0.017)));
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, yFirma);
+    ctx.lineTo(canvas.width, yFirma);
+    ctx.stroke();
+
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold ' + fFuente + 'px sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
+    // Fila 1: Nombre (ancho completo). Fila 2: RUT y Telefono (mitad y mitad).
+    // Fila 3: Firma (ancho completo, la linea mas larga porque ahi va la firma en si).
+    const col2X = canvas.width / 2 + fPad/2;
+    const anchoCol = canvas.width / 2 - fPad*1.5;
+    const filaAltoTexto = fFuente + 8;
+    let yFila = yFirma + fPad + fFuente;
+
+    ctx.fillText('Nombre:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('Nombre:').width + 10, yFila);
+    ctx.lineTo(canvas.width - fPad, yFila);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    yFila += filaAltoTexto + Math.round(fFuente*0.9);
+
+    ctx.fillText('RUT:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('RUT:').width + 10, yFila);
+    ctx.lineTo(fPad + anchoCol, yFila);
+    ctx.stroke();
+
+    ctx.fillText('Teléfono:', col2X, yFila);
+    ctx.beginPath();
+    ctx.moveTo(col2X + ctx.measureText('Teléfono:').width + 10, yFila);
+    ctx.lineTo(col2X + anchoCol, yFila);
+    ctx.stroke();
+
+    yFila += filaAltoTexto + Math.round(fFuente*0.9);
+
+    ctx.fillText('Firma:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('Firma:').width + 10, yFila);
+    ctx.lineTo(canvas.width - fPad, yFila);
+    ctx.stroke();
 
     canvas.toBlob(function(blob){
       if(!blob){
