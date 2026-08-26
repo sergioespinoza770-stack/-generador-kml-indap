@@ -3502,7 +3502,7 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
 // sector/localidad mas cercana en el plano generado. Si falla (sin señal, timeout, etc.)
 // devuelve listas vacias y el plano se genera igual, solo sin esos rotulos.
 function obtenerViasYLugaresOverpass(bounds){
-  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  const bboxCaminos = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
   // Para localidades usamos un bbox mas ancho (bounds x5) que para caminos: en zona rural es
   // comun que no haya ningun pueblo/villorrio con nombre DENTRO de la vista exacta del mapa,
   // pero igual sirve mostrar cual es el sector/localidad mas cercana como referencia.
@@ -3510,16 +3510,14 @@ function obtenerViasYLugaresOverpass(bounds){
   const anchoLon = bounds.getEast() - bounds.getWest();
   const bboxLugares = (bounds.getSouth() - altoLat*2) + ',' + (bounds.getWest() - anchoLon*2) + ',' +
                        (bounds.getNorth() + altoLat*2) + ',' + (bounds.getEast() + anchoLon*2);
-  const consulta = '[out:json][timeout:25];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + '););out geom;';
-  const query = encodeURIComponent(consulta);
 
   // El servidor publico de Overpass a veces demora bastante (tiene mucha carga en horas punta):
   // el limite de espera del lado del navegador tiene que ser MAYOR al "timeout" pedido en la
-  // propia consulta (25s), si no el navegador corta la espera antes de que el servidor
-  // siquiera llegue a responder — eso era lo que estaba pasando antes (se cortaba a los 15s).
+  // propia consulta, si no el navegador corta la espera antes de que el servidor siquiera
+  // llegue a responder.
   function intentarUrl(url){
     const controlador = new AbortController();
-    const timeoutId = setTimeout(function(){ controlador.abort(); }, 30000);
+    const timeoutId = setTimeout(function(){ controlador.abort(); }, 20000);
     return fetch(url, { signal: controlador.signal }).then(function(resp){
       clearTimeout(timeoutId);
       if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
@@ -3527,26 +3525,75 @@ function obtenerViasYLugaresOverpass(bounds){
     }).finally(function(){ clearTimeout(timeoutId); });
   }
 
-  // Si el servidor principal falla o no responde a tiempo, probamos un espejo antes de
-  // rendirnos — asi no dependemos de que un solo servidor publico este disponible.
-  return intentarUrl('https://overpass-api.de/api/interpreter?data=' + query)
-    .catch(function(){
-      return intentarUrl('https://overpass.kumi.systems/api/interpreter?data=' + query);
+  // Prueba el servidor principal y, si falla, DOS espejos distintos antes de rendirse — mas
+  // resistente que depender de un solo servidor publico gratuito (que no tiene garantia de
+  // estar siempre arriba).
+  function consultarConRespaldos(consulta){
+    const query = encodeURIComponent(consulta);
+    return intentarUrl('https://overpass-api.de/api/interpreter?data=' + query)
+      .catch(function(){ return intentarUrl('https://overpass.kumi.systems/api/interpreter?data=' + query); })
+      .catch(function(){ return intentarUrl('https://overpass.openstreetmap.ru/api/interpreter?data=' + query); });
+  }
+
+  // Caminos y localidades van en DOS consultas independientes, en paralelo — asi si una se
+  // cae o se corta por lentitud, la otra puede seguir funcionando igual (antes iban en una
+  // sola consulta combinada: si esa fallaba, se perdian los dos datos juntos aunque solo uno
+  // de los dos fuera realmente el problema).
+  const consultaCaminos = '[out:json][timeout:18];way["highway"]["name"](' + bboxCaminos + ');out geom;';
+  const consultaLugares = '[out:json][timeout:18];node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + ');out;';
+
+  const promesaCaminos = consultarConRespaldos(consultaCaminos).then(function(data){
+    const vias = [];
+    (data.elements || []).forEach(function(el){
+      if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
+        vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
+      }
+    });
+    return vias;
+  }).catch(function(){ return null; }); // null = fallo esta consulta puntual (no ambas)
+
+  const promesaLugares = consultarConRespaldos(consultaLugares).then(function(data){
+    const lugares = [];
+    (data.elements || []).forEach(function(el){
+      if(el.type === 'node' && el.tags && el.tags.name){
+        lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
+      }
+    });
+    return lugares;
+  }).catch(function(){ return null; });
+
+  return Promise.all([promesaCaminos, promesaLugares]).then(function(resultados){
+    const vias = resultados[0], lugares = resultados[1];
+    return {
+      vias: vias || [],
+      lugares: lugares || [],
+      ok: vias !== null && lugares !== null,
+      okParcial: vias !== null || lugares !== null
+    };
+  });
+}
+
+// Sector/localidad del centro del mapa, via Nominatim (el mismo motor ya usado en el buscador
+// de ciudad de esta app, mas simple y confiable que Overpass para este dato puntual: una sola
+// direccion inversa, no una consulta de todos los caminos/lugares con nombre del area).
+function obtenerSectorPorNominatim(lat, lon){
+  const controlador = new AbortController();
+  const timeoutId = setTimeout(function(){ controlador.abort(); }, 12000);
+  return fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lon + '&zoom=14&addressdetails=1&accept-language=es', { signal: controlador.signal })
+    .then(function(resp){
+      clearTimeout(timeoutId);
+      if(!resp.ok) throw new Error('Nominatim respondio ' + resp.status);
+      return resp.json();
     })
     .then(function(data){
-      const vias = [];
-      const lugares = [];
-      (data.elements || []).forEach(function(el){
-        if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
-          vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
-        }else if(el.type === 'node' && el.tags && el.tags.name){
-          lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
-        }
-      });
-      return { vias: vias, lugares: lugares, ok: true };
-    }).catch(function(){
-      return { vias: [], lugares: [], ok: false };
-  });
+      const addr = data.address || {};
+      const sector = addr.village || addr.hamlet || addr.town || addr.city_district || addr.suburb || addr.city || addr.county || '';
+      return { sector: sector, ok: true };
+    })
+    .catch(function(){
+      clearTimeout(timeoutId);
+      return { sector: '', ok: false };
+    });
 }
 
 function generarMapaTerreno(){
@@ -3598,9 +3645,12 @@ function generarMapaTerreno(){
   // La consulta de caminos/localidades se lanza EN PARALELO con la descarga de teselas
   // (no una despues de la otra), para no duplicar el tiempo de espera.
   const promesaVias = obtenerViasYLugaresOverpass(bounds);
+  const centroBounds = bounds.getCenter();
+  const promesaSector = obtenerSectorPorNominatim(centroBounds.lat, centroBounds.lng);
 
-  Promise.all([Promise.all(promesasTiles), promesaVias]).then(function(resultados){
+  Promise.all([Promise.all(promesasTiles), promesaVias, promesaSector]).then(function(resultados){
     const datosVia = resultados[1];
+    const datosSector = resultados[2];
     // Convierte lat/lon a coordenadas de pixel dentro de ESTE canvas (mismo sistema que las teselas).
     function pixelDe(lat, lon){
       const gx = (lon + 180) / 360 * Math.pow(2, zoom) * 256;
@@ -3733,6 +3783,12 @@ function generarMapaTerreno(){
       // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
       // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
       // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
+      // Junto a cada uno va su coordenada UTM (mismo sistema que la grilla del plano), para
+      // poder ubicar ese vertice puntual con un GPS de mano sin tener que adivinar la posicion
+      // a partir de la grilla.
+      ctx.font = 'bold ' + Math.max(9, Math.round(9.5*escalaMarcador)) + 'px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
       puntosCampo.forEach(function(p){
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
@@ -3742,6 +3798,15 @@ function generarMapaTerreno(){
         ctx.lineWidth = 2.5 * escalaMarcador;
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
+
+        const utmPunto = latLonToUtm(p[0], p[1]);
+        const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
+        const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.strokeText(textoCoord, tx, ty);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillText(textoCoord, tx, ty);
       });
     }
 
@@ -3857,9 +3922,14 @@ function generarMapaTerreno(){
     ctx.fillText('N', nx, ny + 18);
     ctx.textAlign = 'left';
 
-    // --- Sector/localidad mas cercana al centro de esta vista (si la consulta la trajo) ---
+    // --- Sector/localidad del centro de esta vista, via Nominatim (mas confiable que la
+    // lista de "lugares" de Overpass, que dependia de una consulta mas pesada y propensa a
+    // fallar) — si Nominatim no respondio a tiempo, usamos el dato de Overpass como respaldo,
+    // por si igual trajo algo util. ---
     let sectorTexto = '';
-    if(datosVia.lugares.length > 0){
+    if(datosSector.sector){
+      sectorTexto = '   ·   Sector: ' + datosSector.sector;
+    }else if(datosVia.lugares.length > 0){
       let masCercano = null, distMinima = Infinity;
       datosVia.lugares.forEach(function(lugar){
         const d = distanciaMetros(latCentro, lonCentro, lugar.lat, lugar.lon);
@@ -3953,7 +4023,14 @@ function generarMapaTerreno(){
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      const avisoVias = datosVia.ok ? '' : ' (sin caminos/sector: no se pudo consultar OpenStreetMap — revisa la señal e intenta de nuevo)';
+      const problemas = [];
+      if(!datosVia.ok && !datosSector.ok){
+        problemas.push('sin caminos/sector: no se pudo consultar OpenStreetMap');
+      }else{
+        if(!datosVia.ok) problemas.push(datosVia.okParcial ? 'faltaron algunos caminos' : 'sin caminos');
+        if(!datosSector.ok && !sectorTexto) problemas.push('sin sector');
+      }
+      const avisoVias = problemas.length > 0 ? ' (' + problemas.join(', ') + ' — revisa la señal e intenta de nuevo)' : '';
       if(estado) estado.textContent = 'Mapa generado y descargado: ' + nombreArchivo + avisoVias;
     }, 'image/jpeg', 0.9);
   }).catch(function(){
