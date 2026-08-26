@@ -1590,31 +1590,48 @@ svg.leaflet-image-layer.leaflet-interactive path {
     .nav-mapa-wrap{ height:65vh; min-height:320px; }
     .tipo-selector{ flex-direction:column; }
     .tipo-opt{ min-width:0; }
-    /* En el telefono, la columna de botones sobre el mapa (Mi ubicacion, Crea punto,
-       Subir KML, Deshacer, Borrar, Descargar, Llevarme ahi, Generar Mapa, Sin señal...)
-       puede llegar a ser mas alta que la pantalla entera cuando estan todos visibles a la
-       vez (trazando un poligono) — se "caen" fuera de lo que se alcanza a ver. Pasarlos a
-       2 columnas mas chicas corta esa altura casi a la mitad, sin esconder ningun boton. */
+    /* SOLUCION REPENSADA: el problema de fondo no era "cuantos botones caben", era que una
+       COLUMNA VERTICAL crece sin techo — cada boton nuevo agranda el alto necesario, y con
+       8-10 botones eso ya no entra en una pantalla de telefono. La solucion real (la misma
+       que usan apps de terreno como Gaia GPS o ArcGIS Field Maps) es otra: una barra
+       HORIZONTAL pegada abajo del mapa que se desliza con el dedo. Esa barra ocupa SIEMPRE
+       la misma altura fija (una fila), tengas 5 botones o 12 — nunca "se cae" de la pantalla,
+       y todo sigue alcanzable con un swipe, sin esconder nada detras de un "Mas". */
     .toolbar-campo{
-      display:grid;
-      grid-template-columns:repeat(2, 1fr);
-      gap:6px;
-      top:8px;
+      position:absolute;
+      top:auto;
+      bottom:8px;
+      left:8px;
       right:8px;
+      display:flex;
+      flex-direction:row;
+      flex-wrap:nowrap;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      scroll-snap-type:x proximity;
+      gap:8px;
+      padding:6px 6px 10px 6px;
+      background:linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.28));
+      border-radius:16px;
+    }
+    .toolbar-campo::-webkit-scrollbar{
+      height:4px;
     }
     .toolbar-campo .btn-icono{
-      width:60px;
-      height:52px;
-      border-radius:11px;
-      gap:1px;
+      flex:0 0 auto;
+      scroll-snap-align:start;
+      width:66px;
+      height:58px;
     }
-    .toolbar-campo .emoji-boton{
-      font-size:16px;
+    /* Ya no hace falta esconder nada detras de "Mas" — con la barra deslizable todo se
+       alcanza igual de facil con un swipe, asi que en el telefono mostramos todo siempre
+       y sacamos el boton "Mas" de en medio (quedaria como un icono raro entre los demas). */
+    #grupoMasOpciones{
+      display:contents !important;
     }
-    .toolbar-campo .texto-boton{
-      font-size:9px;
+    #btnMasOpciones{
+      display:none !important;
     }
-  }
   .zona-arrastrar{
     display:none;
     position:fixed;
