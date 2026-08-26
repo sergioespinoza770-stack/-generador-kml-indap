@@ -4413,6 +4413,15 @@ function obtenerMapa(){
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
     mapa.on('zoomstart', function(){ registrarZoomManual('principal'); });
+    // Las etiquetas de medida de cada segmento dependen de cuantos pixeles ocupa ese tramo en
+    // PANTALLA (no de los metros reales) — asi que al hacer zoom hay que recalcular cuales
+    // caben legibles y cuales no, para que las que faltaban por estar muy juntas vayan
+    // apareciendo a medida que te acercas.
+    mapa.on('zoomend', function(){
+      if(typeof puntosCampo !== 'undefined' && puntosCampo.length >= 2){
+        etiquetarSegmentosCampo(mapa, puntosCampo);
+      }
+    });
 
     // Arrastre y giro con dos dedos: SIEMPRE activos, pero la ROTACION solo se aplica
     // mientras se este navegando (modoNavegacionActivo) — el resto del tiempo, la rotacion
@@ -7783,9 +7792,18 @@ function etiquetarSegmentosCampo(m, puntos){
   // Cierra el poligono (ultimo punto vuelve al primero) solo cuando ya hay 3+ vertices, igual
   // que hace L.polygon automaticamente; con 2 puntos es una sola linea, sin tramo de cierre.
   const cantidadTramos = puntos.length >= 3 ? puntos.length : puntos.length - 1;
+  // Umbral en PIXELES de pantalla (no metros): a zoom alejado, vertices que estan a varios
+  // kilometros en la realidad pueden quedar a solo unos pixeles de distancia en la pantalla —
+  // ahi la etiqueta no cabe legible y se pisa con la del tramo de al lado. Se recalcula cada
+  // vez que se redibuja, asi que si haces zoom + las etiquetas que faltaban van apareciendo.
+  const UMBRAL_PIXELES_PARA_ROTULAR = 40;
   for(let i = 0; i < cantidadTramos; i++){
     const p1 = puntos[i];
     const p2 = puntos[(i + 1) % puntos.length];
+    const px1 = m.latLngToContainerPoint(p1);
+    const px2 = m.latLngToContainerPoint(p2);
+    const largoPixeles = Math.hypot(px2.x - px1.x, px2.y - px1.y);
+    if(largoPixeles < UMBRAL_PIXELES_PARA_ROTULAR) continue;
     const largoM = distanciaMetros(p1[0], p1[1], p2[0], p2[1]);
     const largoTxt = largoM >= 1000 ? (largoM / 1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
     const medioLat = (p1[0] + p2[0]) / 2;
