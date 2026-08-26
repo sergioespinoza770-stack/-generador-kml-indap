@@ -3546,7 +3546,7 @@ function generarMapaTerreno(){
         if(nombresYaPuestos.indexOf(via.nombre) === -1){
           const puntosEnVista = via.puntos.filter(function(p){
             const xy = pixelDe(p[0], p[1]);
-            return xy[0] >= 0 && xy[0] <= canvas.width && xy[1] >= alturaBarra && xy[1] <= canvas.height;
+            return xy[0] >= 0 && xy[0] <= canvas.width && xy[1] >= alturaBarra && xy[1] <= tilesY * 256;
           });
           if(puntosEnVista.length > 0){
             nombresYaPuestos.push(via.nombre);
@@ -3708,7 +3708,7 @@ function generarMapaTerreno(){
       const xy = pixelDe(ll[0], ll[1]);
       ctx.beginPath();
       ctx.moveTo(xy[0], alturaBarra);
-      ctx.lineTo(xy[0], canvas.height);
+      ctx.lineTo(xy[0], tilesY * 256); // se detiene en el borde del mapa, no sigue dentro del pie de firma
       ctx.stroke();
       // La etiqueta va justo DEBAJO de la barra de titulo, nunca encima (ahi quedaria tapada).
       ctx.fillText(Math.round(e) + 'E', xy[0] + 4, alturaBarra + 4);
@@ -3728,7 +3728,10 @@ function generarMapaTerreno(){
       if(o / metrosPorPixel <= 180) metrosBarra = o;
     });
     const anchoBarra = metrosBarra / metrosPorPixel;
-    const escalaX = 16, escalaY = canvas.height - 34;
+    // OJO: se ancla a "tilesY*256" (el borde inferior de la IMAGEN del mapa), no a
+    // "canvas.height" — desde que el lienzo incluye el pie de firma abajo, canvas.height ya
+    // no es el borde del mapa, y anclarla ahi la dejaba escondida dentro de esa franja blanca.
+    const escalaX = 16, escalaY = (tilesY * 256) - 34;
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(escalaX - 6, escalaY - 20, anchoBarra + 12, 40);
     ctx.strokeStyle = '#fff';
@@ -7337,6 +7340,10 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
 
     if(esPrimeraPosicionDeEstePresionar){
       esPrimeraPosicionDeEstePresionar = false;
+      // Ya se encontro el primer punto: el boton se apaga solo (vuelve a su color original).
+      // El rastreo sigue funcionando por detras (el punto azul se sigue actualizando en el
+      // mapa) — el verde solo indicaba "buscando", no "estoy siguiendo tu posicion".
+      boton.classList.remove('activo');
       moverMapaProgramatico(function(){ m.setView([lat, lon], 18); });
       anunciarUbicacionEncontrada(lat, lon);
     }else if(!siguiendoPausadoPorToque('principal')){
