@@ -1632,6 +1632,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
     #btnMasOpciones{
       display:none !important;
     }
+    /* El zoom (+/-) y la escala (Leaflet los ubica los dos en la esquina inferior izquierda)
+       quedaban tapados por la barra de botones nueva, que ahora ocupa todo el ancho de abajo.
+       Los subimos a la esquina superior derecha, que en el telefono queda libre (la barra de
+       botones se movio abajo). */
+    .leaflet-bottom.leaflet-left{
+      bottom:auto !important;
+      left:auto !important;
+      top:8px !important;
+      right:8px !important;
+    }
+    .leaflet-control-zoom{
+      margin-bottom:6px !important;
+    }
+  }
   .zona-arrastrar{
     display:none;
     position:fixed;
