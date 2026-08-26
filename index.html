@@ -1632,14 +1632,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   /* El zoom (+/-) y la escala de Leaflet se ubican por defecto abajo a la izquierda, donde
      ahora esta la barra de botones — los subimos arriba a la derecha para que no se tapen,
-     en cualquier tamaño de pantalla (la barra de botones ya no es solo de celular). */
-  .leaflet-bottom.leaflet-left{
+     en cualquier tamaño de pantalla (la barra de botones ya no es solo de celular).
+     EXCEPTO durante la navegación activa: ahi la barra de botones se esconde entera (abajo
+     queda libre) y arriba a la derecha es justo donde estan los iconos del panel de
+     navegación (parlante, GPS, cerrar) — asi que en ese caso los dejamos en su lugar
+     original, abajo a la izquierda, que es donde de verdad sobra espacio. */
+  body:not(.nav-activa) .leaflet-bottom.leaflet-left{
     bottom:auto !important;
     left:auto !important;
     top:8px !important;
     right:8px !important;
   }
-  .leaflet-control-zoom{
+  body:not(.nav-activa) .leaflet-control-zoom{
     margin-bottom:6px !important;
   }
   .zona-arrastrar{
