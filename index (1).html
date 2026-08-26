@@ -811,6 +811,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border-color:var(--accent);
     box-shadow:0 0 0 4px rgba(255,199,0,0.18);
   }
+  /* El texto de ejemplo (placeholder) va bien mas tenue que lo que el usuario escribe,
+     para que se note de un vistazo que es solo un ejemplo y hay que sobre-escribirlo. */
+  input::placeholder, textarea::placeholder{
+    color:#b8b6a8;
+    font-weight:400;
+    opacity:1;
+  }
   .row{
     display:flex;
     gap:12px;
@@ -852,6 +859,37 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .tipo-opt input{
     display:none;
+  }
+  /* Boton aparte de "subir KML/KMZ para navegar" — mas robusto y con su propio color (verde,
+     distinto del amarillo de los 4 formatos de coordenadas) para que se lea como un paso
+     distinto: primero eliges como vas a generar el KML, y por separado subes uno ya existente. */
+  .kml-cta{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    width:100%;
+    margin:14px 0 18px 0;
+    min-width:0;
+    padding:16px;
+    font-size:14px;
+    border-width:2.5px;
+    border-color:#3fa66b;
+    background:#eef8f1;
+    color:#1e7a45;
+    box-shadow:0 3px 12px rgba(63,166,107,0.18);
+  }
+  .kml-cta .emoji-boton{
+    font-size:19px;
+  }
+  .kml-cta:hover{
+    border-color:#2f8555;
+  }
+  .kml-cta.activo{
+    background:linear-gradient(135deg, #3fa66b, #57c084);
+    border-color:#1e7a45;
+    color:#fff;
+    box-shadow:0 4px 14px rgba(63,166,107,0.4);
   }
   .utm-extra{
     display:none;
@@ -1197,9 +1235,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
     transform:scale(0.94);
   }
   .btn-icono.activo{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
-    border-color:var(--accent-dark);
-    box-shadow:0 0 0 4px rgba(255,199,0,0.35);
+    background:linear-gradient(135deg, #3fa66b, #57c084);
+    border-color:#1e7a45;
+    box-shadow:0 0 0 4px rgba(63,166,107,0.35);
+  }
+  .btn-icono.activo .texto-boton{
+    color:#fff;
+  }
+  /* Los estilos propios de cada boton (inicio=amarillo, navegar=borde azul, etc.) tienen la
+     misma especificidad que .activo y aparecen despues en la hoja de estilos, asi que sin
+     esto ganarian ellos en vez del verde cuando el boton esta activo. Estas reglas de 3 clases
+     tienen mas especificidad y aseguran que el verde de "activo" siempre se vea, sin importar
+     el color base del boton. */
+  .btn-icono.inicio.activo,
+  .btn-icono.navegar.activo,
+  .btn-icono.dibujar.activo{
+    background:linear-gradient(135deg, #3fa66b, #57c084);
+    border-color:#1e7a45;
+    box-shadow:0 0 0 4px rgba(63,166,107,0.35);
+  }
+  .btn-icono.inicio.activo .texto-boton,
+  .btn-icono.navegar.activo .texto-boton,
+  .btn-icono.dibujar.activo .texto-boton{
+    color:#fff;
   }
   .btn-icono.peligro{
     border-color:#e0776b;
@@ -1219,6 +1277,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
+  /* "Mi ubicacion" ya no queda amarillo en reposo — ese color se confundia con "activado".
+     Ahora en reposo es igual de neutro que el resto de los botones, y solo se distingue
+     cuando de verdad esta activo (verde, via .btn-icono.activo mas abajo). */
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
     opacity:0.55;
@@ -1250,6 +1311,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
     padding:7px 14px;
     border-radius:20px;
     box-shadow:0 3px 12px rgba(0,0,0,0.18);
+  }
+  /* Etiqueta de metros sobre cada segmento del poligono/linea que se esta trazando en terreno. */
+  .etiqueta-segmento-campo{
+    background:#fff;
+    border:1.5px solid #ffc700;
+    border-radius:6px;
+    padding:2px 6px;
+    font-family:var(--sans);
+    font-size:11px;
+    font-weight:800;
+    color:#5a4a10;
+    white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    transform:translate(-50%, -50%);
   }
   .badge-plano-activo{
     position:absolute;
@@ -2147,7 +2222,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <div class="wrap">
   <h1>Kit Terreno</h1>
-  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, y tomar fotografías georreferenciadas — todo junto, sin depender de conexión.</p>
+  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, tomar fotografías georreferenciadas, y ahora también generar el plano de terreno — todo junto, sin depender de conexión.</p>
 
   <!-- Pantalla de inicio: 3 tarjetas grandes, tipo dashboard moderno. Tocarlas "despliega"
        esa etapa a pantalla completa (ver cambiarEtapa) — la app arranca siempre acá, y cada
@@ -2210,7 +2285,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <p class="hint">Este nombre queda como nombre del archivo .kml y también como nombre del polígono adentro de Google Earth — usa un nombre distinto para cada predio así, si abres varios KML juntos, se distinguen fácil por nombre en el panel de "Lugares".</p>
   </div>
 
-  <label style="margin-bottom:8px;">Tipo de coordenadas</label>
+  <label style="margin-bottom:8px;">Ingrese tipo de coordenadas</label>
   <div class="tipo-selector">
     <label class="tipo-opt activo" id="optGeo">
       <input type="radio" name="tipoCoord" value="geo" checked>
@@ -2224,13 +2299,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <input type="radio" name="tipoCoord" value="sirsds">
       Formato SIG (lon,lat,0)
     </label>
-    <label class="tipo-opt" id="optKml">
-      <input type="radio" name="tipoCoord" value="kml">
-      Subir KML o KMZ
-    </label>
     <span id="tabsPlantillas" style="display:contents;"></span>
     <button type="button" id="btnNuevaPlantilla" class="tipo-opt" style="cursor:pointer; border-style:dashed; background:transparent; color:var(--accent-dark); font-weight:700;">➕ Mi propio formato</button>
   </div>
+
+  <!-- Boton aparte, mas robusto, debajo de los 4 formatos de coordenadas: subir un KML/KMZ no es
+       "otro formato de coordenadas" como los de arriba, es un paso distinto (traer un archivo ya
+       listo para navegar) — separarlo asi dejar mas claro el orden logico de uso de la app. -->
+  <label class="tipo-opt kml-cta" id="optKml">
+    <input type="radio" name="tipoCoord" value="kml">
+    <span class="emoji-boton" aria-hidden="true">📤</span>
+    <span>Subir KML o KMZ, para navegar</span>
+  </label>
 
 <div id="modalPlantilla" style="display:none; position:fixed; inset:0; z-index:5500; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px;">
   <div style="background:#fff; border-radius:14px; padding:20px; max-width:460px; width:100%; max-height:88vh; overflow-y:auto; font-family:var(--sans, sans-serif);">
@@ -2333,7 +2413,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       ✏️ ¿Vas a trazar un polígono nuevo? Toca el lápiz en el mapa y marca cada vértice caminando el potrero o mirando la imagen satelital.
     </div>
     <div class="map-label">
-      <span>Previsualización — imagen satelital (Esri World Imagery)</span>
+      <span id="mapTituloEtiqueta">Previsualización — imagen satelital (Esri World Imagery)</span>
       <span id="mapInfo" style="font-size:16px; font-weight:800; color:var(--accent-text);"></span>
     </div>
 
@@ -2362,9 +2442,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
-<div id="navInfoPanel" style="display:none; position:absolute; top:0; left:0; right:0; z-index:700; background:#fffdf5; color:#1a1a1a; padding:10px 14px; border-radius:14px 14px 0 0; border:2px solid #ffc700; border-bottom:none; box-shadow:0 3px 14px rgba(0,0,0,0.18); font-family:var(--sans);">
+<div id="navInfoPanel" style="display:none; position:absolute; top:0; left:0; right:0; z-index:700; background:#fffdf5; color:#1a1a1a; padding:8px 14px; border-radius:14px 14px 0 0; border:2px solid #ffc700; border-bottom:none; box-shadow:0 3px 14px rgba(0,0,0,0.18); font-family:var(--sans); max-height:25vh; overflow-y:auto;">
   <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
     <div style="flex:1; min-width:0;">
+      <div id="navEtiquetaKml" style="display:none; color:#8a6dd6; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:2px;">🧭 Navegación hacia tus KML</div>
       <div class="nav-nombre" id="navNombre" style="color:#1a1a1a; font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Buscando ubicación...</div>
       <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
         <span class="nav-distancia" id="navDistanciaRuta" style="color:#c98a00; font-size:19px; font-weight:800;">calculando...</span>
@@ -2387,11 +2468,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
       <div class="badge-plano-activo" id="badgePlanoActivo"></div>
       <div class="toolbar-campo">
-        <button type="button" class="btn-icono" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">
+        <button type="button" class="btn-icono inicio" id="btnUbicarme" title="Mostrar mi ubicación" aria-label="Mostrar mi ubicación">
           <span class="emoji-boton">📍</span><span class="texto-boton">Mi<br>ubicación</span>
         </button>
-        <button type="button" class="btn-icono" id="btnModoCampo" title="Medir tocando el mapa" aria-label="Medir tocando el mapa">
-          <span class="emoji-boton">✏️</span><span class="texto-boton">Marcar<br>aquí</span>
+        <button type="button" class="btn-icono dibujar" id="btnModoCampo" title="Dibuja el polígono tocando el mapa" aria-label="Dibuja el polígono tocando el mapa">
+          <span class="emoji-boton">✏️</span><span class="texto-boton">Crea punto<br>o polígono</span>
         </button>
         <button type="button" class="btn-icono" id="btnCampoDeshacer" style="display:none;" title="Deshacer último punto" aria-label="Deshacer último punto">
           <span class="emoji-boton">↩️</span><span class="texto-boton">Deshacer</span>
@@ -2405,8 +2486,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="btn-icono navegar" id="btnNavegar" title="Navegar hasta el polígono" aria-label="Navegar hasta el polígono">
           <span class="emoji-boton">🧭</span><span class="texto-boton">Llevarme<br>ahí</span>
         </button>
-        <button type="button" class="btn-icono camara" id="btnCamara" title="Cámara georreferenciada" aria-label="Cámara georreferenciada">
-          <span class="emoji-boton">📷</span><span class="texto-boton">Sacar<br>foto</span>
+        <button type="button" class="btn-icono camara" id="btnGeneradorMapa" title="Genera un plano JPG con norte, escala, grilla y coordenadas" aria-label="Generar mapa">
+          <span class="emoji-boton">🗺️</span><span class="texto-boton">Generar<br>Mapa</span>
         </button>
         <button type="button" class="btn-icono offline" id="btnCapaOffline" title="Cambiar entre imagen satelital y grilla sin conexión" aria-label="Cambiar capa de mapa">
           <span class="emoji-boton">🛰️</span><span class="texto-boton">Sin<br>señal</span>
@@ -3319,6 +3400,468 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
   });
 }
 
+// ---------- "Generador de mapa": arma un plano descargable (JPG) de la vista actual ----------
+// Reutiliza el mismo mecanismo ya probado de bajar teselas con CORS habilitado
+// (cargarTeselaConReintentos) que usa el guardado de planos offline, pero en vez de guardarlas
+// en cache arma una imagen final con norte, grilla de coordenadas, escala, fecha/hora y el
+// poligono/puntos que se esten trazando — lista para descargar de inmediato, sin pasos extra.
+// JPG y no PDF a proposito: no depende de cargar ninguna libreria extra, pesa poco y se
+// comparte directo por WhatsApp, que es el uso mas comun en terreno.
+// Trae, en una sola consulta liviana, los caminos CON NOMBRE y las localidades (pueblos,
+// aldeas) dentro del area visible — para poder rotular caminos principales y mostrar el
+// sector/localidad mas cercana en el plano generado. Si falla (sin señal, timeout, etc.)
+// devuelve listas vacias y el plano se genera igual, solo sin esos rotulos.
+function obtenerViasYLugaresOverpass(bounds){
+  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  // Para localidades usamos un bbox mas ancho (bounds x5) que para caminos: en zona rural es
+  // comun que no haya ningun pueblo/villorrio con nombre DENTRO de la vista exacta del mapa,
+  // pero igual sirve mostrar cual es el sector/localidad mas cercana como referencia.
+  const altoLat = bounds.getNorth() - bounds.getSouth();
+  const anchoLon = bounds.getEast() - bounds.getWest();
+  const bboxLugares = (bounds.getSouth() - altoLat*2) + ',' + (bounds.getWest() - anchoLon*2) + ',' +
+                       (bounds.getNorth() + altoLat*2) + ',' + (bounds.getEast() + anchoLon*2);
+  const consulta = '[out:json][timeout:25];(way["highway"]["name"](' + bbox + ');node["place"~"^(city|town|village|hamlet)$"](' + bboxLugares + '););out geom;';
+  const query = encodeURIComponent(consulta);
+
+  // El servidor publico de Overpass a veces demora bastante (tiene mucha carga en horas punta):
+  // el limite de espera del lado del navegador tiene que ser MAYOR al "timeout" pedido en la
+  // propia consulta (25s), si no el navegador corta la espera antes de que el servidor
+  // siquiera llegue a responder — eso era lo que estaba pasando antes (se cortaba a los 15s).
+  function intentarUrl(url){
+    const controlador = new AbortController();
+    const timeoutId = setTimeout(function(){ controlador.abort(); }, 30000);
+    return fetch(url, { signal: controlador.signal }).then(function(resp){
+      clearTimeout(timeoutId);
+      if(!resp.ok) throw new Error('Overpass respondio ' + resp.status);
+      return resp.json();
+    }).finally(function(){ clearTimeout(timeoutId); });
+  }
+
+  // Si el servidor principal falla o no responde a tiempo, probamos un espejo antes de
+  // rendirnos — asi no dependemos de que un solo servidor publico este disponible.
+  return intentarUrl('https://overpass-api.de/api/interpreter?data=' + query)
+    .catch(function(){
+      return intentarUrl('https://overpass.kumi.systems/api/interpreter?data=' + query);
+    })
+    .then(function(data){
+      const vias = [];
+      const lugares = [];
+      (data.elements || []).forEach(function(el){
+        if(el.type === 'way' && el.geometry && el.tags && el.tags.name){
+          vias.push({ nombre: el.tags.name, puntos: el.geometry.map(function(pt){ return [pt.lat, pt.lon]; }) });
+        }else if(el.type === 'node' && el.tags && el.tags.name){
+          lugares.push({ lat: el.lat, lon: el.lon, nombre: el.tags.name });
+        }
+      });
+      return { vias: vias, lugares: lugares, ok: true };
+    }).catch(function(){
+      return { vias: [], lugares: [], ok: false };
+  });
+}
+
+function generarMapaTerreno(){
+  const m = obtenerMapa();
+  const estado = document.getElementById('campoInfo');
+  const bounds = m.getBounds();
+  const zoom = Math.min(19, Math.max(1, Math.round(m.getZoom())));
+
+  const minX = lon2tileX(bounds.getWest(), zoom);
+  const maxX = lon2tileX(bounds.getEast(), zoom);
+  const minY = lat2tileY(bounds.getNorth(), zoom);
+  const maxY = lat2tileY(bounds.getSouth(), zoom);
+  const tilesX = maxX - minX + 1;
+  const tilesY = maxY - minY + 1;
+  const totalTiles = tilesX * tilesY;
+
+  if(totalTiles > 60){
+    if(estado) estado.textContent = 'La vista actual es muy amplia para generar el mapa en detalle — acerca un poco el mapa (zoom +) e intenta de nuevo.';
+    return;
+  }
+
+  if(estado) estado.textContent = 'Generando el mapa (imagen, caminos y localidades cercanas)...';
+
+  const canvas = document.createElement('canvas');
+  const alturaFirma = Math.max(120, Math.min(240, Math.round(tilesX * 256 * 0.16)));
+  canvas.width = tilesX * 256;
+  canvas.height = tilesY * 256 + alturaFirma;
+  const ctx = canvas.getContext('2d');
+  // El pie de firma queda en blanco por defecto: pintamos todo el canvas de blanco ANTES de
+  // las teselas, porque un canvas nuevo es transparente y al exportar a JPG (que no tiene
+  // transparencia) esa franja de abajo saldria negra si no la pintamos primero.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const promesasTiles = [];
+  for(let ty = minY; ty <= maxY; ty++){
+    for(let tx = minX; tx <= maxX; tx++){
+      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
+      const px = (tx - minX) * 256;
+      const py = (ty - minY) * 256;
+      promesasTiles.push(cargarTeselaConReintentos(url, 3).then(function(img){
+        if(img) ctx.drawImage(img, px, py, 256, 256);
+      }));
+    }
+  }
+  // La consulta de caminos/localidades se lanza EN PARALELO con la descarga de teselas
+  // (no una despues de la otra), para no duplicar el tiempo de espera.
+  const promesaVias = obtenerViasYLugaresOverpass(bounds);
+
+  Promise.all([Promise.all(promesasTiles), promesaVias]).then(function(resultados){
+    const datosVia = resultados[1];
+    // Convierte lat/lon a coordenadas de pixel dentro de ESTE canvas (mismo sistema que las teselas).
+    function pixelDe(lat, lon){
+      const gx = (lon + 180) / 360 * Math.pow(2, zoom) * 256;
+      const latRad = lat * Math.PI / 180;
+      const gy = (1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom) * 256;
+      return [gx - minX*256, gy - minY*256];
+    }
+
+    // Alto de la barra de titulo — se define ACA (no mas abajo) porque la grilla la necesita
+    // para no poner sus etiquetas justo donde después queda tapado por la barra superior.
+    const alturaBarra = 74;
+
+    // --- Caminos con nombre de la zona (si la consulta a OpenStreetMap respondio a tiempo) ---
+    if(datosVia.vias.length > 0){
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.setLineDash([10, 6]);
+      const nombresYaPuestos = [];
+      datosVia.vias.slice(0, 25).forEach(function(via){
+        if(via.puntos.length < 2) return;
+        ctx.beginPath();
+        via.puntos.forEach(function(p, i){
+          const xy = pixelDe(p[0], p[1]);
+          if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+        });
+        ctx.stroke();
+        // Rotula cada camino una sola vez, y evita apilar el mismo nombre muchas veces cuando
+        // OSM trae el camino cortado en varios tramos seguidos. El punto medio DE TODA la via
+        // (que a veces sigue mucho mas alla de la vista) puede caer fuera del lienzo — por eso
+        // filtramos primero a los puntos que SI caen dentro del area capturada, y etiquetamos
+        // ahi; si ningun punto de esta via cae dentro de la vista, no se rotula (igual se ve
+        // la linea punteada si cruza el borde).
+        if(nombresYaPuestos.indexOf(via.nombre) === -1){
+          const puntosEnVista = via.puntos.filter(function(p){
+            const xy = pixelDe(p[0], p[1]);
+            return xy[0] >= 0 && xy[0] <= canvas.width && xy[1] >= alturaBarra && xy[1] <= canvas.height;
+          });
+          if(puntosEnVista.length > 0){
+            nombresYaPuestos.push(via.nombre);
+            const medio = puntosEnVista[Math.floor(puntosEnVista.length/2)];
+            const xy = pixelDe(medio[0], medio[1]);
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            const anchoTexto = ctx.measureText(via.nombre).width;
+            ctx.fillRect(xy[0] - 4, xy[1] - 16, anchoTexto + 8, 20);
+            ctx.fillStyle = '#fff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(via.nombre, xy[0], xy[1] - 6);
+          }
+        }
+      });
+      ctx.setLineDash([]);
+    }
+
+    // --- Poligono/linea/puntos que se esten trazando ahora en modo campo (si hay) ---
+    // El grosor y el radio del marcador se escalan con el tamaño real del canvas generado
+    // (que depende del zoom/resolucion con que estabas mirando el mapa), para que el punto
+    // se note claro sea cual sea el nivel de detalle de esta captura en particular.
+    const escalaMarcador = Math.max(1, canvas.width / 700);
+    if(puntosCampo && puntosCampo.length >= 1){
+      if(puntosCampo.length >= 2){
+        ctx.beginPath();
+        puntosCampo.forEach(function(p, i){
+          const xy = pixelDe(p[0], p[1]);
+          if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+        });
+        if(puntosCampo.length >= 3){
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(255,199,0,0.22)';
+          ctx.fill();
+        }
+        ctx.lineWidth = 3.5 * escalaMarcador;
+        ctx.strokeStyle = '#ffc700';
+        ctx.stroke();
+
+        // --- Medida (en metros) de cada segmento, sobre su punto medio ---
+        // Sin caja/recuadro (solo el numero, con un contorno oscuro para que se lea igual
+        // sobre cualquier fondo) y con letra chica — asi no se amontona cuando hay muchos
+        // vertices juntos. Los tramos MUY cortos en la imagen ni siquiera se rotulan: el
+        // numero no cabria de forma legible ahi y solo suma ruido visual; esos tramos se ven
+        // igual en el trazo amarillo, solo sin su numero encima.
+        const UMBRAL_PIXELES_PARA_ROTULAR = 34;
+        ctx.font = 'bold ' + Math.max(10, Math.round(11*escalaMarcador)) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const cantidadTramos = puntosCampo.length >= 3 ? puntosCampo.length : puntosCampo.length - 1;
+        for(let i = 0; i < cantidadTramos; i++){
+          const p1 = puntosCampo[i];
+          const p2 = puntosCampo[(i + 1) % puntosCampo.length];
+          const xy1 = pixelDe(p1[0], p1[1]);
+          const xy2 = pixelDe(p2[0], p2[1]);
+          const largoPixeles = Math.hypot(xy2[0]-xy1[0], xy2[1]-xy1[1]);
+          if(largoPixeles < UMBRAL_PIXELES_PARA_ROTULAR) continue;
+          const largoM = distanciaMetros(p1[0], p1[1], p2[0], p2[1]);
+          const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+          const mx = (xy1[0]+xy2[0])/2, my = (xy1[1]+xy2[1])/2;
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+          ctx.strokeText(largoTxt, mx, my);
+          ctx.fillStyle = '#fff';
+          ctx.fillText(largoTxt, mx, my);
+        }
+        ctx.textAlign = 'left';
+
+        // --- Superficie total del poligono (solo si es un poligono cerrado, 3+ puntos) ---
+        // Va JUSTO DEBAJO del poligono (no centrada adentro) para no taparlo ni pisar las
+        // etiquetas de medida de los segmentos, que quedan sobre los bordes.
+        if(puntosCampo.length >= 3){
+          const areaHa = calcularAreaHa(puntosCampo);
+          let maxYPoligono = -Infinity, sumaX = 0;
+          puntosCampo.forEach(function(p){
+            const xy = pixelDe(p[0], p[1]);
+            if(xy[1] > maxYPoligono) maxYPoligono = xy[1];
+            sumaX += xy[0];
+          });
+          const xCentro = sumaX / puntosCampo.length;
+          const yEtiqueta = maxYPoligono + 24*escalaMarcador;
+          const textoArea = '~' + areaHa.toFixed(2) + ' ha';
+          ctx.font = 'bold ' + Math.round(16*escalaMarcador) + 'px sans-serif';
+          const anchoArea = ctx.measureText(textoArea).width;
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          ctx.fillRect(xCentro - anchoArea/2 - 10, yEtiqueta - 14*escalaMarcador, anchoArea + 20, 28*escalaMarcador);
+          ctx.fillStyle = '#ffc700';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(textoArea, xCentro, yEtiqueta);
+          ctx.textAlign = 'left';
+        }
+      }
+      // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
+      // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
+      // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
+      puntosCampo.forEach(function(p){
+        const xy = pixelDe(p[0], p[1]);
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.lineWidth = 2.5 * escalaMarcador;
+        ctx.strokeStyle = '#c98a00';
+        ctx.stroke();
+      });
+    }
+
+    // --- Tu ubicacion actual (el punto azul), si "Mi ubicacion" esta activo y cae dentro de
+    // esta vista — el mismo estilo de punto que usa Leaflet/Google Maps para que se reconozca
+    // de inmediato como "estoy parado aca", y no se confunda con los vertices del poligono.
+    if(marcadorUbicacion){
+      const ll = marcadorUbicacion.getLatLng();
+      if(ll.lat <= bounds.getNorth() && ll.lat >= bounds.getSouth() && ll.lng >= bounds.getWest() && ll.lng <= bounds.getEast()){
+        const xy = pixelDe(ll.lat, ll.lng);
+        const radioHalo = 14 * escalaMarcador;
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], radioHalo, 0, 2*Math.PI);
+        ctx.fillStyle = 'rgba(26,115,232,0.25)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 7 * escalaMarcador, 0, 2*Math.PI);
+        ctx.fillStyle = '#1a73e8';
+        ctx.fill();
+        ctx.lineWidth = 2.5 * escalaMarcador;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+      }
+    }
+
+    // --- Grilla en UTM: lineas de Este (verticales) y Norte (horizontales) ---
+    // Como el area capturada es chica (unos cientos de metros a pocos km), aproximamos cada
+    // linea como recta usando un solo punto de referencia (centro) para la conversion UTM -> lat/lon
+    // — la convergencia de meridianos en ese rango es minima y no se nota en el plano final.
+    const oeste = bounds.getWest(), este = bounds.getEast();
+    const norte = bounds.getNorth(), sur = bounds.getSouth();
+    const latCentro = (norte + sur) / 2, lonCentro = (oeste + este) / 2;
+    const metrosPorPixel = 156543.03392 * Math.cos(latCentro * Math.PI/180) / Math.pow(2, zoom);
+
+    const utmNO = latLonToUtm(norte, oeste);
+    const utmSE = latLonToUtm(sur, este);
+    const utmCentro = latLonToUtm(latCentro, lonCentro);
+    const minE = Math.min(utmNO.este, utmSE.este), maxE = Math.max(utmNO.este, utmSE.este);
+    const minN = Math.min(utmNO.norte, utmSE.norte), maxN = Math.max(utmNO.norte, utmSE.norte);
+
+    let intervaloUtm = 10;
+    [10,20,50,100,200,500,1000,2000,5000].forEach(function(o){
+      if(o / metrosPorPixel <= 220) intervaloUtm = o;
+    });
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1;
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+
+    for(let e = Math.ceil(minE/intervaloUtm)*intervaloUtm; e <= maxE; e += intervaloUtm){
+      const ll = utmToLatLon(e, utmCentro.norte, utmCentro.huso, utmCentro.hemisferio === 'S');
+      const xy = pixelDe(ll[0], ll[1]);
+      ctx.beginPath();
+      ctx.moveTo(xy[0], alturaBarra);
+      ctx.lineTo(xy[0], canvas.height);
+      ctx.stroke();
+      // La etiqueta va justo DEBAJO de la barra de titulo, nunca encima (ahi quedaria tapada).
+      ctx.fillText(Math.round(e) + 'E', xy[0] + 4, alturaBarra + 4);
+    }
+    for(let n = Math.ceil(minN/intervaloUtm)*intervaloUtm; n <= maxN; n += intervaloUtm){
+      const ll = utmToLatLon(utmCentro.este, n, utmCentro.huso, utmCentro.hemisferio === 'S');
+      const xy = pixelDe(ll[0], ll[1]);
+      ctx.beginPath();
+      ctx.moveTo(0, Math.max(xy[1], alturaBarra));
+      ctx.lineTo(canvas.width, xy[1]);
+      ctx.stroke();
+      ctx.fillText(Math.round(n) + 'N', 4, Math.max(xy[1] + 4, alturaBarra + 4));
+    }
+    // --- Escala grafica (mismo metrosPorPixel ya calculado arriba para la grilla UTM) ---
+    let metrosBarra = 10;
+    [10,20,50,100,200,500,1000,2000,5000,10000].forEach(function(o){
+      if(o / metrosPorPixel <= 180) metrosBarra = o;
+    });
+    const anchoBarra = metrosBarra / metrosPorPixel;
+    const escalaX = 16, escalaY = canvas.height - 34;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(escalaX - 6, escalaY - 20, anchoBarra + 12, 40);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(escalaX, escalaY);
+    ctx.lineTo(escalaX + anchoBarra, escalaY);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText((metrosBarra >= 1000 ? (metrosBarra/1000) + ' km' : metrosBarra + ' m'), escalaX, escalaY - 4);
+
+    // --- Flecha de norte, arriba a la derecha (el mapa siempre queda norte-arriba en esta captura) ---
+    const nx = canvas.width - 60, ny = 96;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.arc(nx, ny, 42, 0, 2*Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#fff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(nx, ny - 26);
+    ctx.lineTo(nx - 13, ny + 13);
+    ctx.lineTo(nx, ny + 3);
+    ctx.lineTo(nx + 13, ny + 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('N', nx, ny + 18);
+    ctx.textAlign = 'left';
+
+    // --- Sector/localidad mas cercana al centro de esta vista (si la consulta la trajo) ---
+    let sectorTexto = '';
+    if(datosVia.lugares.length > 0){
+      let masCercano = null, distMinima = Infinity;
+      datosVia.lugares.forEach(function(lugar){
+        const d = distanciaMetros(latCentro, lonCentro, lugar.lat, lugar.lon);
+        if(d < distMinima){ distMinima = d; masCercano = lugar; }
+      });
+      if(masCercano) sectorTexto = '   ·   Sector: ' + masCercano.nombre;
+    }
+
+    // --- Barra superior con titulo (centrado), fecha y hora de generacion, huso UTM y sector ---
+    const ahora = new Date();
+    const fechaTexto = ahora.toLocaleDateString('es-CL') + ' ' + ahora.toLocaleTimeString('es-CL');
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillRect(0, 0, canvas.width, alturaBarra);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffc700';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Plano de terreno — Kit Terreno', canvas.width/2, alturaBarra*0.36);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio + sectorTexto, canvas.width/2, alturaBarra*0.78);
+    ctx.textAlign = 'left';
+
+    // --- Pie de firma: espacio para completar a mano Nombre, RUT, Telefono y Firma del
+    // profesional que respalda este plano — linea en blanco debajo de la imagen del mapa,
+    // fuera del area satelital, para no tapar nada del terreno. ---
+    const yFirma = tilesY * 256;
+    const fPad = Math.max(14, Math.min(30, Math.round(canvas.width * 0.025)));
+    const fFuente = Math.max(13, Math.min(22, Math.round(canvas.width * 0.017)));
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, yFirma);
+    ctx.lineTo(canvas.width, yFirma);
+    ctx.stroke();
+
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold ' + fFuente + 'px sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
+    // Fila 1: Nombre (ancho completo). Fila 2: RUT y Telefono (mitad y mitad).
+    // Fila 3: Firma (ancho completo, la linea mas larga porque ahi va la firma en si).
+    const col2X = canvas.width / 2 + fPad/2;
+    const anchoCol = canvas.width / 2 - fPad*1.5;
+    const filaAltoTexto = fFuente + 8;
+    let yFila = yFirma + fPad + fFuente;
+
+    ctx.fillText('Nombre:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('Nombre:').width + 10, yFila);
+    ctx.lineTo(canvas.width - fPad, yFila);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    yFila += filaAltoTexto + Math.round(fFuente*0.9);
+
+    ctx.fillText('RUT:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('RUT:').width + 10, yFila);
+    ctx.lineTo(fPad + anchoCol, yFila);
+    ctx.stroke();
+
+    ctx.fillText('Teléfono:', col2X, yFila);
+    ctx.beginPath();
+    ctx.moveTo(col2X + ctx.measureText('Teléfono:').width + 10, yFila);
+    ctx.lineTo(col2X + anchoCol, yFila);
+    ctx.stroke();
+
+    yFila += filaAltoTexto + Math.round(fFuente*0.9);
+
+    ctx.fillText('Firma:', fPad, yFila);
+    ctx.beginPath();
+    ctx.moveTo(fPad + ctx.measureText('Firma:').width + 10, yFila);
+    ctx.lineTo(canvas.width - fPad, yFila);
+    ctx.stroke();
+
+    canvas.toBlob(function(blob){
+      if(!blob){
+        if(estado) estado.textContent = 'No se pudo generar el mapa (el proveedor de imagen satelital pudo haber bloqueado la exportación).';
+        return;
+      }
+      const nombreArchivo = 'plano_terreno_' + ahora.toISOString().slice(0,10) + '_' + String(ahora.getHours()).padStart(2,'0') + 'h' + String(ahora.getMinutes()).padStart(2,'0') + '.jpg';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      const avisoVias = datosVia.ok ? '' : ' (sin caminos/sector: no se pudo consultar OpenStreetMap — revisa la señal e intenta de nuevo)';
+      if(estado) estado.textContent = 'Mapa generado y descargado: ' + nombreArchivo + avisoVias;
+    }, 'image/jpeg', 0.9);
+  });
+}
+
 function renderizarListaPlanosOffline(){
   const cont = document.getElementById('listaPlanosOffline');
   if(!cont) return;
@@ -3706,7 +4249,7 @@ function siguiendoPausadoPorToque(cualMapa){
 function obtenerMapa(){
   if(!mapa){
     mapa = L.map('map', { attributionControl: true, zoomControl: false });
-    L.control.zoom({ position: 'bottomright' }).addTo(mapa);
+    L.control.zoom({ position: 'bottomleft' }).addTo(mapa);
 
     capaSatelital = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
@@ -3739,6 +4282,31 @@ function obtenerMapa(){
     mapa.on('click', function(e){
       if(!modoMedicionActivo) return;
       agregarPuntoCampo(e.latlng.lat, e.latlng.lng);
+    });
+
+    // Doble clic/doble toque: termina el polígono (o línea) a propósito, sin importar si el
+    // siguiente vértice real habría quedado "afuera" de la forma actual — eso hacía fallar
+    // formas cóncavas con la regla anterior. El segundo clic del doble clic ya alcanzó a
+    // agregar su propio vértice (agregarPuntoCampo via el 'click' de arriba) antes de que el
+    // navegador dispare 'dblclick' — lo sacamos (punto Y marcador), porque no es un vértice
+    // real, es solo la señal de "termine".
+    mapa.on('dblclick', function(e){
+      if(!modoMedicionActivo) return;
+      if(puntosCampo.length > 0){
+        puntosCampo.pop();
+        const marcadorSobrante = marcadoresVerticesCampo.pop();
+        if(marcadorSobrante) mapa.removeLayer(marcadorSobrante);
+      }
+      redibujarPoligonoCampo(mapa);
+      actualizarInfoCampo();
+      actualizarTextareaDesdeCampo();
+      guardarPuntosCampoEnStorage();
+      if(puntosCampo.length >= 3){
+        desactivarModoMedicion();
+        document.getElementById('campoInfo').textContent = 'Poligono cerrado. Toca "Crea punto o polígono" para trazar uno nuevo.';
+      }else{
+        document.getElementById('campoInfo').textContent = 'Necesitas al menos 3 vertices para cerrar un poligono. Sigue tocando el mapa.';
+      }
     });
 
     mapa.on('moveend', function(){ intentarCachearCallesAutomatico(mapa); });
@@ -3858,7 +4426,7 @@ function mostrarMapa(puntos){
     setTimeout(() => m.invalidateSize(), 150);
 
     const area = calcularAreaHa(latlngs);
-    document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ~' + area.toFixed(2) + ' ha';
+    document.getElementById('mapInfo').textContent = puntos.length + ' puntos · ' + formatoAreaHaYM2(area);
     agregarClicParaNavegar(capaPoligono, latlngs);
   }
 
@@ -3879,6 +4447,13 @@ function calcularAreaHa(latlngs){
   }
   area = Math.abs(area * R * R / 2);
   return area / 10000; // m2 a hectareas
+}
+
+// Texto de superficie total en hectareas — la medida en metros que pidio el usuario va por
+// separado, en un rotulo sobre cada segmento del poligono (ver etiquetarSegmentosCampo), no
+// aca en el total.
+function formatoAreaHaYM2(areaHa){
+  return '~' + areaHa.toFixed(2) + ' ha';
 }
 
 // ---------- Conversion Lat/Lon -> UTM (directa, formula Snyder, WGS84) ----------
@@ -4961,6 +5536,16 @@ function iniciarNavegacionHacia(puntos, nombre){
   mostrarModalPreferenciaRuta(puntos, nombre);
 }
 
+// Marca si el viaje que se esta por iniciar es hacia un KML/polígono propio del usuario (los
+// que pasan por el modal de preferencia de ruta) o un destino directo (ciudad/direccion/punto
+// pegado) — se usa para mostrar el rotulo "Navegación hacia tus KML" solo en el primer caso.
+let navEsHaciaKmlPropio = false;
+
+function iniciarNavegacionHaciaDirecto(puntos, nombre){
+  navEsHaciaKmlPropio = false;
+  iniciarNavegacionHaciaConfirmada(puntos, nombre);
+}
+
 function mostrarModalPreferenciaRuta(puntos, nombre){
   const modalViejo = document.getElementById('modalPreferenciaRuta');
   if(modalViejo) modalViejo.remove();
@@ -4969,19 +5554,24 @@ function mostrarModalPreferenciaRuta(puntos, nombre){
   modal.id = 'modalPreferenciaRuta';
   modal.style.cssText = 'position:fixed; inset:0; z-index:5600; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:16px;';
   modal.innerHTML =
-    '<div style="background:#fff; border-radius:14px; padding:22px 20px; max-width:380px; width:100%; font-family:var(--sans, sans-serif); text-align:center;">' +
+    '<div style="background:#fff; border-radius:14px; padding:22px 20px; max-width:380px; width:100%; font-family:var(--sans, sans-serif); text-align:center; position:relative;">' +
+      '<button type="button" id="btnCerrarModalRuta" aria-label="Cerrar" title="Cerrar" style="position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; border:none; background:#f1efe8; color:#444; font-size:16px; font-weight:700; cursor:pointer; box-shadow:none; padding:0;">✕</button>' +
       '<div style="font-weight:800; font-size:16px; margin-bottom:4px;">¿Cómo quieres ir hacia "' + nombre + '"?</div>' +
       '<p class="hint" style="margin:0 0 18px 0;">Elige para este viaje — se puede cambiar en cualquier otra navegación.</p>' +
-      '<button type="button" id="btnModalRutaCorta" style="width:100%; padding:14px; margin-bottom:10px; font-size:14.5px;">📏 Ruta más corta<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Menos kilómetros — mezcla ripio y asfalto</span></button>' +
-      '<button type="button" id="btnModalRutaRapida" style="width:100%; padding:14px; font-size:14.5px; background:#eef2ff; color:#2c3ea8; box-shadow:none;">⏱️ Ruta más rápida<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Prioriza velocidad, aunque sean más km</span></button>' +
+      '<button type="button" id="btnModalRutaRapida" style="width:100%; padding:14px; margin-bottom:10px; font-size:14.5px;">⏱️ Ruta más rápida<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Prioriza velocidad, aunque sean más km</span></button>' +
+      '<button type="button" id="btnModalRutaCorta" style="width:100%; padding:14px; font-size:14.5px; background:#eef2ff; color:#2c3ea8; box-shadow:none;">📏 Ruta más corta<br><span style="font-weight:400; font-size:12px; opacity:0.85;">Menos kilómetros — mezcla ripio y asfalto</span></button>' +
     '</div>';
   document.body.appendChild(modal);
 
+  document.getElementById('btnCerrarModalRuta').addEventListener('click', function(){
+    modal.remove();
+  });
   document.getElementById('btnModalRutaCorta').addEventListener('click', function(){
     preferenciaRuta = 'corta';
     localStorage.setItem('generadorKml_preferenciaRuta', 'corta');
     actualizarBotonesPreferenciaRuta();
     modal.remove();
+    navEsHaciaKmlPropio = true;
     iniciarNavegacionHaciaConfirmada(puntos, nombre);
   });
   document.getElementById('btnModalRutaRapida').addEventListener('click', function(){
@@ -4989,6 +5579,7 @@ function mostrarModalPreferenciaRuta(puntos, nombre){
     localStorage.setItem('generadorKml_preferenciaRuta', 'rapida');
     actualizarBotonesPreferenciaRuta();
     modal.remove();
+    navEsHaciaKmlPropio = true;
     iniciarNavegacionHaciaConfirmada(puntos, nombre);
   });
 }
@@ -4999,11 +5590,16 @@ function iniciarNavegacionHaciaConfirmada(puntos, nombre){
   // para que el panel de navegacion sea lo primero que se vea.
   if(typeof cambiarEtapa === 'function') cambiarEtapa('navegar');
 
+  const btnNav = document.getElementById('btnNavegar');
+  if(btnNav) btnNav.classList.add('activo');
+
   const m = obtenerMapa();
   const panel = document.getElementById('navInfoPanel');
   const elNombre = document.getElementById('navNombre');
+  const elEtiquetaKml = document.getElementById('navEtiquetaKml');
   const elDistancia = document.getElementById('navDistancia');
   const elEstado = document.getElementById('navEstado');
+  if(elEtiquetaKml) elEtiquetaKml.style.display = navEsHaciaKmlPropio ? 'block' : 'none';
 
   // Importante: si ya habia un rastreo de GPS corriendo de una navegacion anterior (por ejemplo,
   // si esta funcion se llama dos veces sin haber cerrado el navegador antes), lo cerramos primero.
@@ -5119,6 +5715,8 @@ function cerrarNavegador(){
   document.getElementById('navInfoPanel').style.display = 'none';
   modoNavegacionActivo = false;
   document.body.classList.remove('nav-activa');
+  const btnNav = document.getElementById('btnNavegar');
+  if(btnNav) btnNav.classList.remove('activo');
   borrarSesionNavActiva(); // cerraste a mano: no hace falta retomar esto si se reabre la app
   if(navWatchId !== null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
   if(navOrientHandler){
@@ -5408,7 +6006,7 @@ function renderizarGaleriaFotos(){
   });
 }
 
-document.getElementById('btnCamara').addEventListener('click', abrirCamara);
+document.getElementById('btnGeneradorMapa').addEventListener('click', generarMapaTerreno);
 
 document.getElementById('btnAbrirOficina').addEventListener('click', function(){
   const bloque = document.getElementById('bloqueOficina');
@@ -6014,7 +6612,7 @@ function mostrarInfoPoligonoSubido(item, latlngClick){
     lineaMedida = 'Longitud: ~' + largoTxt;
   }else{
     const area = calcularAreaHa(item.puntos);
-    lineaMedida = 'Superficie: ~' + area.toFixed(2) + ' ha';
+    lineaMedida = 'Superficie: ' + formatoAreaHaYM2(area);
   }
 
   const idInfo = 'infoDist_' + item.id;
@@ -6192,6 +6790,15 @@ function cambiarEtapa(nombre){
   document.querySelectorAll('.etapa-tab').forEach(function(btn){
     btn.classList.toggle('activa', btn.getAttribute('data-etapa') === nombre);
   });
+  // El titulo sobre el mapa cambia segun la pestaña: en "Navegar" se explica que ahi mismo
+  // se pueden crear puntos/poligonos nuevos tocando el mapa; en "Crear"/"Mis puntos" se
+  // mantiene la aclaracion de que es una vista previa satelital.
+  const elTituloMapa = document.getElementById('mapTituloEtiqueta');
+  if(elTituloMapa){
+    elTituloMapa.textContent = nombre === 'navegar'
+      ? 'Navegación — crea tus puntos o tus polígonos'
+      : 'Previsualización — imagen satelital (Esri World Imagery)';
+  }
   if(nombre !== 'inicio'){
     window.scrollTo({ top:0, behavior:'instant' in window ? 'instant' : 'auto' });
   }
@@ -6567,10 +7174,17 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
   let cargados = 0;
   let conError = [];
 
+  let medidaUltimoItem = '';
+
   const procesarUno = function(index){
     if(index >= archivos.length){
       statusEl.className = conError.length > 0 ? 'status err' : 'status ok';
       let msg = 'Se cargaron ' + cargados + ' de ' + archivos.length + ' poligono(s). Quedan guardados en este navegador — toca "Ir" en la lista para saltar a cada uno estando en terreno.' + avisoLimite;
+      // Cuando se sube un solo elemento (el caso mas comun), mostramos su medida de una vez
+      // en el mismo mensaje, en vez de que el usuario tenga que ir a tocarlo en el mapa.
+      if(cargados === 1 && medidaUltimoItem){
+        msg += ' ' + medidaUltimoItem;
+      }
       if(conError.length > 0){
         msg += ' Con problemas: ' + conError.join(', ') + '.';
       }
@@ -6591,6 +7205,13 @@ function procesarArchivosKml(archivosOriginales, limpiarInput){
             || (resultados.length > 1 ? (nombreBase + ' ' + (i+1)) : nombreBase);
           const item = agregarPoligonoSubido(nombreEtiqueta, resultado.puntos, resultado.tipo, esCargaMasiva);
           cargados++;
+          if(item.tipo === 'poligono'){
+            medidaUltimoItem = 'Superficie: ' + formatoAreaHaYM2(calcularAreaHa(item.puntos)) + '.';
+          }else if(item.tipo === 'linea'){
+            const largoM = longitudTotalLinea(item.puntos);
+            const largoTxt = largoM >= 1000 ? (largoM/1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+            medidaUltimoItem = 'Longitud: ~' + largoTxt + '.';
+          }
           if(esCargaMasiva){
             const centro = item.tipo === 'punto' ? item.puntos[0] : centroide(item.puntos);
             sumaLat += centro[0]; sumaLon += centro[1]; cantidadCentros++;
@@ -6669,6 +7290,16 @@ let capaPoligonoCampo = null;
 let marcadoresVerticesCampo = [];
 
 document.getElementById('btnUbicarme').addEventListener('click', function(){
+  const boton = document.getElementById('btnUbicarme');
+  // Segundo toque mientras ya esta activo: lo apagamos (para el seguimiento de GPS y el
+  // boton vuelve a su color original), en vez de reiniciar el rastreo cada vez.
+  if(watchIdUbicacion !== null){
+    navigator.geolocation.clearWatch(watchIdUbicacion);
+    watchIdUbicacion = null;
+    boton.classList.remove('activo');
+    document.getElementById('campoInfo').textContent = '';
+    return;
+  }
   if(!navigator.geolocation){
     document.getElementById('campoInfo').textContent = 'Este navegador no soporta geolocalizacion.';
     return;
@@ -6676,8 +7307,7 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
   const m = obtenerMapa();
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
   document.getElementById('campoInfo').textContent = 'Buscando tu ubicacion...';
-
-  if(watchIdUbicacion !== null) navigator.geolocation.clearWatch(watchIdUbicacion);
+  boton.classList.add('activo');
 
   // Cada vez que se toca el boton, la PROXIMA posicion que llegue hace zoom y anuncia por voz
   // (antes esto solo pasaba la primerisima vez de toda la sesion, no cada vez que se apretaba).
@@ -6772,7 +7402,7 @@ function buscarCiudad(idInput, idResultados){
       cont.style.display = 'none';
       cont.innerHTML = '';
       input.value = '';
-      iniciarNavegacionHacia([[ubicacionDirecta.lat, ubicacionDirecta.lon]], 'Ubicación compartida');
+      iniciarNavegacionHaciaDirecto([[ubicacionDirecta.lat, ubicacionDirecta.lon]], 'Ubicación compartida');
     });
     fila.appendChild(nombreSpan);
     fila.appendChild(btnIr);
@@ -6815,7 +7445,7 @@ function buscarCiudad(idInput, idResultados){
           cont.innerHTML = '';
           input.value = '';
           guardarDestinoElegido(nombreCorto, lat, lon);
-          iniciarNavegacionHacia([[lat, lon]], nombreCorto);
+          iniciarNavegacionHaciaDirecto([[lat, lon]], nombreCorto);
         });
 
         fila.appendChild(nombreSpan);
@@ -6934,7 +7564,7 @@ if(elVersion) elVersion.textContent = APP_VERSION;
 document.getElementById('btnUsarDestinoGuardado').addEventListener('click', function(){
   try{
     const d = JSON.parse(localStorage.getItem('generadorKml_ultimoDestino'));
-    if(d) iniciarNavegacionHacia([[d.lat, d.lon]], d.nombre);
+    if(d) iniciarNavegacionHaciaDirecto([[d.lat, d.lon]], d.nombre);
   }catch(e){}
 });
 document.getElementById('btnBorrarDestinoGuardado').addEventListener('click', function(){
@@ -6969,19 +7599,79 @@ function anunciarUbicacionEncontrada(lat, lon){
 }
 
 document.getElementById('btnModoCampo').addEventListener('click', function(){
-  obtenerMapa();
+  const m = obtenerMapa();
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
   modoMedicionActivo = !modoMedicionActivo;
   const boton = document.getElementById('btnModoCampo');
   if(modoMedicionActivo){
     boton.classList.add('activo');
-    boton.title = 'Midiendo... toca el mapa en cada vértice (toca aquí de nuevo para parar)';
-    document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden.';
+    boton.title = 'Midiendo... toca el mapa en cada vértice (doble clic o toca aquí de nuevo para cerrar)';
+    document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden. Doble clic para cerrar el poligono.';
+    // Mientras se traza, el doble clic sirve para CERRAR el poligono — desactivamos el zoom
+    // por doble clic nativo de Leaflet, si no cada cierre tambien haria zoom de golpe.
+    m.doubleClickZoom.disable();
   }else{
     boton.classList.remove('activo');
-    boton.title = 'Medir tocando el mapa';
+    boton.title = 'Dibuja el polígono tocando el mapa';
+    m.doubleClickZoom.enable();
   }
 });
+
+// Apaga el modo "crear punto/poligono" SIN el scroll ni el mensaje de bienvenida que usa el
+// boton (eso solo tiene sentido cuando lo tocas vos mismo) — se usa cuando el cierre del modo
+// lo dispara un doble clic en el mapa (ver mas abajo), no el boton.
+function desactivarModoMedicion(){
+  modoMedicionActivo = false;
+  const boton = document.getElementById('btnModoCampo');
+  boton.classList.remove('activo');
+  boton.title = 'Dibuja el polígono tocando el mapa';
+  const m = obtenerMapa();
+  m.doubleClickZoom.enable();
+}
+
+// Prueba clasica de punto-en-poligono (ray casting) usando los mismos puntosCampo — para
+// distinguir un toque "adentro" (seguis viendo/revisando el potrero ya trazado) de uno
+// "afuera" (ya terminaste, hay que soltar el lapiz solo).
+function puntoDentroDePoligonoCampo(latlng, puntos){
+  let dentro = false;
+  for(let i = 0, j = puntos.length - 1; i < puntos.length; j = i++){
+    const yi = puntos[i][0], xi = puntos[i][1];
+    const yj = puntos[j][0], xj = puntos[j][1];
+    const interseca = ((yi > latlng.lat) !== (yj > latlng.lat)) &&
+      (latlng.lng < (xj - xi) * (latlng.lat - yi) / (yj - yi) + xi);
+    if(interseca) dentro = !dentro;
+  }
+  return dentro;
+}
+
+// Muestra la medida (en metros) de cada segmento del poligono/linea que se esta trazando,
+// como una pequeña etiqueta flotando sobre el punto medio de ese tramo — asi el usuario ve
+// cuanto mide cada lado en terreno, no solo la superficie total.
+let etiquetasSegmentosCampo = [];
+function limpiarEtiquetasSegmentosCampo(m){
+  etiquetasSegmentosCampo.forEach(function(et){ if(m.hasLayer(et)) m.removeLayer(et); });
+  etiquetasSegmentosCampo = [];
+}
+function etiquetarSegmentosCampo(m, puntos){
+  limpiarEtiquetasSegmentosCampo(m);
+  if(puntos.length < 2) return;
+  // Cierra el poligono (ultimo punto vuelve al primero) solo cuando ya hay 3+ vertices, igual
+  // que hace L.polygon automaticamente; con 2 puntos es una sola linea, sin tramo de cierre.
+  const cantidadTramos = puntos.length >= 3 ? puntos.length : puntos.length - 1;
+  for(let i = 0; i < cantidadTramos; i++){
+    const p1 = puntos[i];
+    const p2 = puntos[(i + 1) % puntos.length];
+    const largoM = distanciaMetros(p1[0], p1[1], p2[0], p2[1]);
+    const largoTxt = largoM >= 1000 ? (largoM / 1000).toFixed(2) + ' km' : Math.round(largoM) + ' m';
+    const medioLat = (p1[0] + p2[0]) / 2;
+    const medioLon = (p1[1] + p2[1]) / 2;
+    const etiqueta = L.marker([medioLat, medioLon], {
+      icon: L.divIcon({ className:'', html:'<div class="etiqueta-segmento-campo">' + largoTxt + '</div>', iconSize:null }),
+      interactive:false
+    }).addTo(m);
+    etiquetasSegmentosCampo.push(etiqueta);
+  }
+}
 
 function redibujarPoligonoCampo(m){
   if(capaPoligonoCampo) m.removeLayer(capaPoligonoCampo);
@@ -6996,6 +7686,7 @@ function redibujarPoligonoCampo(m){
       mostrarPopupNavegarCampo(e.latlng);
     });
   }
+  etiquetarSegmentosCampo(m, puntosCampo);
 }
 
 // Popup simple con boton de navegar, para el punto/linea/poligono que se esta trazando
@@ -7203,9 +7894,9 @@ function actualizarInfoCampo(){
 
   if(puntosCampo.length >= 3){
     const area = calcularAreaHa(puntosCampo);
-    info += ' Area aproximada: ~' + area.toFixed(2) + ' ha.';
+    info += ' Area aproximada: ' + formatoAreaHaYM2(area) + '.';
     badge.style.display = 'inline-block';
-    badge.textContent = '~' + area.toFixed(2) + ' ha';
+    badge.textContent = formatoAreaHaYM2(area);
     btnExportar.style.display = 'flex';
   }else if(puntosCampo.length === 2){
     const largoM = longitudTotalLinea(puntosCampo);
@@ -7275,6 +7966,7 @@ document.getElementById('btnCampoReset').addEventListener('click', function(){
   marcadoresVerticesCampo.forEach(mk => m.removeLayer(mk));
   marcadoresVerticesCampo = [];
   if(capaPoligonoCampo){ m.removeLayer(capaPoligonoCampo); capaPoligonoCampo = null; }
+  limpiarEtiquetasSegmentosCampo(m);
   document.getElementById('campoInfo').textContent = '';
   document.getElementById('campoLista').textContent = '';
   document.getElementById('campoAreaBadge').style.display = 'none';
