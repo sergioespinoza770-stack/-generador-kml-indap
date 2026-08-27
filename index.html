@@ -8003,6 +8003,24 @@ function redibujarPoligonoCampo(m){
 // Popup simple con boton de navegar, para el punto/linea/poligono que se esta trazando
 // en modo campo — usa siempre los puntosCampo actuales (no una foto vieja), asi funciona
 // bien aunque se sigan agregando o moviendo vertices despues.
+// El poligono/linea que estas trazando en terreno todavia NO es un "item" guardado (con su
+// propio arreglo de fotos) mientras no lo mandes a "Mis puntos" — asi que vincular una foto
+// desde ahi necesita primero guardarlo. Si ya lo habiamos guardado en esta misma sesion de
+// trazado, reusamos ESE mismo item (actualizando sus puntos por si seguiste agregando
+// vertices despues) en vez de crear uno duplicado cada vez que tocas el boton.
+let itemCampoVinculadoParaFoto = null;
+function vincularFotoAlTrazoActual(nombreSugerido){
+  if(itemCampoVinculadoParaFoto && poligonosSubidos.indexOf(itemCampoVinculadoParaFoto) !== -1){
+    itemCampoVinculadoParaFoto.puntos = puntosCampo.slice();
+    abrirCamaraParaItem(itemCampoVinculadoParaFoto);
+    return;
+  }
+  const nombre = nombreSugerido || ('Predio ' + new Date().toLocaleDateString('es-CL'));
+  const item = agregarPoligonoSubido(nombre, puntosCampo.slice(), null, true);
+  itemCampoVinculadoParaFoto = item;
+  abrirCamaraParaItem(item);
+}
+
 function mostrarPopupNavegarCampo(latlng){
   if(puntosCampo.length === 0) return;
   const m = obtenerMapa();
@@ -8010,6 +8028,7 @@ function mostrarPopupNavegarCampo(latlng){
   const nombreCampo = document.getElementById('nombre').value.trim();
   const nombre = nombreCampo || 'el polígono que estás trazando';
   const idBtn = 'btnNavCampo_' + Date.now();
+  const idBtnFoto = 'btnFotoCampo_' + Date.now();
   const idBtnMover = 'btnMoverCampo_' + Date.now();
   const idBtnBorrar = 'btnBorrarCampo_' + Date.now();
   const idBtnDescargar = 'btnDescargarCampo_' + Date.now();
@@ -8019,6 +8038,7 @@ function mostrarPopupNavegarCampo(latlng){
       '<div style="font-family:var(--sans, sans-serif);">' +
         '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
         '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+        '<button id="' + idBtnFoto + '" style="background:#fdeee1; border:1.5px solid #e0956a; color:#7a3c1e; padding:8px 12px; border-radius:6px; font-weight:800; font-size:12.5px; cursor:pointer; width:100%; margin-bottom:6px;">📷 Vincula foto al predio</button>' +
         '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
         '<div style="display:flex; gap:6px;">' +
           '<button id="' + idBtnMover + '" style="flex:1; background:#eef2ff; border:1px solid #b9c3ff; color:#2c3ea8; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Mover</button>' +
@@ -8027,6 +8047,11 @@ function mostrarPopupNavegarCampo(latlng){
       '</div>'
     ).openOn(m);
   setTimeout(function(){
+    const btnFoto = document.getElementById(idBtnFoto);
+    if(btnFoto) btnFoto.addEventListener('click', function(){
+      m.closePopup();
+      vincularFotoAlTrazoActual(nombreCampo);
+    });
     const btn = document.getElementById(idBtn);
     if(btn) btn.addEventListener('click', function(){
       m.closePopup();
@@ -8274,6 +8299,7 @@ document.getElementById('btnExportarCampo').addEventListener('click', function()
 document.getElementById('btnCampoReset').addEventListener('click', function(){
   const m = obtenerMapa();
   puntosCampo = [];
+  itemCampoVinculadoParaFoto = null;
   marcadoresVerticesCampo.forEach(mk => m.removeLayer(mk));
   marcadoresVerticesCampo = [];
   if(capaPoligonoCampo){ m.removeLayer(capaPoligonoCampo); capaPoligonoCampo = null; }
