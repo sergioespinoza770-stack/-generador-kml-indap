@@ -3463,6 +3463,16 @@ function guardarPlanoAutomaticoAlrededorDePunto(lat, lon, nombreDestino){
 // terreno rural), un solo intento fallaba seguido, dejando el guardado automatico sin nada
 // aunque el cartel dijera que si habia respaldo. Con 3 intentos y una pequeña espera entre
 // cada uno, se recupera de cortes cortos de señal en vez de rendirse al primer error.
+// Descarga una tesela satelital reintentando si falla — usada SOLO para armar planos/imagenes
+// (canvas), nunca para el mapa en vivo que ves navegando (ese lo maneja Leaflet directo).
+// Las URLs que llegan aca siempre incluyen "?cors=1" al final (ver los 3 lugares que llaman a
+// esta funcion): el mapa en vivo pide estas mismas teselas SIN el permiso especial de CORS
+// (no lo necesita, solo se muestran en pantalla), y el navegador guarda esa version en su
+// cache. Si despues pedimos la MISMA url pero CON el permiso de CORS (que si hace falta para
+// poder "leer" la imagen y armar el canvas), a veces el navegador reutiliza por error la
+// version vieja de la cache — eso "mancha" el canvas y hace fallar la generacion del plano
+// la PRIMERA vez, arreglandose solo en el segundo intento porque ahi ya se resolvio bien.
+// El "?cors=1" evita el choque de entrada: como cambia la URL, nunca se pisan las dos caches.
 function cargarTeselaConReintentos(url, intentosRestantes){
   return new Promise(function(resolve){
     const img = new Image();
@@ -3525,7 +3535,7 @@ function ejecutarGuardadoDePlano(bounds, zoom, nombreForzado, opciones){
   const promesas = [];
   for(let ty = minY; ty <= maxY; ty++){
     for(let tx = minX; tx <= maxX; tx++){
-      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
+      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx + '?cors=1';
       const px = (tx - minX) * 256;
       const py = (ty - minY) * 256;
       promesas.push(cargarTeselaConReintentos(url, 3).then(function(img){
@@ -3730,7 +3740,7 @@ function generarMapaTerreno(){
   const promesasTiles = [];
   for(let ty = minY; ty <= maxY; ty++){
     for(let tx = minX; tx <= maxX; tx++){
-      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
+      const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx + '?cors=1';
       const px = (tx - minX) * 256;
       const py = (ty - minY) * 256;
       promesasTiles.push(cargarTeselaConReintentos(url, 3).then(function(img){
@@ -4200,7 +4210,7 @@ function generarPlanoJpgParaItem(item){
     const promesasTiles = [];
     for(let ty = minY; ty <= maxY; ty++){
       for(let tx = minX; tx <= maxX; tx++){
-        const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx;
+        const url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + ty + '/' + tx + '?cors=1';
         const px = (tx - minX) * 256, py = (ty - minY) * 256;
         promesasTiles.push(cargarTeselaConReintentos(url, 3).then(function(img){
           if(img) ctx.drawImage(img, px, py, 256, 256);
