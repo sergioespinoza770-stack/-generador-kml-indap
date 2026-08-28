@@ -1319,6 +1319,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.mas-opciones.activo .texto-boton{
     color:#333;
   }
+  /* Boton "Vista previa / Guardar PDF" del Informe: se pone verde mientras arma el plano
+     satelital y el documento, y vuelve solo a su color normal apenas termina — mismo
+     lenguaje visual que "Generador de mapa" para la misma idea ("estoy trabajando"). */
+  #btnVistaPreviaInforme.activo{
+    background:linear-gradient(135deg, #3fa66b, #57c084) !important;
+    color:#fff !important;
+  }
   .btn-icono.navegar{
     border-color:#1a73e8;
   }
@@ -1331,9 +1338,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
-  /* "Mi ubicacion" ya no queda amarillo en reposo — ese color se confundia con "activado".
-     Ahora en reposo es igual de neutro que el resto de los botones, y solo se distingue
-     cuando de verdad esta activo (verde, via .btn-icono.activo mas abajo). */
+  /* "Mi ubicacion" es casi siempre el primer toque al llegar al potrero — la destacamos con
+     el amarillo insignia de la app en reposo (fondo lleno, no solo el borde), para que sea la
+     mas notoria del grupo de un vistazo. Cuando esta buscando tu posicion se pone VERDE (via
+     .btn-icono.inicio.activo, mas especifico que esta regla y por eso gana mientras esta
+     activo) y al encontrarla vuelve sola a este amarillo. */
+  .btn-icono.inicio{
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    border-color:var(--accent-dark);
+    border-width:2.5px;
+    box-shadow:0 3px 14px rgba(255,199,0,0.4);
+  }
+  .btn-icono.inicio .texto-boton{
+    color:var(--accent-text);
+  }
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
     opacity:0.55;
@@ -3861,9 +3879,10 @@ function generarMapaTerreno(){
       // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
       // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
       // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
-      // Junto a cada uno va su coordenada UTM (mismo sistema que la grilla del plano), para
-      // poder ubicar ese vertice puntual con un GPS de mano sin tener que adivinar la posicion
-      // a partir de la grilla.
+      // La coordenada UTM junto al punto SOLO se muestra cuando es un punto aislado (1 solo
+      // vertice) — con un poligono de varios vertices, poner la coordenada de cada uno
+      // amontona el plano y lo hace ilegible (ahi ya esta la grilla UTM de fondo para ubicar
+      // cualquier vertice a ojo).
       ctx.font = 'bold ' + Math.max(9, Math.round(9.5*escalaMarcador)) + 'px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -3877,14 +3896,16 @@ function generarMapaTerreno(){
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
 
-        const utmPunto = latLonToUtm(p[0], p[1]);
-        const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
-        const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.strokeText(textoCoord, tx, ty);
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillText(textoCoord, tx, ty);
+        if(puntosCampo.length === 1){
+          const utmPunto = latLonToUtm(p[0], p[1]);
+          const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
+          const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.strokeText(textoCoord, tx, ty);
+          ctx.fillStyle = '#1a1a1a';
+          ctx.fillText(textoCoord, tx, ty);
+        }
       });
     }
 
@@ -4798,6 +4819,21 @@ function obtenerMapa(){
   return mapa;
 }
 
+// Igual que vincularFotoAlTrazoActual (mas abajo, para el trazado en terreno), pero para la
+// previsualizacion del generador de oficina (pestaña Crear): si esta figura todavia no esta
+// guardada en "Mis puntos", la guarda ahi mismo para poder vincularle la foto.
+let itemPreviewVinculadoParaFoto = null;
+function vincularFotoAPreview(nombre, latlngs){
+  if(itemPreviewVinculadoParaFoto && poligonosSubidos.indexOf(itemPreviewVinculadoParaFoto) !== -1){
+    itemPreviewVinculadoParaFoto.puntos = latlngs.slice();
+    abrirCamaraParaItem(itemPreviewVinculadoParaFoto);
+    return;
+  }
+  const item = agregarPoligonoSubido(nombre, latlngs.slice(), null, true);
+  itemPreviewVinculadoParaFoto = item;
+  abrirCamaraParaItem(item);
+}
+
 function agregarClicParaNavegar(capa, latlngs){
   capa.on('click', function(e){
     if(modoMedicionActivo) return; // mientras se traza, el clic sigue sirviendo para eso
@@ -4805,6 +4841,7 @@ function agregarClicParaNavegar(capa, latlngs){
     m.closePopup();
     const nombre = (document.getElementById('nombre').value.trim()) || 'este predio';
     const idBtn = 'btnNavPreview_' + Date.now();
+    const idBtnFoto = 'btnFotoPreview_' + Date.now();
     const idBtnDescargar = 'btnDescargarPreview_' + Date.now();
     L.popup({ maxWidth: 240 })
       .setLatLng(e.latlng)
@@ -4812,6 +4849,7 @@ function agregarClicParaNavegar(capa, latlngs){
         '<div style="font-family:var(--sans, sans-serif);">' +
           '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
           '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
+          '<button id="' + idBtnFoto + '" style="background:#fdeee1; border:1.5px solid #e0956a; color:#7a3c1e; padding:8px 12px; border-radius:6px; font-weight:800; font-size:12.5px; cursor:pointer; width:100%; margin-bottom:6px;">📷 Vincula foto al predio</button>' +
           '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">⬇️ Descargar KML</button>' +
         '</div>'
       ).openOn(m);
@@ -4820,6 +4858,11 @@ function agregarClicParaNavegar(capa, latlngs){
       if(btn) btn.addEventListener('click', function(){
         m.closePopup();
         iniciarNavegacionHacia(latlngs, nombre);
+      });
+      const btnFoto = document.getElementById(idBtnFoto);
+      if(btnFoto) btnFoto.addEventListener('click', function(){
+        m.closePopup();
+        vincularFotoAPreview(nombre, latlngs);
       });
       const btnDescargar = document.getElementById(idBtnDescargar);
       if(btnDescargar) btnDescargar.addEventListener('click', function(){
@@ -8931,18 +8974,39 @@ function generarVistaPreviaInforme(){
   const botonVista = document.getElementById('btnVistaPreviaInforme');
   const estadoMic = document.getElementById('informeEstadoMic');
   botonVista.disabled = true;
+  botonVista.classList.add('activo');
   estadoMic.textContent = 'Generando el plano satelital del predio... esto puede tardar unos segundos.';
+
+  function terminar(planoDataUrl){
+    armarEImprimirInforme(item, planoDataUrl);
+    botonVista.disabled = false;
+    botonVista.classList.remove('activo');
+  }
 
   // El plano satelital real se genera SIEMPRE que armas el informe (no hace falta haberlo
   // generado antes con "Generar Mapa" por separado) — asi el informe siempre lleva el mapa
   // en pantalla, como corresponde. Si no hay señal en este momento y no se puede traer la
   // imagen satelital, el informe se arma igual, solo avisando que faltó.
+  // Ademas: un limite de tiempo total (30s) para que esto NUNCA se quede pegado esperando
+  // para siempre si algo se cuelga — pasado ese tiempo, se arma el informe igual (con el
+  // esquema simple de respaldo) en vez de dejar al usuario sin nada.
+  let resuelto = false;
+  const limiteTiempo = setTimeout(function(){
+    if(resuelto) return;
+    resuelto = true;
+    terminar(null);
+  }, 30000);
+
   generarPlanoJpgParaItem(item).then(function(planoDataUrl){
-    armarEImprimirInforme(item, planoDataUrl);
-    botonVista.disabled = false;
+    if(resuelto) return;
+    resuelto = true;
+    clearTimeout(limiteTiempo);
+    terminar(planoDataUrl);
   }).catch(function(){
-    armarEImprimirInforme(item, null);
-    botonVista.disabled = false;
+    if(resuelto) return;
+    resuelto = true;
+    clearTimeout(limiteTiempo);
+    terminar(null);
   });
 }
 
