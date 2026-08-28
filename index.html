@@ -4179,6 +4179,7 @@ function calcularBoundsYZoomParaPuntos(puntos){
 // traer el plano, pero sigue generandose igual con el resto de los datos.
 function generarPlanoJpgParaItem(item){
   return new Promise(function(resolve){
+    try{
     if(!item.puntos || item.puntos.length === 0){ resolve(null); return; }
     const bz = calcularBoundsYZoomParaPuntos(item.puntos);
     const bounds = bz.bounds, zoom = bz.zoom;
@@ -4187,7 +4188,7 @@ function generarPlanoJpgParaItem(item){
     const minY = lat2tileY(bounds.getNorth(), zoom);
     const maxY = lat2tileY(bounds.getSouth(), zoom);
     const tilesX = maxX - minX + 1, tilesY = maxY - minY + 1;
-    if(tilesX * tilesY > 40){ resolve(null); return; }
+    if(tilesX * tilesY > 40){ resolve({ error: 'La zona del predio es muy amplia para el plano del informe (' + (tilesX*tilesY) + ' teselas).' }); return; }
 
     const canvas = document.createElement('canvas');
     canvas.width = tilesX * 256;
@@ -4322,9 +4323,14 @@ function generarPlanoJpgParaItem(item){
       ctx.fillText('Huso 18S' + sectorTexto, 12, alturaBarra*0.78);
 
       resolve(canvas.toDataURL('image/jpeg', 0.85));
-    }).catch(function(){
-      resolve(null);
+    }).catch(function(err){
+      // Devolvemos el motivo real del fallo (no solo "no se pudo") — asi si vuelve a pasar,
+      // el mismo informe impreso va a decir la causa exacta, en vez de tener que adivinar.
+      resolve({ error: (err && err.message) ? err.message : 'Error desconocido al generar el plano.' });
     });
+    }catch(err){
+      resolve({ error: (err && err.message) ? err.message : 'Error desconocido al preparar el plano.' });
+    }
   });
 }
 function datosSectorSeguro(datosSector){
@@ -9030,12 +9036,14 @@ function armarEImprimirInforme(item, planoDataUrl){
 
   // El plano real (satelital) va primero si se pudo generar. Si no hubo señal justo en ese
   // momento, caemos al esquema simple en SVG (no necesita internet) para que el informe
-  // igual se pueda armar completo, solo avisando que el plano satelital no se pudo traer.
+  // igual se pueda armar completo, mostrando el motivo exacto por el que no se pudo traer
+  // el plano real (para poder diagnosticarlo si vuelve a pasar, en vez de un aviso generico).
   let planoHtml = '';
-  if(planoDataUrl){
+  if(typeof planoDataUrl === 'string' && planoDataUrl){
     planoHtml = '<img src="' + planoDataUrl + '" style="width:100%; max-width:600px; height:auto; border-radius:10px; border:1.5px solid #ffe28a;">';
   }else{
-    planoHtml = '<p style="color:#a3291c; font-size:12px; margin-bottom:6px;">⚠️ No se pudo traer la imagen satelital en este momento (revisa la señal) — se muestra un esquema simple en su lugar.</p>' +
+    const motivo = (planoDataUrl && planoDataUrl.error) ? planoDataUrl.error : 'sin señal o tiempo agotado';
+    planoHtml = '<p style="color:#a3291c; font-size:12px; margin-bottom:6px;">⚠️ No se pudo traer la imagen satelital (' + motivo.replace(/</g,'&lt;') + ') — se muestra un esquema simple en su lugar.</p>' +
       construirEsquemaSvgPredio(item);
   }
 
