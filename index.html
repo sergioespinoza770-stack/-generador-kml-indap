@@ -1338,20 +1338,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
-  /* "Mi ubicacion" es casi siempre el primer toque al llegar al potrero — la destacamos con
-     el amarillo insignia de la app en reposo (fondo lleno, no solo el borde), para que sea la
-     mas notoria del grupo de un vistazo. Cuando esta buscando tu posicion se pone VERDE (via
-     .btn-icono.inicio.activo, mas especifico que esta regla y por eso gana mientras esta
-     activo) y al encontrarla vuelve sola a este amarillo. */
-  .btn-icono.inicio{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
-    border-color:var(--accent-dark);
-    border-width:2.5px;
-    box-shadow:0 3px 14px rgba(255,199,0,0.4);
-  }
-  .btn-icono.inicio .texto-boton{
-    color:var(--accent-text);
-  }
+  /* "Mi ubicacion" ya NO va destacada en reposo — queda igual de neutra que el resto de los
+     iconos (Deshacer, Sin señal, etc: solo borde amarillo fino, sin relleno). El amarillo
+     entero "insignia" quedo para el boton de verdad de Inicio (.boton-volver-inicio, mas
+     abajo). Se pone VERDE mientras busca tu posicion (via .btn-icono.inicio.activo) y al
+     encontrarla vuelve sola a este estado neutro. */
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
     opacity:0.55;
@@ -1937,15 +1928,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
     align-items:center;
     gap:6px;
     width:auto;
-    background:#fff;
-    border:1.5px solid #ffe28a;
-    color:#a3720a;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    border:2px solid var(--accent-dark);
+    color:var(--accent-text);
     font-family:var(--sans);
     font-weight:700;
     font-size:13px;
     padding:8px 14px 8px 10px;
     border-radius:20px;
-    box-shadow:0 2px 8px rgba(20,18,10,0.06);
+    box-shadow:0 3px 12px rgba(255,199,0,0.4);
     cursor:pointer;
     margin-bottom:14px;
   }
@@ -2572,7 +2563,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
       <div style="display:flex; gap:8px; margin-top:22px;">
         <button type="button" id="btnGuardarBorradorInforme" class="secundario" style="flex:1;">💾 Guardar borrador</button>
-        <button type="button" id="btnVistaPreviaInforme" style="flex:1;">🖨️ Vista previa / Guardar PDF</button>
+        <button type="button" id="btnVistaPreviaInforme" style="flex:1;"><span id="btnVistaPreviaInformeTexto">🖨️ Vista previa de informe</span></button>
       </div>
     </div>
   </div>
@@ -3706,7 +3697,7 @@ function generarMapaTerreno(){
   const m = obtenerMapa();
   const estado = document.getElementById('campoInfo');
   const botonGenerar = document.getElementById('btnGeneradorMapa');
-  if(botonGenerar) botonGenerar.classList.add('activo');
+  if(botonGenerar){ botonGenerar.classList.add('activo'); marcarBotonProcesando(botonGenerar, true); }
   const bounds = m.getBounds();
   const zoom = Math.min(19, Math.max(1, Math.round(m.getZoom())));
 
@@ -3720,7 +3711,7 @@ function generarMapaTerreno(){
 
   if(totalTiles > 60){
     if(estado) estado.textContent = 'La vista actual es muy amplia para generar el mapa en detalle — acerca un poco el mapa (zoom +) e intenta de nuevo.';
-    if(botonGenerar) botonGenerar.classList.remove('activo');
+    if(botonGenerar){ botonGenerar.classList.remove('activo'); marcarBotonProcesando(botonGenerar, false); }
     return;
   }
 
@@ -4118,7 +4109,7 @@ function generarMapaTerreno(){
     ctx.stroke();
 
     canvas.toBlob(function(blob){
-      if(botonGenerar) botonGenerar.classList.remove('activo');
+      if(botonGenerar){ botonGenerar.classList.remove('activo'); marcarBotonProcesando(botonGenerar, false); }
       if(!blob){
         if(estado) estado.textContent = 'No se pudo generar el mapa (el proveedor de imagen satelital pudo haber bloqueado la exportación).';
         return;
@@ -4145,7 +4136,7 @@ function generarMapaTerreno(){
   }).catch(function(){
     // Salvavidas: si algo se cae de forma inesperada en toda esta cadena, el boton no debe
     // quedar pegado en verde para siempre — se apaga igual y se avisa.
-    if(botonGenerar) botonGenerar.classList.remove('activo');
+    if(botonGenerar){ botonGenerar.classList.remove('activo'); marcarBotonProcesando(botonGenerar, false); }
     if(estado) estado.textContent = 'Ocurrió un problema al generar el mapa. Intenta de nuevo.';
   });
 }
@@ -4221,7 +4212,23 @@ function generarPlanoJpgParaItem(item){
     const centroBounds = bounds.getCenter();
     const promesaSector = obtenerSectorPorNominatim(centroBounds.lat, centroBounds.lng);
 
-    Promise.all([Promise.all(promesasTiles), promesaVias, promesaSector]).then(function(resultados){
+    // CLAVE de esta version: los caminos/sector son un EXTRA decorativo, no algo esencial —
+    // dependen de un servicio externo (Overpass) que puede demorar mucho o no contestar. Antes,
+    // el plano ENTERO esperaba a que esos dos terminaran junto con las teselas — si Overpass se
+    // colgaba, el plano completo se colgaba con el, aunque la imagen satelital (lo esencial) ya
+    // estuviera lista hace rato. Ahora el plano SOLO espera las teselas; a los caminos/sector
+    // les damos un premio de 9 segundos — si no llegaron para entonces, el plano se dibuja igual,
+    // simplemente sin esos dos extras.
+    const promesaViasConLimite = Promise.race([
+      promesaVias,
+      new Promise(function(res){ setTimeout(function(){ res({ vias: [], lugares: [], ok: false }); }, 9000); })
+    ]);
+    const promesaSectorConLimite = Promise.race([
+      promesaSector,
+      new Promise(function(res){ setTimeout(function(){ res({ sector: '', ok: false }); }, 9000); })
+    ]);
+
+    Promise.all([Promise.all(promesasTiles), promesaViasConLimite, promesaSectorConLimite]).then(function(resultados){
       const datosVia = resultados[1];
       function pixelDe(lat, lon){
         const gx = (lon + 180) / 360 * Math.pow(2, zoom) * 256;
@@ -7837,6 +7844,24 @@ let puntosCampo = []; // [lat, lon]
 let capaPoligonoCampo = null;
 let marcadoresVerticesCampo = [];
 
+// Helper compartido por los 4 botones que "trabajan" (Mi ubicacion, Crea punto/poligono,
+// Generar Mapa, Vista previa de informe): mientras estan en eso, cambian su texto a
+// "Procesando" (ademas de ponerse verdes via la clase .activo que cada uno ya maneja), para
+// que se note con claridad que la app esta trabajando y no que el toque no sirvio de nada.
+// Guarda el texto original en un data-attribute la primera vez, asi lo puede restaurar exacto
+// (con su <br> y todo) sin tener que hardcodearlo de nuevo en cada lugar que lo usa.
+function marcarBotonProcesando(boton, procesando){
+  const span = boton.querySelector('.texto-boton') || boton.querySelector('span') || boton;
+  if(procesando){
+    if(span.dataset.textoOriginal === undefined){
+      span.dataset.textoOriginal = span.innerHTML;
+    }
+    span.textContent = 'Procesando';
+  }else if(span.dataset.textoOriginal !== undefined){
+    span.innerHTML = span.dataset.textoOriginal;
+  }
+}
+
 document.getElementById('btnUbicarme').addEventListener('click', function(){
   const boton = document.getElementById('btnUbicarme');
   // Segundo toque mientras ya esta activo: lo apagamos (para el seguimiento de GPS y el
@@ -7845,6 +7870,7 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
     navigator.geolocation.clearWatch(watchIdUbicacion);
     watchIdUbicacion = null;
     boton.classList.remove('activo');
+    marcarBotonProcesando(boton, false);
     document.getElementById('campoInfo').textContent = '';
     return;
   }
@@ -7856,6 +7882,7 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
   document.getElementById('mapPanel').scrollIntoView({ behavior:'smooth', block:'center' });
   document.getElementById('campoInfo').textContent = 'Buscando tu ubicacion...';
   boton.classList.add('activo');
+  marcarBotonProcesando(boton, true);
 
   // Cada vez que se toca el boton, la PROXIMA posicion que llegue hace zoom y anuncia por voz
   // (antes esto solo pasaba la primerisima vez de toda la sesion, no cada vez que se apretaba).
@@ -7880,6 +7907,7 @@ document.getElementById('btnUbicarme').addEventListener('click', function(){
       // El rastreo sigue funcionando por detras (el punto azul se sigue actualizando en el
       // mapa) — el verde solo indicaba "buscando", no "estoy siguiendo tu posicion".
       boton.classList.remove('activo');
+      marcarBotonProcesando(boton, false);
       moverMapaProgramatico(function(){ m.setView([lat, lon], 18); });
       anunciarUbicacionEncontrada(lat, lon);
     }else if(!siguiendoPausadoPorToque('principal')){
@@ -8157,6 +8185,7 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
   const boton = document.getElementById('btnModoCampo');
   if(modoMedicionActivo){
     boton.classList.add('activo');
+    marcarBotonProcesando(boton, true);
     boton.title = 'Midiendo... toca el mapa en cada vértice (doble clic o toca aquí de nuevo para cerrar)';
     document.getElementById('campoInfo').textContent = 'Modo medicion activo: toca el mapa de arriba en cada vertice del potrero, en orden. Doble clic para cerrar el poligono.';
     // Mientras se traza, el doble clic sirve para CERRAR el poligono — desactivamos el zoom
@@ -8164,6 +8193,7 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
     m.doubleClickZoom.disable();
   }else{
     boton.classList.remove('activo');
+    marcarBotonProcesando(boton, false);
     boton.title = 'Dibuja el polígono tocando el mapa';
     m.doubleClickZoom.enable();
   }
@@ -8176,6 +8206,7 @@ function desactivarModoMedicion(){
   modoMedicionActivo = false;
   const boton = document.getElementById('btnModoCampo');
   boton.classList.remove('activo');
+  marcarBotonProcesando(boton, false);
   boton.title = 'Dibuja el polígono tocando el mapa';
   const m = obtenerMapa();
   m.doubleClickZoom.enable();
@@ -8991,27 +9022,31 @@ function generarVistaPreviaInforme(){
   const estadoMic = document.getElementById('informeEstadoMic');
   botonVista.disabled = true;
   botonVista.classList.add('activo');
+  marcarBotonProcesando(botonVista, true);
   estadoMic.textContent = 'Generando el plano satelital del predio... esto puede tardar unos segundos.';
 
   function terminar(planoDataUrl){
     armarEImprimirInforme(item, planoDataUrl);
     botonVista.disabled = false;
     botonVista.classList.remove('activo');
+    marcarBotonProcesando(botonVista, false);
   }
 
   // El plano satelital real se genera SIEMPRE que armas el informe (no hace falta haberlo
   // generado antes con "Generar Mapa" por separado) — asi el informe siempre lleva el mapa
   // en pantalla, como corresponde. Si no hay señal en este momento y no se puede traer la
   // imagen satelital, el informe se arma igual, solo avisando que faltó.
-  // Ademas: un limite de tiempo total (30s) para que esto NUNCA se quede pegado esperando
+  // Ademas: un limite de tiempo total (20s) para que esto NUNCA se quede pegado esperando
   // para siempre si algo se cuelga — pasado ese tiempo, se arma el informe igual (con el
-  // esquema simple de respaldo) en vez de dejar al usuario sin nada.
+  // esquema simple de respaldo) en vez de dejar al usuario sin nada. Ahora que los caminos/
+  // sector ya no bloquean el plano (tienen su propio limite corto, 9s), este tope solo hace
+  // falta como ultimo salvavidas — lo normal es que termine bastante antes.
   let resuelto = false;
   const limiteTiempo = setTimeout(function(){
     if(resuelto) return;
     resuelto = true;
     terminar(null);
-  }, 30000);
+  }, 20000);
 
   generarPlanoJpgParaItem(item).then(function(planoDataUrl){
     if(resuelto) return;
@@ -9107,8 +9142,39 @@ function armarEImprimirInforme(item, planoDataUrl){
   area.innerHTML = html;
   document.body.appendChild(area);
 
-  document.body.classList.add('imprimiendo-informe');
-  window.print();
+  // El plano es una imagen pesada (varios megapixeles, en base64) — si "Imprimir" se dispara
+  // ANTES de que el navegador termine de decodificarla y pintarla, la ventana de impresion
+  // puede abrirse con esa zona en blanco y SIN ningun error (justo lo que estaba pasando).
+  // Por eso esperamos a que la imagen del plano este realmente lista (decode() o, si eso
+  // falla, el evento load/error) antes de recien ahi llamar a imprimir — con un tope de 6s
+  // por si la imagen jamas termina de cargar, para no dejar el informe trabado.
+  const imgPlano = area.querySelector('img');
+  function imprimirYa(){
+    document.body.classList.add('imprimiendo-informe');
+    window.print();
+  }
+  if(imgPlano && !imgPlano.complete){
+    let yaImprimio = false;
+    const forzar = setTimeout(function(){
+      if(yaImprimio) return;
+      yaImprimio = true;
+      imprimirYa();
+    }, 6000);
+    const listo = function(){
+      if(yaImprimio) return;
+      yaImprimio = true;
+      clearTimeout(forzar);
+      imprimirYa();
+    };
+    if(imgPlano.decode){
+      imgPlano.decode().then(listo).catch(listo);
+    }else{
+      imgPlano.onload = listo;
+      imgPlano.onerror = listo;
+    }
+  }else{
+    imprimirYa();
+  }
 }
 
 // Esquema simple del polígono/linea en SVG — respaldo SIN internet, solo para cuando el
