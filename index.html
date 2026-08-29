@@ -3814,6 +3814,15 @@ function generarMapaTerreno(){
     // pantalla del mapa, sea que lo hayas trazado a mano o que venga de un KML que subiste.
     poligonosSubidos.forEach(function(itemSubido){
       if(!itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length === 0) return;
+      // Si este item es justo el que quedo vinculado al trazo que segui editando en modo
+      // campo (via "Vincula foto al predio"), NO lo dibujamos aca — puntosCampo mas abajo ya
+      // representa ese mismo predio, con su estado actual (que puede tener mas o menos
+      // vertices que la foto vieja guardada). Dibujar los dos era lo que causaba el contorno
+      // duplicado con puntos de mas.
+      if((typeof itemCampoVinculadoParaFoto !== 'undefined' && itemSubido === itemCampoVinculadoParaFoto) ||
+         (typeof itemPreviewVinculadoParaFoto !== 'undefined' && itemSubido === itemPreviewVinculadoParaFoto)){
+        return;
+      }
       const dentroDeVista = itemSubido.puntos.some(function(p){
         return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
       });
