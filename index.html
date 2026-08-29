@@ -3807,6 +3807,54 @@ function generarMapaTerreno(){
     // (que depende del zoom/resolucion con que estabas mirando el mapa), para que el punto
     // se note claro sea cual sea el nivel de detalle de esta captura en particular.
     const escalaMarcador = Math.max(1, canvas.width / 700);
+
+    // Ademas de lo que se este trazando ahora en modo campo (puntosCampo), tambien dibujamos
+    // CUALQUIER punto/poligono/linea ya subido o guardado ("Mis puntos") que este visible y
+    // caiga dentro de esta vista — asi "Generar Mapa" siempre refleja todo lo que se ve en la
+    // pantalla del mapa, sea que lo hayas trazado a mano o que venga de un KML que subiste.
+    poligonosSubidos.forEach(function(itemSubido){
+      if(!itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length === 0) return;
+      const dentroDeVista = itemSubido.puntos.some(function(p){
+        return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
+      });
+      if(!dentroDeVista) return;
+      const colorItem = itemSubido.color || '#ffc700';
+      if(itemSubido.puntos.length >= 2){
+        ctx.beginPath();
+        itemSubido.puntos.forEach(function(p, i){
+          const xy = pixelDe(p[0], p[1]);
+          if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+        });
+        if(itemSubido.tipo === 'poligono'){
+          ctx.closePath();
+          ctx.fillStyle = colorItem + '38'; // mismo color, semi-transparente
+          ctx.fill();
+        }
+        ctx.lineWidth = 3 * escalaMarcador;
+        ctx.strokeStyle = colorItem;
+        ctx.stroke();
+      }
+      itemSubido.puntos.forEach(function(p){
+        const xy = pixelDe(p[0], p[1]);
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 4 * escalaMarcador, 0, 2*Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.lineWidth = 2 * escalaMarcador;
+        ctx.strokeStyle = colorItem;
+        ctx.stroke();
+      });
+      // Nombre del predio, cerca de su primer punto — asi se puede distinguir cual es cual
+      // cuando hay varios KML subidos a la vez dentro de la misma vista.
+      const xyNombre = pixelDe(itemSubido.puntos[0][0], itemSubido.puntos[0][1]);
+      ctx.font = 'bold ' + Math.max(10, Math.round(11*escalaMarcador)) + 'px sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.strokeText(itemSubido.nombre, xyNombre[0] + 8, xyNombre[1] - 8);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillText(itemSubido.nombre, xyNombre[0] + 8, xyNombre[1] - 8);
+    });
+
     if(puntosCampo && puntosCampo.length >= 1){
       if(puntosCampo.length >= 2){
         ctx.beginPath();
@@ -8191,13 +8239,26 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
     // Mientras se traza, el doble clic sirve para CERRAR el poligono — desactivamos el zoom
     // por doble clic nativo de Leaflet, si no cada cierre tambien haria zoom de golpe.
     m.doubleClickZoom.disable();
+    mostrarVerticesCampo(true);
   }else{
     boton.classList.remove('activo');
     marcarBotonProcesando(boton, false);
     boton.title = 'Dibuja el polígono tocando el mapa';
     m.doubleClickZoom.enable();
+    mostrarVerticesCampo(false);
   }
 });
+
+// Muestra u oculta los circulos de cada vertice YA puestos: se ven mientras estas dibujando
+// (para saber donde tocaste y poder arrastrarlos a ojo), y se esconden apenas terminas —
+// dejando solo la linea/relleno del poligono, limpio. Siguen siendo arrastrables aunque esten
+// ocultos (por si hace falta corregir un vertice despues sin tener que volver a activar el
+// modo dibujo entero).
+function mostrarVerticesCampo(visible){
+  marcadoresVerticesCampo.forEach(function(marcador){
+    marcador.setOpacity(visible ? 1 : 0);
+  });
+}
 
 // Apaga el modo "crear punto/poligono" SIN el scroll ni el mensaje de bienvenida que usa el
 // boton (eso solo tiene sentido cuando lo tocas vos mismo) — se usa cuando el cierre del modo
@@ -8210,6 +8271,7 @@ function desactivarModoMedicion(){
   boton.title = 'Dibuja el polígono tocando el mapa';
   const m = obtenerMapa();
   m.doubleClickZoom.enable();
+  mostrarVerticesCampo(false);
 }
 
 // Prueba clasica de punto-en-poligono (ray casting) usando los mismos puntosCampo — para
@@ -8265,18 +8327,49 @@ function etiquetarSegmentosCampo(m, puntos){
   }
 }
 
+// Detecta si el poligono que se esta trazando ahora se superpone con algun poligono YA
+// guardado (subido, o generado antes) — para avisar visualmente (color rojo) y evitar
+// confundir dos poligonos que caen en la misma zona. Prueba simple pero suficiente: si algun
+// vertice de uno cae DENTRO del otro (en cualquiera de los dos sentidos), se consideran
+// superpuestos — no es una interseccion geometrica perfecta (no detecta cruces de bordes sin
+// que ningun vertice quede adentro), pero cubre bien el caso real de "dibuje encima de otro".
+function poligonoActualSeSuperponeConGuardado(){
+  if(puntosCampo.length < 3) return false;
+  for(let i = 0; i < poligonosSubidos.length; i++){
+    const itemSubido = poligonosSubidos[i];
+    if(itemSubido.tipo !== 'poligono' || !itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length < 3) continue;
+    for(let j = 0; j < puntosCampo.length; j++){
+      const p = puntosCampo[j];
+      if(puntoDentroDePoligonoCampo({ lat:p[0], lng:p[1] }, itemSubido.puntos)) return true;
+    }
+    for(let j = 0; j < itemSubido.puntos.length; j++){
+      const p = itemSubido.puntos[j];
+      if(puntoDentroDePoligonoCampo({ lat:p[0], lng:p[1] }, puntosCampo)) return true;
+    }
+  }
+  return false;
+}
+
 function redibujarPoligonoCampo(m){
   if(capaPoligonoCampo) m.removeLayer(capaPoligonoCampo);
   capaPoligonoCampo = null;
   if(puntosCampo.length >= 2){
+    // Amarillo de siempre, salvo que este trazo caiga encima de un poligono ya guardado —
+    // ahi se pone rojo, para que se note de un vistazo que hay dos poligonos en la misma
+    // zona y evitar confundirlos.
+    const hayConflicto = poligonoActualSeSuperponeConGuardado();
+    const colorTrazo = hayConflicto ? '#e0392b' : '#ffc700';
     capaPoligonoCampo = L.polygon(puntosCampo, {
-      color:'#ffc700', weight:3, fillColor:'#ffc700', fillOpacity:0.15
+      color: colorTrazo, weight:3, fillColor: colorTrazo, fillOpacity:0.15
     }).addTo(m);
     capaPoligonoCampo.on('click', function(e){
       if(modoMedicionActivo) return;
       L.DomEvent.stopPropagation(e);
       mostrarPopupNavegarCampo(e.latlng);
     });
+    if(hayConflicto){
+      document.getElementById('campoInfo').textContent = '⚠️ Este polígono se superpone con uno que ya tienes guardado — revisa que no sean el mismo predio duplicado.';
+    }
   }
   etiquetarSegmentosCampo(m, puntosCampo);
 }
@@ -8402,7 +8495,11 @@ function crearMarcadorVertice(lat, lon){
   const m = obtenerMapa();
   const marcador = L.marker([lat, lon], {
     icon: L.divIcon({ className:'', html:'<div class="vertice-arrastrable"></div>', iconSize:[18,18], iconAnchor:[9,9] }),
-    draggable: true
+    draggable: true,
+    // Si el poligono ya esta cerrado (no estamos en modo dibujo), el punto arranca oculto —
+    // se ve solo la linea/relleno limpio, sin los circulos. Sigue siendo arrastrable aunque
+    // este oculto (por si hace falta ajustar un vertice despues), solo que no se muestra.
+    opacity: modoMedicionActivo ? 1 : 0
   }).addTo(m);
 
   marcador.on('drag', function(e){
@@ -9085,7 +9182,7 @@ function armarEImprimirInforme(item, planoDataUrl){
   // el plano real (para poder diagnosticarlo si vuelve a pasar, en vez de un aviso generico).
   let planoHtml = '';
   if(typeof planoDataUrl === 'string' && planoDataUrl){
-    planoHtml = '<img src="' + planoDataUrl + '" style="width:100%; max-width:600px; height:auto; border-radius:10px; border:1.5px solid #ffe28a;">';
+    planoHtml = '<img src="' + planoDataUrl + '" style="width:100%; max-width:600px; max-height:470px; height:auto; object-fit:contain; border-radius:10px; border:1.5px solid #ffe28a;">';
   }else{
     const motivo = (planoDataUrl && planoDataUrl.error) ? planoDataUrl.error : 'sin señal o tiempo agotado';
     planoHtml = '<p style="color:#a3291c; font-size:12px; margin-bottom:6px;">⚠️ No se pudo traer la imagen satelital (' + motivo.replace(/</g,'&lt;') + ') — se muestra un esquema simple en su lugar.</p>' +
@@ -9102,30 +9199,36 @@ function armarEImprimirInforme(item, planoDataUrl){
 
   const html =
     '<div style="font-family:Arial, sans-serif; color:#1a1a1a; max-width:760px; margin:0 auto; padding:24px;">' +
-      '<div style="border-bottom:3px solid #ffc700; padding-bottom:12px; margin-bottom:18px;">' +
+      '<div style="border-bottom:3px solid #ffc700; padding-bottom:12px; margin-bottom:18px; break-inside:avoid; page-break-inside:avoid;">' +
         '<h1 style="margin:0; font-size:24px;">Informe técnico de terreno</h1>' +
         '<p style="margin:4px 0 0 0; color:#555; font-size:13px;">Kit Terreno · ' + fechaTexto + '</p>' +
       '</div>' +
 
-      '<h2 style="font-size:16px; margin-bottom:4px;">' + item.nombre + '</h2>' +
-      '<p style="margin:0 0 4px 0; font-size:13px; color:#333;">' + medida + '</p>' +
-      '<p style="margin:0 0 14px 0; font-size:13px; color:#333;">UTM ' + Math.round(utmCentro.este) + 'E ' + Math.round(utmCentro.norte) + 'N · Huso ' + utmCentro.huso + utmCentro.hemisferio + '</p>' +
-      planoHtml +
+      '<div style="break-inside:avoid; page-break-inside:avoid;">' +
+        '<h2 style="font-size:16px; margin-bottom:4px;">' + item.nombre + '</h2>' +
+        '<p style="margin:0 0 4px 0; font-size:13px; color:#333;">' + medida + '</p>' +
+        '<p style="margin:0 0 14px 0; font-size:13px; color:#333;">UTM ' + Math.round(utmCentro.este) + 'E ' + Math.round(utmCentro.norte) + 'N · Huso ' + utmCentro.huso + utmCentro.hemisferio + '</p>' +
+        '<div style="max-height:480px; overflow:hidden;">' + planoHtml + '</div>' +
+      '</div>' +
 
-      '<table style="width:100%; border-collapse:collapse; margin-top:18px; font-size:13px;">' +
+      '<table style="width:100%; border-collapse:collapse; margin-top:18px; font-size:13px; break-inside:avoid; page-break-inside:avoid;">' +
         '<tr><td style="padding:5px 0; width:130px; color:#555;">Nombre</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.nombreAgricultor || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">RUT</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.rut || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">Comuna/sector</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.comuna || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">Programa</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.programa || '') + '</td></tr>' +
       '</table>' +
 
-      '<h3 style="font-size:14px; margin-top:20px; margin-bottom:6px;">Observaciones de terreno</h3>' +
-      '<p style="font-size:13px; line-height:1.6; white-space:pre-wrap; border:1px solid #ddd; border-radius:8px; padding:10px;">' + (inf.observaciones ? inf.observaciones.replace(/</g,'&lt;') : 'Sin observaciones registradas.') + '</p>' +
+      '<div style="break-inside:avoid; page-break-inside:avoid; margin-top:20px;">' +
+        '<h3 style="font-size:14px; margin-bottom:6px;">Observaciones de terreno</h3>' +
+        '<p style="font-size:13px; line-height:1.6; white-space:pre-wrap; border:1px solid #ddd; border-radius:8px; padding:10px;">' + (inf.observaciones ? inf.observaciones.replace(/</g,'&lt;') : 'Sin observaciones registradas.') + '</p>' +
+      '</div>' +
 
-      '<h3 style="font-size:14px; margin-top:20px; margin-bottom:6px;">Fotografías georreferenciadas</h3>' +
-      fotosHtml +
+      '<div style="break-inside:avoid; page-break-inside:avoid; margin-top:20px;">' +
+        '<h3 style="font-size:14px; margin-bottom:6px;">Fotografías georreferenciadas</h3>' +
+        fotosHtml +
+      '</div>' +
 
-      '<div style="margin-top:36px; font-size:13px;">' +
+      '<div style="margin-top:36px; font-size:13px; break-inside:avoid; page-break-inside:avoid;">' +
         '<p style="margin:0 0 20px 0; border-bottom:1px solid #333; padding-bottom:24px;">Nombre profesional: ______________________________________</p>' +
         '<div style="display:flex; gap:24px;">' +
           '<p style="flex:1; margin:0 0 20px 0; border-bottom:1px solid #333; padding-bottom:24px;">RUT: ______________________</p>' +
