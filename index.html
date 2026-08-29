@@ -7391,6 +7391,16 @@ function cambiarEtapa(nombre){
     // necesita que le avisemos que su contenedor cambio de tamaño recien ahora que se ve,
     // si no se queda con medidas viejas y aparecen tiles grises o mal recortados.
     try{ obtenerMapa().invalidateSize(); }catch(e){}
+    // Mismo salvavidas que en redibujarPoligonoCampo: si veniamos de navegar y algo quedo sin
+    // limpiar bien, una ruta calculada no debe seguir viendose al volver a mirar/editar
+    // poligonos en cualquiera de estas 3 pestañas.
+    try{
+      const m = obtenerMapa();
+      if(typeof navCapaRuta !== 'undefined' && navCapaRuta && !modoNavegacionActivo && m.hasLayer(navCapaRuta)){
+        m.removeLayer(navCapaRuta);
+        navCapaRuta = null;
+      }
+    }catch(e){}
   }
   if(nombre === 'informe' && typeof renderizarSelectorInforme === 'function'){
     renderizarSelectorInforme();
@@ -8353,6 +8363,13 @@ function poligonoActualSeSuperponeConGuardado(){
 function redibujarPoligonoCampo(m){
   if(capaPoligonoCampo) m.removeLayer(capaPoligonoCampo);
   capaPoligonoCampo = null;
+  // Salvavidas: si por cualquier motivo quedo una ruta calculada (navCapaRuta) pegada en el
+  // mapa sin que se este navegando de verdad ahora mismo, la sacamos — nunca debe verse una
+  // linea de ruta mientras solo estas mirando/editando un poligono, viniera de donde viniera.
+  if(typeof navCapaRuta !== 'undefined' && navCapaRuta && !modoNavegacionActivo && m.hasLayer(navCapaRuta)){
+    m.removeLayer(navCapaRuta);
+    navCapaRuta = null;
+  }
   if(puntosCampo.length >= 2){
     // Amarillo de siempre, salvo que este trazo caiga encima de un poligono ya guardado —
     // ahi se pone rojo, para que se note de un vistazo que hay dos poligonos en la misma
