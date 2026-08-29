@@ -3855,6 +3855,45 @@ function generarMapaTerreno(){
       ctx.fillText(itemSubido.nombre, xyNombre[0] + 8, xyNombre[1] - 8);
     });
 
+    // La previsualizacion del generador (pestaña Crear, hecha con coordenadas pegadas — no
+    // necesariamente un KML) todavia no es un "item" en poligonosSubidos mientras no la
+    // descargues o vincules una foto — pero si esta visible en el mapa, tambien debe salir en
+    // el plano, tal como se ve en pantalla.
+    if(typeof capaPoligonoUltimosPuntos !== 'undefined' && capaPoligonoUltimosPuntos && capaPoligonoUltimosPuntos.length > 0){
+      const puntosPreview = capaPoligonoUltimosPuntos;
+      const dentroDeVistaPreview = puntosPreview.some(function(p){
+        return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
+      });
+      if(dentroDeVistaPreview){
+        if(puntosPreview.length >= 2){
+          ctx.beginPath();
+          puntosPreview.forEach(function(p, i){
+            const xy = pixelDe(p[0], p[1]);
+            if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+          });
+          const tipoPreview = determinarTipoFigura(puntosPreview, document.getElementById('noCerrarFigura').checked);
+          if(tipoPreview === 'poligono'){
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255,199,0,0.22)';
+            ctx.fill();
+          }
+          ctx.lineWidth = 3.5 * escalaMarcador;
+          ctx.strokeStyle = '#ffc700';
+          ctx.stroke();
+        }
+        puntosPreview.forEach(function(p){
+          const xy = pixelDe(p[0], p[1]);
+          ctx.beginPath();
+          ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.lineWidth = 2.5 * escalaMarcador;
+          ctx.strokeStyle = '#c98a00';
+          ctx.stroke();
+        });
+      }
+    }
+
     if(puntosCampo && puntosCampo.length >= 1){
       if(puntosCampo.length >= 2){
         ctx.beginPath();
@@ -4914,6 +4953,7 @@ function agregarClicParaNavegar(capa, latlngs){
     const idBtn = 'btnNavPreview_' + Date.now();
     const idBtnFoto = 'btnFotoPreview_' + Date.now();
     const idBtnDescargar = 'btnDescargarPreview_' + Date.now();
+    const idBtnEliminar = 'btnEliminarPreview_' + Date.now();
     L.popup({ maxWidth: 240 })
       .setLatLng(e.latlng)
       .setContent(
@@ -4921,7 +4961,8 @@ function agregarClicParaNavegar(capa, latlngs){
           '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
           '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
           '<button id="' + idBtnFoto + '" style="background:#fdeee1; border:1.5px solid #e0956a; color:#7a3c1e; padding:8px 12px; border-radius:6px; font-weight:800; font-size:12.5px; cursor:pointer; width:100%; margin-bottom:6px;">📷 Vincula foto al predio</button>' +
-          '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">⬇️ Descargar KML</button>' +
+          '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
+          '<button id="' + idBtnEliminar + '" style="background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">🗑️ Eliminar</button>' +
         '</div>'
       ).openOn(m);
     setTimeout(function(){
@@ -4939,6 +4980,16 @@ function agregarClicParaNavegar(capa, latlngs){
       if(btnDescargar) btnDescargar.addEventListener('click', function(){
         m.closePopup();
         descargarKmlDeItem(nombre, latlngs);
+      });
+      const btnEliminar = document.getElementById(idBtnEliminar);
+      if(btnEliminar) btnEliminar.addEventListener('click', function(){
+        m.closePopup();
+        if(capaPoligono){ m.removeLayer(capaPoligono); capaPoligono = null; }
+        capaPoligonoUltimosPuntos = null;
+        etiquetasMedida.forEach(function(x){ m.removeLayer(x); });
+        etiquetasMedida = [];
+        document.getElementById('mapInfo').textContent = '';
+        document.getElementById('coords').value = '';
       });
     }, 50);
   });
