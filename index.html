@@ -3858,8 +3858,13 @@ function generarMapaTerreno(){
     // La previsualizacion del generador (pestaña Crear, hecha con coordenadas pegadas — no
     // necesariamente un KML) todavia no es un "item" en poligonosSubidos mientras no la
     // descargues o vincules una foto — pero si esta visible en el mapa, tambien debe salir en
-    // el plano, tal como se ve en pantalla.
-    if(typeof capaPoligonoUltimosPuntos !== 'undefined' && capaPoligonoUltimosPuntos && capaPoligonoUltimosPuntos.length > 0){
+    // el plano, tal como se ve en pantalla. OJO: hay que confirmar que la capa siga REALMENTE
+    // puesta en el mapa ahora mismo (m.hasLayer) — si solo miramos la variable con los ultimos
+    // puntos, una previsualizacion vieja de una sesion anterior (que ya no se ve en pantalla)
+    // se seguia sumando al plano por error, con puntos de mas que no coincidian con lo que se
+    // ve en vivo.
+    if(typeof capaPoligono !== 'undefined' && capaPoligono && m.hasLayer(capaPoligono) &&
+       typeof capaPoligonoUltimosPuntos !== 'undefined' && capaPoligonoUltimosPuntos && capaPoligonoUltimosPuntos.length > 0){
       const puntosPreview = capaPoligonoUltimosPuntos;
       const dentroDeVistaPreview = puntosPreview.some(function(p){
         return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
