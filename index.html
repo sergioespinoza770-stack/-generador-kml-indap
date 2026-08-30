@@ -3857,7 +3857,11 @@ function generarMapaTerreno(){
         ctx.strokeStyle = colorItem;
         ctx.stroke();
       }
-      itemSubido.puntos.forEach(function(p){
+      // El circulo por vertice solo tiene sentido cuando es un PUNTO aislado (ahi es la unica
+      // forma de verlo); en lineas/poligonos, ahora dejamos solo el trazo limpio, sin puntos
+      // en cada vertice — se pedía asi para que no se amontonen con muchos vertices juntos.
+      if(itemSubido.puntos.length === 1){
+        const p = itemSubido.puntos[0];
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
         ctx.arc(xy[0], xy[1], 4 * escalaMarcador, 0, 2*Math.PI);
@@ -3866,7 +3870,7 @@ function generarMapaTerreno(){
         ctx.lineWidth = 2 * escalaMarcador;
         ctx.strokeStyle = colorItem;
         ctx.stroke();
-      });
+      }
       // Nombre del predio, cerca de su primer punto — asi se puede distinguir cual es cual
       // cuando hay varios KML subidos a la vez dentro de la misma vista.
       const xyNombre = pixelDe(itemSubido.puntos[0][0], itemSubido.puntos[0][1]);
@@ -3910,6 +3914,7 @@ function generarMapaTerreno(){
           ctx.stroke();
         }
         puntosPreview.forEach(function(p){
+          if(puntosPreview.length !== 1) return; // solo puntos aislados llevan circulo
           const xy = pixelDe(p[0], p[1]);
           ctx.beginPath();
           ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
@@ -3992,17 +3997,13 @@ function generarMapaTerreno(){
           ctx.textAlign = 'left';
         }
       }
-      // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
-      // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
-      // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
-      // La coordenada UTM junto al punto SOLO se muestra cuando es un punto aislado (1 solo
-      // vertice) — con un poligono de varios vertices, poner la coordenada de cada uno
-      // amontona el plano y lo hace ilegible (ahi ya esta la grilla UTM de fondo para ubicar
-      // cualquier vertice a ojo).
+      // Puntos chicos SOLO cuando es un unico punto aislado — en linea/poligono, ahora se pide
+      // dejar solo el trazo limpio, sin un circulo marcando cada vertice.
       ctx.font = 'bold ' + Math.max(9, Math.round(9.5*escalaMarcador)) + 'px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      puntosCampo.forEach(function(p){
+      if(puntosCampo.length === 1){
+        const p = puntosCampo[0];
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
         ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
@@ -4012,17 +4013,15 @@ function generarMapaTerreno(){
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
 
-        if(puntosCampo.length === 1){
-          const utmPunto = latLonToUtm(p[0], p[1]);
-          const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
-          const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-          ctx.strokeText(textoCoord, tx, ty);
-          ctx.fillStyle = '#1a1a1a';
-          ctx.fillText(textoCoord, tx, ty);
-        }
-      });
+        const utmPunto = latLonToUtm(p[0], p[1]);
+        const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
+        const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.strokeText(textoCoord, tx, ty);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillText(textoCoord, tx, ty);
+      }
     }
 
     // --- Tu ubicacion actual (el punto azul), si "Mi ubicacion" esta activo y cae dentro de
@@ -4297,8 +4296,34 @@ function generarPlanoJpgParaItem(item){
   return new Promise(function(resolve){
     try{
     if(!item.puntos || item.puntos.length === 0){ resolve(null); return; }
-    const bz = calcularBoundsYZoomParaPuntos(item.puntos);
-    const bounds = bz.bounds, zoom = bz.zoom;
+
+    // Si el predio elegido cae dentro de lo que el mapa de Navegar/Crear/Mis puntos esta
+    // mostrando AHORA MISMO (el mapa sigue vivo en memoria aunque estes parado en la pestaña
+    // Informe, solo queda oculto), usamos esa MISMA vista — asi el plano del informe muestra
+    // todo lo que hay en pantalla (otros predios cercanos incluidos), no solo un recorte
+    // ajustado nada mas al predio elegido. Si el predio no esta a la vista en este momento
+    // (por ejemplo, elegiste uno de otra zona desde el selector), calculamos un encuadre
+    // propio centrado en el, para que el plano nunca quede vacio.
+    let bounds, zoom;
+    let usandoVistaDelMapa = false;
+    try{
+      const m = obtenerMapa();
+      const boundsMapaActual = m.getBounds();
+      const itemDentroDeVistaActual = item.puntos.some(function(p){
+        return p[0] <= boundsMapaActual.getNorth() && p[0] >= boundsMapaActual.getSouth() &&
+               p[1] >= boundsMapaActual.getWest() && p[1] <= boundsMapaActual.getEast();
+      });
+      if(itemDentroDeVistaActual){
+        bounds = boundsMapaActual;
+        zoom = Math.min(19, Math.max(1, Math.round(m.getZoom())));
+        usandoVistaDelMapa = true;
+      }
+    }catch(e){}
+    if(!usandoVistaDelMapa){
+      const bz = calcularBoundsYZoomParaPuntos(item.puntos);
+      bounds = bz.bounds; zoom = bz.zoom;
+    }
+
     const minX = lon2tileX(bounds.getWest(), zoom);
     const maxX = lon2tileX(bounds.getEast(), zoom);
     const minY = lat2tileY(bounds.getNorth(), zoom);
@@ -4398,7 +4423,8 @@ function generarPlanoJpgParaItem(item){
           ctx.strokeStyle = colorOtro;
           ctx.stroke();
         }
-        itemSubido.puntos.forEach(function(p){
+        if(itemSubido.puntos.length === 1){
+          const p = itemSubido.puntos[0];
           const xy = pixelDe(p[0], p[1]);
           ctx.beginPath();
           ctx.arc(xy[0], xy[1], 3.5 * escalaMarcador, 0, 2*Math.PI);
@@ -4407,7 +4433,7 @@ function generarPlanoJpgParaItem(item){
           ctx.lineWidth = 2 * escalaMarcador;
           ctx.strokeStyle = colorOtro;
           ctx.stroke();
-        });
+        }
         const xyNombreOtro = pixelDe(itemSubido.puntos[0][0], itemSubido.puntos[0][1]);
         ctx.font = 'bold ' + Math.max(9, Math.round(10*escalaMarcador)) + 'px sans-serif';
         ctx.lineWidth = 3;
@@ -4433,7 +4459,8 @@ function generarPlanoJpgParaItem(item){
         ctx.strokeStyle = '#ffc700';
         ctx.stroke();
       }
-      puntos.forEach(function(p){
+      if(puntos.length === 1){
+        const p = puntos[0];
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
         ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
@@ -4442,7 +4469,7 @@ function generarPlanoJpgParaItem(item){
         ctx.lineWidth = 2.5 * escalaMarcador;
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
-      });
+      }
 
       // Escala grafica
       const centroLat = (bounds.getNorth() + bounds.getSouth()) / 2;
@@ -6634,6 +6661,16 @@ function guardarFotoEnGaleria(){
         fecha: fechaTexto
       });
       guardarPoligonosEnStorage();
+      // Aunque la foto quede vinculada a un predio (y no en la galeria general), tambien la
+      // sumamos a "Fotos de esta sesion" para que se vea de inmediato que se guardo — antes,
+      // la galeria de la sesion se quedaba vacia aunque ya hubieras sacado varias fotos, todas
+      // vinculadas.
+      fotosSesion.push({
+        id: 'foto_' + Date.now(),
+        dataUrl: dataUrlFinal,
+        nombre: nombreFotoFinal + ' (vinculada a ' + itemVinculandoFoto.nombre + ')'
+      });
+      renderizarGaleriaFotos();
       document.getElementById('camaraEstado').textContent = 'Foto vinculada a "' + itemVinculandoFoto.nombre + '". Puedes sacar otra, o cerrar la cámara.';
       // OJO: NO limpiamos itemVinculandoFoto aca — si sacas una segunda foto seguida en la
       // misma sesion de camara, debe seguir vinculandose al MISMO predio, no perderse en la
