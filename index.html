@@ -4959,6 +4959,29 @@ function obtenerMapa(){
       }
     });
 
+    // El globo de "~X ha" queda fijo arriba del mapa — cuando un globito de informacion se
+    // abre justo ahi debajo (pasa seguido, ya que Leaflet centra los popups sobre donde
+    // tocaste), se tapan entre si. Mientras haya un popup abierto, escondemos el globo de
+    // hectareas — vuelve a aparecer solo apenas se cierra.
+    mapa.on('popupopen', function(){
+      const badge = document.getElementById('mapInfo');
+      if(badge && badge.textContent.trim()){
+        badge.dataset.ocultoPorPopup = '1';
+        badge.style.visibility = 'hidden';
+      }
+      const badgeCampo = document.getElementById('campoAreaBadge');
+      if(badgeCampo && badgeCampo.style.display !== 'none'){
+        badgeCampo.dataset.ocultoPorPopup = '1';
+        badgeCampo.style.visibility = 'hidden';
+      }
+    });
+    mapa.on('popupclose', function(){
+      const badge = document.getElementById('mapInfo');
+      if(badge && badge.dataset.ocultoPorPopup){ badge.style.visibility = ''; delete badge.dataset.ocultoPorPopup; }
+      const badgeCampo = document.getElementById('campoAreaBadge');
+      if(badgeCampo && badgeCampo.dataset.ocultoPorPopup){ badgeCampo.style.visibility = ''; delete badgeCampo.dataset.ocultoPorPopup; }
+    });
+
     // Arrastre y giro con dos dedos: SIEMPRE activos, pero la ROTACION solo se aplica
     // mientras se este navegando (modoNavegacionActivo) — el resto del tiempo, la rotacion
     // queda fija en 0, asi que el arrastre se comporta exactamente igual que el nativo de
@@ -5033,12 +5056,21 @@ function agregarClicParaNavegar(capa, latlngs){
       const btnFoto = document.getElementById(idBtnFoto);
       if(btnFoto) btnFoto.addEventListener('click', function(){
         m.closePopup();
-        vincularFotoAPreview(nombre, latlngs);
+        // Si no habia nombre puesto (se estaba usando "este predio" solo para mostrar en el
+        // globito), ahora si se pide de verdad — asi no queda guardado en "Mis puntos" con
+        // ese nombre generico, que ademas se presta a duplicados.
+        const tipoFigura = determinarTipoFigura(latlngs, document.getElementById('noCerrarFigura').checked);
+        const nombreReal = pedirNombreSiFalta(tipoFigura);
+        if(!nombreReal) return;
+        vincularFotoAPreview(nombreReal, latlngs);
       });
       const btnDescargar = document.getElementById(idBtnDescargar);
       if(btnDescargar) btnDescargar.addEventListener('click', function(){
         m.closePopup();
-        descargarKmlDeItem(nombre, latlngs);
+        const tipoFigura = determinarTipoFigura(latlngs, document.getElementById('noCerrarFigura').checked);
+        const nombreReal = pedirNombreSiFalta(tipoFigura);
+        if(!nombreReal) return;
+        descargarKmlDeItem(nombreReal, latlngs);
       });
       const btnEliminar = document.getElementById(idBtnEliminar);
       if(btnEliminar) btnEliminar.addEventListener('click', function(){
@@ -6572,15 +6604,26 @@ function guardarFotoEnGaleria(){
     // porque estas quedan guardadas de forma permanente junto con el punto — con la version
     // grande, unas pocas fotos ya llenarian el espacio disponible del navegador.
     redimensionarDataUrl(dataUrlFinal, 900, 0.72).then(function(dataUrlLiviana){
+      // Si ya hay otra foto vinculada a ESTE MISMO predio con el mismo nombre, se le agrega
+      // "(2)", "(3)", etc. — asi nunca quedan dos fotos identicas de nombre dentro del mismo
+      // predio, que se prestaba a confusion al revisarlas despues.
+      let nombreFotoFinal = nombreFoto;
+      let contadorFoto = 2;
+      while(itemVinculandoFoto.fotos.some(function(f){ return f.nombre === nombreFotoFinal; })){
+        nombreFotoFinal = nombreFoto + ' (' + contadorFoto + ')';
+        contadorFoto++;
+      }
       itemVinculandoFoto.fotos.push({
         id: 'fotoitem_' + Date.now(),
         dataUrl: dataUrlLiviana,
-        nombre: nombreFoto,
+        nombre: nombreFotoFinal,
         fecha: fechaTexto
       });
       guardarPoligonosEnStorage();
       document.getElementById('camaraEstado').textContent = 'Foto vinculada a "' + itemVinculandoFoto.nombre + '". Puedes sacar otra, o cerrar la cámara.';
-      itemVinculandoFoto = null;
+      // OJO: NO limpiamos itemVinculandoFoto aca — si sacas una segunda foto seguida en la
+      // misma sesion de camara, debe seguir vinculandose al MISMO predio, no perderse en la
+      // galeria general. Solo se limpia cuando de verdad cierras la camara (cerrarCamara()).
     });
   }else{
     fotosSesion.push({
@@ -7574,7 +7617,21 @@ function quitarPoligonoKml(id){
   guardarPoligonosEnStorage();
 }
 
+// Si ya existe un predio guardado con exactamente ese nombre, le agrega "(2)", "(3)", etc. —
+// asi nunca quedan dos polígonos con el mismo nombre en "Mis puntos" (algo que confunde mucho
+// a la hora de elegir cual es cual, por ejemplo en el Informe o al navegar).
+function nombreUnicoParaPoligono(nombreBase){
+  let nombre = nombreBase;
+  let contador = 2;
+  while(poligonosSubidos.some(function(it){ return it.nombre === nombre; })){
+    nombre = nombreBase + ' (' + contador + ')';
+    contador++;
+  }
+  return nombre;
+}
+
 function agregarPoligonoSubido(nombre, puntos, tipo, omitirZonaAutomatica){
+  nombre = nombreUnicoParaPoligono(nombre);
   const item = {
     id: 'kml_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     nombre: nombre,
