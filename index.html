@@ -2554,12 +2554,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
         <input type="text" id="informeComuna" placeholder="Comuna / sector" style="flex:1; min-width:180px;">
-        <select id="informePrograma" style="flex:1; min-width:140px;">
-          <option value="">Programa (opcional)</option>
-          <option value="PSRF">PSRF</option>
-          <option value="SIRSD-S">SIRSD-S</option>
-          <option value="PDTI">PDTI</option>
-          <option value="Otro">Otro</option>
+        <input type="text" id="informeFechaHora" readonly style="flex:1; min-width:140px; background:#f4f3ee; color:#5a5a5a; cursor:default;">
         </select>
       </div>
 
@@ -9203,7 +9198,10 @@ function cargarPredioEnInforme(id){
   document.getElementById('informeNombre').value = inf.nombreAgricultor || '';
   document.getElementById('informeRut').value = inf.rut || '';
   document.getElementById('informeComuna').value = inf.comuna || '';
-  document.getElementById('informePrograma').value = inf.programa || '';
+  // Fecha y hora: siempre automatica, no se guarda ni se edita — se actualiza sola cada vez
+  // que entras a mirar/editar este predio en el Informe.
+  const ahoraCarga = new Date();
+  document.getElementById('informeFechaHora').value = ahoraCarga.toLocaleDateString('es-CL') + ' ' + ahoraCarga.toLocaleTimeString('es-CL');
   document.getElementById('informeObservaciones').value = inf.observaciones || '';
   document.getElementById('informeEstadoMic').textContent = '';
 
@@ -9235,7 +9233,6 @@ function guardarBorradorInforme(silencioso){
     nombreAgricultor: document.getElementById('informeNombre').value.trim(),
     rut: document.getElementById('informeRut').value.trim(),
     comuna: document.getElementById('informeComuna').value.trim(),
-    programa: document.getElementById('informePrograma').value,
     observaciones: document.getElementById('informeObservaciones').value
   };
   guardarPoligonosEnStorage();
@@ -9450,7 +9447,7 @@ function armarEImprimirInforme(item, planoDataUrl){
         '<tr><td style="padding:5px 0; width:130px; color:#555;">Nombre</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.nombreAgricultor || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">RUT</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.rut || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">Comuna/sector</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.comuna || '') + '</td></tr>' +
-        '<tr><td style="padding:5px 0; color:#555;">Programa</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.programa || '') + '</td></tr>' +
+        '<tr><td style="padding:5px 0; color:#555;">Fecha y hora</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + fechaTexto + '</td></tr>' +
       '</table>' +
 
       '<div style="break-inside:avoid; page-break-inside:avoid; margin-top:20px;">' +
@@ -9536,11 +9533,7 @@ function construirEsquemaSvgPredio(item){
   const forma = item.tipo === 'poligono'
     ? '<polygon points="' + puntosSvg + '" fill="rgba(255,199,0,0.25)" stroke="#c98a00" stroke-width="2.5"/>'
     : '<polyline points="' + puntosSvg + '" fill="none" stroke="#c98a00" stroke-width="2.5"/>';
-  const circulos = item.puntos.map(function(p){
-    const c = xy(p).split(',');
-    return '<circle cx="' + c[0] + '" cy="' + c[1] + '" r="5" fill="#fff" stroke="#c98a00" stroke-width="2"/>';
-  }).join('');
-  return '<svg viewBox="0 0 ' + anchoSvg + ' ' + altoSvg + '" style="width:100%; max-width:500px; height:auto; background:#fdfaf0; border:1.5px solid #ffe28a; border-radius:10px;">' + forma + circulos + '</svg>';
+  return '<svg viewBox="0 0 ' + anchoSvg + ' ' + altoSvg + '" style="width:100%; max-width:500px; height:auto; background:#fdfaf0; border:1.5px solid #ffe28a; border-radius:10px;">' + forma + '</svg>';
 }
 
 window.addEventListener('afterprint', function(){
