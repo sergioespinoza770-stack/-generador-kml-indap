@@ -2046,6 +2046,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   body[data-etapa="navegar"] #bloqueOficina{
     display:none !important;
   }
+  /* El buscador de "Navegar a una ciudad o dirección" es contenido EXCLUSIVO de la pestaña
+     Navegar — por las dudas de que la regla de arriba (esconderlo en crear/puntos) deje algun
+     hueco en otro estado no contemplado, esta segunda regla lo esconde SIEMPRE por defecto y
+     solo lo vuelve a mostrar cuando de verdad estas en "navegar". Asi nunca puede aparecer
+     por error en ningun otro lugar de la app. */
+  .buscar-ciudad-wrap{
+    display:none !important;
+  }
+  body[data-etapa="navegar"] .buscar-ciudad-wrap{
+    display:block !important;
+  }
+  body.nav-activa .buscar-ciudad-wrap{
+    display:none !important;
+  }
   #btnAbrirOficina{ display:none !important; } /* obsoleto: la tarjeta "Crear" cumple esta funcion ahora */
   /* Mientras se está navegando de verdad, ni la barra de etapas (sin uso) ni el botón
      "Inicio" hacen falta — el mapa ya ocupa casi toda la pantalla. */
