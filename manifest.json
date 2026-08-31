@@ -1,7 +1,7 @@
 {
   "name": "Kit de Herramienta de Terreno",
   "short_name": "Kit Herramienta",
-  "description": "Kit de herramientas para el trabajo de campo: crea KML de un punto o polígono, navega hasta el lugar aunque no haya señal, toma fotografías georreferenciadas, genera un mapa automatizado del predio, y elabora un informe técnico donde respaldes tu visita a terreno y lo que encontraste ahí.",
+  "description": "Kit de herramientas para el trabajo de campo: crea KML de un punto o polígono, navega hasta el lugar aunque no haya señal, toma fotografías georreferenciadas, genera un mapa automatizado del polígono o de tu trabajo realizado en terreno, y elabora un informe técnico donde respaldes tu visita a terreno y lo que encontraste ahí.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
