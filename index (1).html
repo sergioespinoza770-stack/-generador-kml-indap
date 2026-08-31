@@ -1338,20 +1338,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .btn-icono.guardarplano{
     border-color:#3fa66b;
   }
-  /* "Mi ubicacion" es casi siempre el primer toque al llegar al potrero — la destacamos con
-     el amarillo insignia de la app en reposo (fondo lleno, no solo el borde), para que sea la
-     mas notoria del grupo de un vistazo. Cuando esta buscando tu posicion se pone VERDE (via
-     .btn-icono.inicio.activo, mas especifico que esta regla y por eso gana mientras esta
-     activo) y al encontrarla vuelve sola a este amarillo. */
-  .btn-icono.inicio{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
-    border-color:var(--accent-dark);
-    border-width:2.5px;
-    box-shadow:0 3px 14px rgba(255,199,0,0.4);
-  }
-  .btn-icono.inicio .texto-boton{
-    color:var(--accent-text);
-  }
+  /* "Mi ubicacion" ya NO va destacada en reposo — queda igual de neutra que el resto de los
+     iconos (Deshacer, Sin señal, etc: solo borde amarillo fino, sin relleno). El amarillo
+     entero "insignia" quedo para el boton de verdad de Inicio (.boton-volver-inicio, mas
+     abajo). Se pone VERDE mientras busca tu posicion (via .btn-icono.inicio.activo) y al
+     encontrarla vuelve sola a este estado neutro. */
   .btn-icono.sin-conexion, .overlay-offline-nav.sin-conexion{
     position:relative;
     opacity:0.55;
@@ -1937,15 +1928,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
     align-items:center;
     gap:6px;
     width:auto;
-    background:#fff;
-    border:1.5px solid #ffe28a;
-    color:#a3720a;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    border:2px solid var(--accent-dark);
+    color:var(--accent-text);
     font-family:var(--sans);
     font-weight:700;
     font-size:13px;
     padding:8px 14px 8px 10px;
     border-radius:20px;
-    box-shadow:0 2px 8px rgba(20,18,10,0.06);
+    box-shadow:0 3px 12px rgba(255,199,0,0.4);
     cursor:pointer;
     margin-bottom:14px;
   }
@@ -2053,6 +2044,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   body[data-etapa="puntos"] .buscar-ciudad-wrap,
   body[data-etapa="puntos"] #bloqueOficina,
   body[data-etapa="navegar"] #bloqueOficina{
+    display:none !important;
+  }
+  /* El buscador de "Navegar a una ciudad o dirección" es contenido EXCLUSIVO de la pestaña
+     Navegar — por las dudas de que la regla de arriba (esconderlo en crear/puntos) deje algun
+     hueco en otro estado no contemplado, esta segunda regla lo esconde SIEMPRE por defecto y
+     solo lo vuelve a mostrar cuando de verdad estas en "navegar". Asi nunca puede aparecer
+     por error en ningun otro lugar de la app. */
+  .buscar-ciudad-wrap{
+    display:none !important;
+  }
+  body[data-etapa="navegar"] .buscar-ciudad-wrap{
+    display:block !important;
+  }
+  body.nav-activa .buscar-ciudad-wrap{
     display:none !important;
   }
   #btnAbrirOficina{ display:none !important; } /* obsoleto: la tarjeta "Crear" cumple esta funcion ahora */
@@ -2332,7 +2337,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <div class="wrap">
   <h1>Kit Terreno</h1>
-  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, tomar fotografías georreferenciadas, y generar el plano de terreno — todo junto, sin depender de conexión.</p>
+  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, tomar fotografías georreferenciadas, generar un mapa del terreno, y elaborar un informe técnico automatizado donde respaldes tu visita a terreno y lo que encontraste ahí — todo junto, sin depender de conexión.</p>
 
   <!-- Pantalla de inicio: 3 tarjetas grandes, tipo dashboard moderno. Tocarlas "despliega"
        esa etapa a pantalla completa (ver cambiarEtapa) — la app arranca siempre acá, y cada
@@ -2549,12 +2554,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
         <input type="text" id="informeComuna" placeholder="Comuna / sector" style="flex:1; min-width:180px;">
-        <select id="informePrograma" style="flex:1; min-width:140px;">
-          <option value="">Programa (opcional)</option>
-          <option value="PSRF">PSRF</option>
-          <option value="SIRSD-S">SIRSD-S</option>
-          <option value="PDTI">PDTI</option>
-          <option value="Otro">Otro</option>
+        <input type="text" id="informeFechaHora" readonly style="flex:1; min-width:140px; background:#f4f3ee; color:#5a5a5a; cursor:default;">
         </select>
       </div>
 
@@ -3816,6 +3816,112 @@ function generarMapaTerreno(){
     // (que depende del zoom/resolucion con que estabas mirando el mapa), para que el punto
     // se note claro sea cual sea el nivel de detalle de esta captura en particular.
     const escalaMarcador = Math.max(1, canvas.width / 700);
+
+    // Ademas de lo que se este trazando ahora en modo campo (puntosCampo), tambien dibujamos
+    // CUALQUIER punto/poligono/linea ya subido o guardado ("Mis puntos") que este visible y
+    // caiga dentro de esta vista — asi "Generar Mapa" siempre refleja todo lo que se ve en la
+    // pantalla del mapa, sea que lo hayas trazado a mano o que venga de un KML que subiste.
+    poligonosSubidos.forEach(function(itemSubido){
+      if(!itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length === 0) return;
+      // Si este item es justo el que quedo vinculado al trazo que segui editando en modo
+      // campo (via "Vincula foto al predio"), NO lo dibujamos aca — puntosCampo mas abajo ya
+      // representa ese mismo predio, con su estado actual (que puede tener mas o menos
+      // vertices que la foto vieja guardada). Dibujar los dos era lo que causaba el contorno
+      // duplicado con puntos de mas.
+      if((typeof itemCampoVinculadoParaFoto !== 'undefined' && itemSubido === itemCampoVinculadoParaFoto) ||
+         (typeof itemPreviewVinculadoParaFoto !== 'undefined' && itemSubido === itemPreviewVinculadoParaFoto)){
+        return;
+      }
+      const dentroDeVista = itemSubido.puntos.some(function(p){
+        return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
+      });
+      if(!dentroDeVista) return;
+      const colorItem = itemSubido.color || '#ffc700';
+      if(itemSubido.puntos.length >= 2){
+        ctx.beginPath();
+        itemSubido.puntos.forEach(function(p, i){
+          const xy = pixelDe(p[0], p[1]);
+          if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+        });
+        if(itemSubido.tipo === 'poligono'){
+          ctx.closePath();
+          ctx.fillStyle = colorItem + '38'; // mismo color, semi-transparente
+          ctx.fill();
+        }
+        ctx.lineWidth = 3 * escalaMarcador;
+        ctx.strokeStyle = colorItem;
+        ctx.stroke();
+      }
+      // El circulo por vertice solo tiene sentido cuando es un PUNTO aislado (ahi es la unica
+      // forma de verlo); en lineas/poligonos, ahora dejamos solo el trazo limpio, sin puntos
+      // en cada vertice — se pedía asi para que no se amontonen con muchos vertices juntos.
+      if(itemSubido.puntos.length === 1){
+        const p = itemSubido.puntos[0];
+        const xy = pixelDe(p[0], p[1]);
+        ctx.beginPath();
+        ctx.arc(xy[0], xy[1], 4 * escalaMarcador, 0, 2*Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.lineWidth = 2 * escalaMarcador;
+        ctx.strokeStyle = colorItem;
+        ctx.stroke();
+      }
+      // Nombre del predio, cerca de su primer punto — asi se puede distinguir cual es cual
+      // cuando hay varios KML subidos a la vez dentro de la misma vista.
+      const xyNombre = pixelDe(itemSubido.puntos[0][0], itemSubido.puntos[0][1]);
+      ctx.font = 'bold ' + Math.max(10, Math.round(11*escalaMarcador)) + 'px sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.strokeText(itemSubido.nombre, xyNombre[0] + 8, xyNombre[1] - 8);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillText(itemSubido.nombre, xyNombre[0] + 8, xyNombre[1] - 8);
+    });
+
+    // La previsualizacion del generador (pestaña Crear, hecha con coordenadas pegadas — no
+    // necesariamente un KML) todavia no es un "item" en poligonosSubidos mientras no la
+    // descargues o vincules una foto — pero si esta visible en el mapa, tambien debe salir en
+    // el plano, tal como se ve en pantalla. OJO: hay que confirmar que la capa siga REALMENTE
+    // puesta en el mapa ahora mismo (m.hasLayer) — si solo miramos la variable con los ultimos
+    // puntos, una previsualizacion vieja de una sesion anterior (que ya no se ve en pantalla)
+    // se seguia sumando al plano por error, con puntos de mas que no coincidian con lo que se
+    // ve en vivo.
+    if(typeof capaPoligono !== 'undefined' && capaPoligono && m.hasLayer(capaPoligono) &&
+       typeof capaPoligonoUltimosPuntos !== 'undefined' && capaPoligonoUltimosPuntos && capaPoligonoUltimosPuntos.length > 0){
+      const puntosPreview = capaPoligonoUltimosPuntos;
+      const dentroDeVistaPreview = puntosPreview.some(function(p){
+        return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
+      });
+      if(dentroDeVistaPreview){
+        if(puntosPreview.length >= 2){
+          ctx.beginPath();
+          puntosPreview.forEach(function(p, i){
+            const xy = pixelDe(p[0], p[1]);
+            if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+          });
+          const tipoPreview = determinarTipoFigura(puntosPreview, document.getElementById('noCerrarFigura').checked);
+          if(tipoPreview === 'poligono'){
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255,199,0,0.22)';
+            ctx.fill();
+          }
+          ctx.lineWidth = 3.5 * escalaMarcador;
+          ctx.strokeStyle = '#ffc700';
+          ctx.stroke();
+        }
+        puntosPreview.forEach(function(p){
+          if(puntosPreview.length !== 1) return; // solo puntos aislados llevan circulo
+          const xy = pixelDe(p[0], p[1]);
+          ctx.beginPath();
+          ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.lineWidth = 2.5 * escalaMarcador;
+          ctx.strokeStyle = '#c98a00';
+          ctx.stroke();
+        });
+      }
+    }
+
     if(puntosCampo && puntosCampo.length >= 1){
       if(puntosCampo.length >= 2){
         ctx.beginPath();
@@ -3886,17 +3992,13 @@ function generarMapaTerreno(){
           ctx.textAlign = 'left';
         }
       }
-      // Puntos chicos: antes eran circulos grandes que se pisaban entre si cuando habia
-      // varios vertices juntos (caminata con GPS, por ejemplo). Un punto chico con borde
-      // sigue siendo bien visible sobre la imagen satelital sin taparse entre ellos.
-      // La coordenada UTM junto al punto SOLO se muestra cuando es un punto aislado (1 solo
-      // vertice) — con un poligono de varios vertices, poner la coordenada de cada uno
-      // amontona el plano y lo hace ilegible (ahi ya esta la grilla UTM de fondo para ubicar
-      // cualquier vertice a ojo).
+      // Puntos chicos SOLO cuando es un unico punto aislado — en linea/poligono, ahora se pide
+      // dejar solo el trazo limpio, sin un circulo marcando cada vertice.
       ctx.font = 'bold ' + Math.max(9, Math.round(9.5*escalaMarcador)) + 'px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      puntosCampo.forEach(function(p){
+      if(puntosCampo.length === 1){
+        const p = puntosCampo[0];
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
         ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
@@ -3906,17 +4008,15 @@ function generarMapaTerreno(){
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
 
-        if(puntosCampo.length === 1){
-          const utmPunto = latLonToUtm(p[0], p[1]);
-          const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
-          const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-          ctx.strokeText(textoCoord, tx, ty);
-          ctx.fillStyle = '#1a1a1a';
-          ctx.fillText(textoCoord, tx, ty);
-        }
-      });
+        const utmPunto = latLonToUtm(p[0], p[1]);
+        const textoCoord = Math.round(utmPunto.este) + 'E  ' + Math.round(utmPunto.norte) + 'N';
+        const tx = xy[0] + 9*escalaMarcador, ty = xy[1] + 7*escalaMarcador;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.strokeText(textoCoord, tx, ty);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillText(textoCoord, tx, ty);
+      }
     }
 
     // --- Tu ubicacion actual (el punto azul), si "Mi ubicacion" esta activo y cae dentro de
@@ -4191,8 +4291,34 @@ function generarPlanoJpgParaItem(item){
   return new Promise(function(resolve){
     try{
     if(!item.puntos || item.puntos.length === 0){ resolve(null); return; }
-    const bz = calcularBoundsYZoomParaPuntos(item.puntos);
-    const bounds = bz.bounds, zoom = bz.zoom;
+
+    // Si el predio elegido cae dentro de lo que el mapa de Navegar/Crear/Mis puntos esta
+    // mostrando AHORA MISMO (el mapa sigue vivo en memoria aunque estes parado en la pestaña
+    // Informe, solo queda oculto), usamos esa MISMA vista — asi el plano del informe muestra
+    // todo lo que hay en pantalla (otros predios cercanos incluidos), no solo un recorte
+    // ajustado nada mas al predio elegido. Si el predio no esta a la vista en este momento
+    // (por ejemplo, elegiste uno de otra zona desde el selector), calculamos un encuadre
+    // propio centrado en el, para que el plano nunca quede vacio.
+    let bounds, zoom;
+    let usandoVistaDelMapa = false;
+    try{
+      const m = obtenerMapa();
+      const boundsMapaActual = m.getBounds();
+      const itemDentroDeVistaActual = item.puntos.some(function(p){
+        return p[0] <= boundsMapaActual.getNorth() && p[0] >= boundsMapaActual.getSouth() &&
+               p[1] >= boundsMapaActual.getWest() && p[1] <= boundsMapaActual.getEast();
+      });
+      if(itemDentroDeVistaActual){
+        bounds = boundsMapaActual;
+        zoom = Math.min(19, Math.max(1, Math.round(m.getZoom())));
+        usandoVistaDelMapa = true;
+      }
+    }catch(e){}
+    if(!usandoVistaDelMapa){
+      const bz = calcularBoundsYZoomParaPuntos(item.puntos);
+      bounds = bz.bounds; zoom = bz.zoom;
+    }
+
     const minX = lon2tileX(bounds.getWest(), zoom);
     const maxX = lon2tileX(bounds.getEast(), zoom);
     const minY = lat2tileY(bounds.getNorth(), zoom);
@@ -4266,6 +4392,52 @@ function generarPlanoJpgParaItem(item){
 
       // Poligono/linea/punto del predio
       const escalaMarcador = Math.max(1, canvas.width / 700);
+
+      // Otros predios/poligonos guardados que caigan dentro de esta misma vista TAMBIEN se
+      // dibujan (en su propio color, mas tenues) — asi el plano del informe refleja todo lo
+      // que se ve en el mapa alrededor del predio principal, no solo ese unico predio aislado.
+      poligonosSubidos.forEach(function(itemSubido){
+        if(itemSubido === item || !itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length === 0) return;
+        const dentroDeVista = itemSubido.puntos.some(function(p){
+          return p[0] <= bounds.getNorth() && p[0] >= bounds.getSouth() && p[1] >= bounds.getWest() && p[1] <= bounds.getEast();
+        });
+        if(!dentroDeVista) return;
+        const colorOtro = itemSubido.color || '#ffc700';
+        if(itemSubido.puntos.length >= 2){
+          ctx.beginPath();
+          itemSubido.puntos.forEach(function(p, i){
+            const xy = pixelDe(p[0], p[1]);
+            if(i === 0) ctx.moveTo(xy[0], xy[1]); else ctx.lineTo(xy[0], xy[1]);
+          });
+          if(itemSubido.tipo === 'poligono'){
+            ctx.closePath();
+            ctx.fillStyle = colorOtro + '30';
+            ctx.fill();
+          }
+          ctx.lineWidth = 2.5 * escalaMarcador;
+          ctx.strokeStyle = colorOtro;
+          ctx.stroke();
+        }
+        if(itemSubido.puntos.length === 1){
+          const p = itemSubido.puntos[0];
+          const xy = pixelDe(p[0], p[1]);
+          ctx.beginPath();
+          ctx.arc(xy[0], xy[1], 3.5 * escalaMarcador, 0, 2*Math.PI);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.lineWidth = 2 * escalaMarcador;
+          ctx.strokeStyle = colorOtro;
+          ctx.stroke();
+        }
+        const xyNombreOtro = pixelDe(itemSubido.puntos[0][0], itemSubido.puntos[0][1]);
+        ctx.font = 'bold ' + Math.max(9, Math.round(10*escalaMarcador)) + 'px sans-serif';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.strokeText(itemSubido.nombre, xyNombreOtro[0] + 7, xyNombreOtro[1] - 7);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillText(itemSubido.nombre, xyNombreOtro[0] + 7, xyNombreOtro[1] - 7);
+      });
+
       const puntos = item.puntos;
       if(puntos.length >= 2){
         ctx.beginPath();
@@ -4282,7 +4454,8 @@ function generarPlanoJpgParaItem(item){
         ctx.strokeStyle = '#ffc700';
         ctx.stroke();
       }
-      puntos.forEach(function(p){
+      if(puntos.length === 1){
+        const p = puntos[0];
         const xy = pixelDe(p[0], p[1]);
         ctx.beginPath();
         ctx.arc(xy[0], xy[1], 5 * escalaMarcador, 0, 2*Math.PI);
@@ -4291,7 +4464,7 @@ function generarPlanoJpgParaItem(item){
         ctx.lineWidth = 2.5 * escalaMarcador;
         ctx.strokeStyle = '#c98a00';
         ctx.stroke();
-      });
+      }
 
       // Escala grafica
       const centroLat = (bounds.getNorth() + bounds.getSouth()) / 2;
@@ -4822,6 +4995,29 @@ function obtenerMapa(){
       }
     });
 
+    // El globo de "~X ha" queda fijo arriba del mapa — cuando un globito de informacion se
+    // abre justo ahi debajo (pasa seguido, ya que Leaflet centra los popups sobre donde
+    // tocaste), se tapan entre si. Mientras haya un popup abierto, escondemos el globo de
+    // hectareas — vuelve a aparecer solo apenas se cierra.
+    mapa.on('popupopen', function(){
+      const badge = document.getElementById('mapInfo');
+      if(badge && badge.textContent.trim()){
+        badge.dataset.ocultoPorPopup = '1';
+        badge.style.visibility = 'hidden';
+      }
+      const badgeCampo = document.getElementById('campoAreaBadge');
+      if(badgeCampo && badgeCampo.style.display !== 'none'){
+        badgeCampo.dataset.ocultoPorPopup = '1';
+        badgeCampo.style.visibility = 'hidden';
+      }
+    });
+    mapa.on('popupclose', function(){
+      const badge = document.getElementById('mapInfo');
+      if(badge && badge.dataset.ocultoPorPopup){ badge.style.visibility = ''; delete badge.dataset.ocultoPorPopup; }
+      const badgeCampo = document.getElementById('campoAreaBadge');
+      if(badgeCampo && badgeCampo.dataset.ocultoPorPopup){ badgeCampo.style.visibility = ''; delete badgeCampo.dataset.ocultoPorPopup; }
+    });
+
     // Arrastre y giro con dos dedos: SIEMPRE activos, pero la ROTACION solo se aplica
     // mientras se este navegando (modoNavegacionActivo) — el resto del tiempo, la rotacion
     // queda fija en 0, asi que el arrastre se comporta exactamente igual que el nativo de
@@ -4875,6 +5071,7 @@ function agregarClicParaNavegar(capa, latlngs){
     const idBtn = 'btnNavPreview_' + Date.now();
     const idBtnFoto = 'btnFotoPreview_' + Date.now();
     const idBtnDescargar = 'btnDescargarPreview_' + Date.now();
+    const idBtnEliminar = 'btnEliminarPreview_' + Date.now();
     L.popup({ maxWidth: 240 })
       .setLatLng(e.latlng)
       .setContent(
@@ -4882,7 +5079,8 @@ function agregarClicParaNavegar(capa, latlngs){
           '<div style="font-weight:700; font-size:13px; color:#000; margin-bottom:8px;">' + nombre + '</div>' +
           '<button id="' + idBtn + '" style="background:#ffc700; border:none; padding:7px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; width:100%; margin-bottom:6px;">🧭 Navegar hacia aquí</button>' +
           '<button id="' + idBtnFoto + '" style="background:#fdeee1; border:1.5px solid #e0956a; color:#7a3c1e; padding:8px 12px; border-radius:6px; font-weight:800; font-size:12.5px; cursor:pointer; width:100%; margin-bottom:6px;">📷 Vincula foto al predio</button>' +
-          '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">⬇️ Descargar KML</button>' +
+          '<button id="' + idBtnDescargar + '" style="background:#e8f5ee; border:1px solid #9fd6b8; color:#1e7a45; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%; margin-bottom:6px;">⬇️ Descargar KML</button>' +
+          '<button id="' + idBtnEliminar + '" style="background:#fdeceb; border:1px solid #e0a79f; color:#a3291c; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; width:100%;">🗑️ Eliminar</button>' +
         '</div>'
       ).openOn(m);
     setTimeout(function(){
@@ -4894,12 +5092,31 @@ function agregarClicParaNavegar(capa, latlngs){
       const btnFoto = document.getElementById(idBtnFoto);
       if(btnFoto) btnFoto.addEventListener('click', function(){
         m.closePopup();
-        vincularFotoAPreview(nombre, latlngs);
+        // Si no habia nombre puesto (se estaba usando "este predio" solo para mostrar en el
+        // globito), ahora si se pide de verdad — asi no queda guardado en "Mis puntos" con
+        // ese nombre generico, que ademas se presta a duplicados.
+        const tipoFigura = determinarTipoFigura(latlngs, document.getElementById('noCerrarFigura').checked);
+        const nombreReal = pedirNombreSiFalta(tipoFigura);
+        if(!nombreReal) return;
+        vincularFotoAPreview(nombreReal, latlngs);
       });
       const btnDescargar = document.getElementById(idBtnDescargar);
       if(btnDescargar) btnDescargar.addEventListener('click', function(){
         m.closePopup();
-        descargarKmlDeItem(nombre, latlngs);
+        const tipoFigura = determinarTipoFigura(latlngs, document.getElementById('noCerrarFigura').checked);
+        const nombreReal = pedirNombreSiFalta(tipoFigura);
+        if(!nombreReal) return;
+        descargarKmlDeItem(nombreReal, latlngs);
+      });
+      const btnEliminar = document.getElementById(idBtnEliminar);
+      if(btnEliminar) btnEliminar.addEventListener('click', function(){
+        m.closePopup();
+        if(capaPoligono){ m.removeLayer(capaPoligono); capaPoligono = null; }
+        capaPoligonoUltimosPuntos = null;
+        etiquetasMedida.forEach(function(x){ m.removeLayer(x); });
+        etiquetasMedida = [];
+        document.getElementById('mapInfo').textContent = '';
+        document.getElementById('coords').value = '';
       });
     }, 50);
   });
@@ -6423,15 +6640,36 @@ function guardarFotoEnGaleria(){
     // porque estas quedan guardadas de forma permanente junto con el punto — con la version
     // grande, unas pocas fotos ya llenarian el espacio disponible del navegador.
     redimensionarDataUrl(dataUrlFinal, 900, 0.72).then(function(dataUrlLiviana){
+      // Si ya hay otra foto vinculada a ESTE MISMO predio con el mismo nombre, se le agrega
+      // "(2)", "(3)", etc. — asi nunca quedan dos fotos identicas de nombre dentro del mismo
+      // predio, que se prestaba a confusion al revisarlas despues.
+      let nombreFotoFinal = nombreFoto;
+      let contadorFoto = 2;
+      while(itemVinculandoFoto.fotos.some(function(f){ return f.nombre === nombreFotoFinal; })){
+        nombreFotoFinal = nombreFoto + ' (' + contadorFoto + ')';
+        contadorFoto++;
+      }
       itemVinculandoFoto.fotos.push({
         id: 'fotoitem_' + Date.now(),
         dataUrl: dataUrlLiviana,
-        nombre: nombreFoto,
+        nombre: nombreFotoFinal,
         fecha: fechaTexto
       });
       guardarPoligonosEnStorage();
+      // Aunque la foto quede vinculada a un predio (y no en la galeria general), tambien la
+      // sumamos a "Fotos de esta sesion" para que se vea de inmediato que se guardo — antes,
+      // la galeria de la sesion se quedaba vacia aunque ya hubieras sacado varias fotos, todas
+      // vinculadas.
+      fotosSesion.push({
+        id: 'foto_' + Date.now(),
+        dataUrl: dataUrlFinal,
+        nombre: nombreFotoFinal + ' (vinculada a ' + itemVinculandoFoto.nombre + ')'
+      });
+      renderizarGaleriaFotos();
       document.getElementById('camaraEstado').textContent = 'Foto vinculada a "' + itemVinculandoFoto.nombre + '". Puedes sacar otra, o cerrar la cámara.';
-      itemVinculandoFoto = null;
+      // OJO: NO limpiamos itemVinculandoFoto aca — si sacas una segunda foto seguida en la
+      // misma sesion de camara, debe seguir vinculandose al MISMO predio, no perderse en la
+      // galeria general. Solo se limpia cuando de verdad cierras la camara (cerrarCamara()).
     });
   }else{
     fotosSesion.push({
@@ -7352,6 +7590,16 @@ function cambiarEtapa(nombre){
     // necesita que le avisemos que su contenedor cambio de tamaño recien ahora que se ve,
     // si no se queda con medidas viejas y aparecen tiles grises o mal recortados.
     try{ obtenerMapa().invalidateSize(); }catch(e){}
+    // Mismo salvavidas que en redibujarPoligonoCampo: si veniamos de navegar y algo quedo sin
+    // limpiar bien, una ruta calculada no debe seguir viendose al volver a mirar/editar
+    // poligonos en cualquiera de estas 3 pestañas.
+    try{
+      const m = obtenerMapa();
+      if(typeof navCapaRuta !== 'undefined' && navCapaRuta && !modoNavegacionActivo && m.hasLayer(navCapaRuta)){
+        m.removeLayer(navCapaRuta);
+        navCapaRuta = null;
+      }
+    }catch(e){}
   }
   if(nombre === 'informe' && typeof renderizarSelectorInforme === 'function'){
     renderizarSelectorInforme();
@@ -7415,7 +7663,21 @@ function quitarPoligonoKml(id){
   guardarPoligonosEnStorage();
 }
 
+// Si ya existe un predio guardado con exactamente ese nombre, le agrega "(2)", "(3)", etc. —
+// asi nunca quedan dos polígonos con el mismo nombre en "Mis puntos" (algo que confunde mucho
+// a la hora de elegir cual es cual, por ejemplo en el Informe o al navegar).
+function nombreUnicoParaPoligono(nombreBase){
+  let nombre = nombreBase;
+  let contador = 2;
+  while(poligonosSubidos.some(function(it){ return it.nombre === nombre; })){
+    nombre = nombreBase + ' (' + contador + ')';
+    contador++;
+  }
+  return nombre;
+}
+
 function agregarPoligonoSubido(nombre, puntos, tipo, omitirZonaAutomatica){
+  nombre = nombreUnicoParaPoligono(nombre);
   const item = {
     id: 'kml_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     nombre: nombre,
@@ -8200,13 +8462,26 @@ document.getElementById('btnModoCampo').addEventListener('click', function(){
     // Mientras se traza, el doble clic sirve para CERRAR el poligono — desactivamos el zoom
     // por doble clic nativo de Leaflet, si no cada cierre tambien haria zoom de golpe.
     m.doubleClickZoom.disable();
+    mostrarVerticesCampo(true);
   }else{
     boton.classList.remove('activo');
     marcarBotonProcesando(boton, false);
     boton.title = 'Dibuja el polígono tocando el mapa';
     m.doubleClickZoom.enable();
+    mostrarVerticesCampo(false);
   }
 });
+
+// Muestra u oculta los circulos de cada vertice YA puestos: se ven mientras estas dibujando
+// (para saber donde tocaste y poder arrastrarlos a ojo), y se esconden apenas terminas —
+// dejando solo la linea/relleno del poligono, limpio. Siguen siendo arrastrables aunque esten
+// ocultos (por si hace falta corregir un vertice despues sin tener que volver a activar el
+// modo dibujo entero).
+function mostrarVerticesCampo(visible){
+  marcadoresVerticesCampo.forEach(function(marcador){
+    marcador.setOpacity(visible ? 1 : 0);
+  });
+}
 
 // Apaga el modo "crear punto/poligono" SIN el scroll ni el mensaje de bienvenida que usa el
 // boton (eso solo tiene sentido cuando lo tocas vos mismo) — se usa cuando el cierre del modo
@@ -8219,6 +8494,7 @@ function desactivarModoMedicion(){
   boton.title = 'Dibuja el polígono tocando el mapa';
   const m = obtenerMapa();
   m.doubleClickZoom.enable();
+  mostrarVerticesCampo(false);
 }
 
 // Prueba clasica de punto-en-poligono (ray casting) usando los mismos puntosCampo — para
@@ -8274,18 +8550,56 @@ function etiquetarSegmentosCampo(m, puntos){
   }
 }
 
+// Detecta si el poligono que se esta trazando ahora se superpone con algun poligono YA
+// guardado (subido, o generado antes) — para avisar visualmente (color rojo) y evitar
+// confundir dos poligonos que caen en la misma zona. Prueba simple pero suficiente: si algun
+// vertice de uno cae DENTRO del otro (en cualquiera de los dos sentidos), se consideran
+// superpuestos — no es una interseccion geometrica perfecta (no detecta cruces de bordes sin
+// que ningun vertice quede adentro), pero cubre bien el caso real de "dibuje encima de otro".
+function poligonoActualSeSuperponeConGuardado(){
+  if(puntosCampo.length < 3) return false;
+  for(let i = 0; i < poligonosSubidos.length; i++){
+    const itemSubido = poligonosSubidos[i];
+    if(itemSubido.tipo !== 'poligono' || !itemSubido.visible || !itemSubido.puntos || itemSubido.puntos.length < 3) continue;
+    for(let j = 0; j < puntosCampo.length; j++){
+      const p = puntosCampo[j];
+      if(puntoDentroDePoligonoCampo({ lat:p[0], lng:p[1] }, itemSubido.puntos)) return true;
+    }
+    for(let j = 0; j < itemSubido.puntos.length; j++){
+      const p = itemSubido.puntos[j];
+      if(puntoDentroDePoligonoCampo({ lat:p[0], lng:p[1] }, puntosCampo)) return true;
+    }
+  }
+  return false;
+}
+
 function redibujarPoligonoCampo(m){
   if(capaPoligonoCampo) m.removeLayer(capaPoligonoCampo);
   capaPoligonoCampo = null;
+  // Salvavidas: si por cualquier motivo quedo una ruta calculada (navCapaRuta) pegada en el
+  // mapa sin que se este navegando de verdad ahora mismo, la sacamos — nunca debe verse una
+  // linea de ruta mientras solo estas mirando/editando un poligono, viniera de donde viniera.
+  if(typeof navCapaRuta !== 'undefined' && navCapaRuta && !modoNavegacionActivo && m.hasLayer(navCapaRuta)){
+    m.removeLayer(navCapaRuta);
+    navCapaRuta = null;
+  }
   if(puntosCampo.length >= 2){
+    // Amarillo de siempre, salvo que este trazo caiga encima de un poligono ya guardado —
+    // ahi se pone rojo, para que se note de un vistazo que hay dos poligonos en la misma
+    // zona y evitar confundirlos.
+    const hayConflicto = poligonoActualSeSuperponeConGuardado();
+    const colorTrazo = hayConflicto ? '#e0392b' : '#ffc700';
     capaPoligonoCampo = L.polygon(puntosCampo, {
-      color:'#ffc700', weight:3, fillColor:'#ffc700', fillOpacity:0.15
+      color: colorTrazo, weight:3, fillColor: colorTrazo, fillOpacity:0.15
     }).addTo(m);
     capaPoligonoCampo.on('click', function(e){
       if(modoMedicionActivo) return;
       L.DomEvent.stopPropagation(e);
       mostrarPopupNavegarCampo(e.latlng);
     });
+    if(hayConflicto){
+      document.getElementById('campoInfo').textContent = '⚠️ Este polígono se superpone con uno que ya tienes guardado — revisa que no sean el mismo predio duplicado.';
+    }
   }
   etiquetarSegmentosCampo(m, puntosCampo);
 }
@@ -8411,7 +8725,11 @@ function crearMarcadorVertice(lat, lon){
   const m = obtenerMapa();
   const marcador = L.marker([lat, lon], {
     icon: L.divIcon({ className:'', html:'<div class="vertice-arrastrable"></div>', iconSize:[18,18], iconAnchor:[9,9] }),
-    draggable: true
+    draggable: true,
+    // Si el poligono ya esta cerrado (no estamos en modo dibujo), el punto arranca oculto —
+    // se ve solo la linea/relleno limpio, sin los circulos. Sigue siendo arrastrable aunque
+    // este oculto (por si hace falta ajustar un vertice despues), solo que no se muestra.
+    opacity: modoMedicionActivo ? 1 : 0
   }).addTo(m);
 
   marcador.on('drag', function(e){
@@ -8880,7 +9198,10 @@ function cargarPredioEnInforme(id){
   document.getElementById('informeNombre').value = inf.nombreAgricultor || '';
   document.getElementById('informeRut').value = inf.rut || '';
   document.getElementById('informeComuna').value = inf.comuna || '';
-  document.getElementById('informePrograma').value = inf.programa || '';
+  // Fecha y hora: siempre automatica, no se guarda ni se edita — se actualiza sola cada vez
+  // que entras a mirar/editar este predio en el Informe.
+  const ahoraCarga = new Date();
+  document.getElementById('informeFechaHora').value = ahoraCarga.toLocaleDateString('es-CL') + ' ' + ahoraCarga.toLocaleTimeString('es-CL');
   document.getElementById('informeObservaciones').value = inf.observaciones || '';
   document.getElementById('informeEstadoMic').textContent = '';
 
@@ -8912,7 +9233,6 @@ function guardarBorradorInforme(silencioso){
     nombreAgricultor: document.getElementById('informeNombre').value.trim(),
     rut: document.getElementById('informeRut').value.trim(),
     comuna: document.getElementById('informeComuna').value.trim(),
-    programa: document.getElementById('informePrograma').value,
     observaciones: document.getElementById('informeObservaciones').value
   };
   guardarPoligonosEnStorage();
@@ -8953,8 +9273,18 @@ function iniciarMicInforme(){
 
   // Texto ya confirmado antes de este arranque — lo que venga nuevo se agrega DESPUES de
   // esto, nunca lo reemplaza (para no perder lo que ya habias escrito o dictado antes).
-  const textoBase = textarea.value.trim();
+  // "let" porque se vuelve a fijar cada vez que el reconocimiento se reinicia solo (ver
+  // onend mas abajo) — asi cada reinicio parte de cero relativo a lo que YA quedo escrito,
+  // en vez de volver a sumar (y duplicar) el texto de la sesion anterior. En el celular, el
+  // reconocimiento de voz de Chrome/Android a veces reentrega los resultados de la sesion
+  // vieja al reiniciarse solo — esto evita que eso se note como texto repetido.
+  let textoBase = textarea.value.trim();
   let textoFinalAcumulado = '';
+  // Ademas del reinicio de sesion, algunos celulares repiten la MISMA frase final varias
+  // veces seguidas dentro de una misma sesion (otro bug conocido de Android) — esta variable
+  // guarda la ultima frase final que ya se agrego, para no volver a sumarla si llega igual
+  // de nuevo justo despues.
+  let ultimaFraseFinalAgregada = '';
 
   reconocedorVozInforme.onresult = function(evento){
     let interino = '';
@@ -8967,7 +9297,11 @@ function iniciarMicInforme(){
         interino += trozo;
       }
     }
-    if(final) textoFinalAcumulado += final;
+    const finalLimpio = final.trim();
+    if(finalLimpio && finalLimpio !== ultimaFraseFinalAgregada){
+      textoFinalAcumulado += final;
+      ultimaFraseFinalAgregada = finalLimpio;
+    }
     const separador = textoBase ? '\n' : '';
     textarea.value = textoBase + separador + textoFinalAcumulado + interino;
   };
@@ -8981,8 +9315,13 @@ function iniciarMicInforme(){
   reconocedorVozInforme.onend = function(){
     // Si el navegador corta el reconocimiento solo (pasa despues de un rato de silencio) y
     // el usuario todavia no toco el boton para parar, lo reiniciamos para que la grabacion
-    // se sienta continua, no que se corte sin avisar.
+    // se sienta continua, no que se corte sin avisar. Antes de reiniciar, "cerramos" la
+    // sesion anterior: lo que quedo escrito pasa a ser la nueva base, y el acumulado de esta
+    // sesion se vacia — asi la sesion nueva no puede duplicar texto de la sesion vieja.
     if(grabandoVozInforme){
+      textoBase = textarea.value.trim();
+      textoFinalAcumulado = '';
+      ultimaFraseFinalAgregada = '';
       try{ reconocedorVozInforme.start(); }catch(e){}
     }
   };
@@ -9094,7 +9433,7 @@ function armarEImprimirInforme(item, planoDataUrl){
   // el plano real (para poder diagnosticarlo si vuelve a pasar, en vez de un aviso generico).
   let planoHtml = '';
   if(typeof planoDataUrl === 'string' && planoDataUrl){
-    planoHtml = '<img src="' + planoDataUrl + '" style="width:100%; max-width:600px; height:auto; border-radius:10px; border:1.5px solid #ffe28a;">';
+    planoHtml = '<img src="' + planoDataUrl + '" style="width:100%; max-width:600px; max-height:470px; height:auto; object-fit:contain; border-radius:10px; border:1.5px solid #ffe28a;">';
   }else{
     const motivo = (planoDataUrl && planoDataUrl.error) ? planoDataUrl.error : 'sin señal o tiempo agotado';
     planoHtml = '<p style="color:#a3291c; font-size:12px; margin-bottom:6px;">⚠️ No se pudo traer la imagen satelital (' + motivo.replace(/</g,'&lt;') + ') — se muestra un esquema simple en su lugar.</p>' +
@@ -9111,30 +9450,36 @@ function armarEImprimirInforme(item, planoDataUrl){
 
   const html =
     '<div style="font-family:Arial, sans-serif; color:#1a1a1a; max-width:760px; margin:0 auto; padding:24px;">' +
-      '<div style="border-bottom:3px solid #ffc700; padding-bottom:12px; margin-bottom:18px;">' +
+      '<div style="border-bottom:3px solid #ffc700; padding-bottom:12px; margin-bottom:18px; break-inside:avoid; page-break-inside:avoid;">' +
         '<h1 style="margin:0; font-size:24px;">Informe técnico de terreno</h1>' +
         '<p style="margin:4px 0 0 0; color:#555; font-size:13px;">Kit Terreno · ' + fechaTexto + '</p>' +
       '</div>' +
 
-      '<h2 style="font-size:16px; margin-bottom:4px;">' + item.nombre + '</h2>' +
-      '<p style="margin:0 0 4px 0; font-size:13px; color:#333;">' + medida + '</p>' +
-      '<p style="margin:0 0 14px 0; font-size:13px; color:#333;">UTM ' + Math.round(utmCentro.este) + 'E ' + Math.round(utmCentro.norte) + 'N · Huso ' + utmCentro.huso + utmCentro.hemisferio + '</p>' +
-      planoHtml +
+      '<div style="break-inside:avoid; page-break-inside:avoid;">' +
+        '<h2 style="font-size:16px; margin-bottom:4px;">' + item.nombre + '</h2>' +
+        '<p style="margin:0 0 4px 0; font-size:13px; color:#333;">' + medida + '</p>' +
+        '<p style="margin:0 0 14px 0; font-size:13px; color:#333;">UTM ' + Math.round(utmCentro.este) + 'E ' + Math.round(utmCentro.norte) + 'N · Huso ' + utmCentro.huso + utmCentro.hemisferio + '</p>' +
+        '<div style="max-height:480px; overflow:hidden;">' + planoHtml + '</div>' +
+      '</div>' +
 
-      '<table style="width:100%; border-collapse:collapse; margin-top:18px; font-size:13px;">' +
+      '<table style="width:100%; border-collapse:collapse; margin-top:18px; font-size:13px; break-inside:avoid; page-break-inside:avoid;">' +
         '<tr><td style="padding:5px 0; width:130px; color:#555;">Nombre</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.nombreAgricultor || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">RUT</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.rut || '') + '</td></tr>' +
         '<tr><td style="padding:5px 0; color:#555;">Comuna/sector</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.comuna || '') + '</td></tr>' +
-        '<tr><td style="padding:5px 0; color:#555;">Programa</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + (inf.programa || '') + '</td></tr>' +
+        '<tr><td style="padding:5px 0; color:#555;">Fecha y hora</td><td style="padding:5px 0; border-bottom:1px solid #ddd;">' + fechaTexto + '</td></tr>' +
       '</table>' +
 
-      '<h3 style="font-size:14px; margin-top:20px; margin-bottom:6px;">Observaciones de terreno</h3>' +
-      '<p style="font-size:13px; line-height:1.6; white-space:pre-wrap; border:1px solid #ddd; border-radius:8px; padding:10px;">' + (inf.observaciones ? inf.observaciones.replace(/</g,'&lt;') : 'Sin observaciones registradas.') + '</p>' +
+      '<div style="break-inside:avoid; page-break-inside:avoid; margin-top:20px;">' +
+        '<h3 style="font-size:14px; margin-bottom:6px;">Observaciones de terreno</h3>' +
+        '<p style="font-size:13px; line-height:1.6; white-space:pre-wrap; border:1px solid #ddd; border-radius:8px; padding:10px;">' + (inf.observaciones ? inf.observaciones.replace(/</g,'&lt;') : 'Sin observaciones registradas.') + '</p>' +
+      '</div>' +
 
-      '<h3 style="font-size:14px; margin-top:20px; margin-bottom:6px;">Fotografías georreferenciadas</h3>' +
-      fotosHtml +
+      '<div style="break-inside:avoid; page-break-inside:avoid; margin-top:20px;">' +
+        '<h3 style="font-size:14px; margin-bottom:6px;">Fotografías georreferenciadas</h3>' +
+        fotosHtml +
+      '</div>' +
 
-      '<div style="margin-top:36px; font-size:13px;">' +
+      '<div style="margin-top:36px; font-size:13px; break-inside:avoid; page-break-inside:avoid;">' +
         '<p style="margin:0 0 20px 0; border-bottom:1px solid #333; padding-bottom:24px;">Nombre profesional: ______________________________________</p>' +
         '<div style="display:flex; gap:24px;">' +
           '<p style="flex:1; margin:0 0 20px 0; border-bottom:1px solid #333; padding-bottom:24px;">RUT: ______________________</p>' +
@@ -9207,11 +9552,7 @@ function construirEsquemaSvgPredio(item){
   const forma = item.tipo === 'poligono'
     ? '<polygon points="' + puntosSvg + '" fill="rgba(255,199,0,0.25)" stroke="#c98a00" stroke-width="2.5"/>'
     : '<polyline points="' + puntosSvg + '" fill="none" stroke="#c98a00" stroke-width="2.5"/>';
-  const circulos = item.puntos.map(function(p){
-    const c = xy(p).split(',');
-    return '<circle cx="' + c[0] + '" cy="' + c[1] + '" r="5" fill="#fff" stroke="#c98a00" stroke-width="2"/>';
-  }).join('');
-  return '<svg viewBox="0 0 ' + anchoSvg + ' ' + altoSvg + '" style="width:100%; max-width:500px; height:auto; background:#fdfaf0; border:1.5px solid #ffe28a; border-radius:10px;">' + forma + circulos + '</svg>';
+  return '<svg viewBox="0 0 ' + anchoSvg + ' ' + altoSvg + '" style="width:100%; max-width:500px; height:auto; background:#fdfaf0; border:1.5px solid #ffe28a; border-radius:10px;">' + forma + '</svg>';
 }
 
 window.addEventListener('afterprint', function(){
