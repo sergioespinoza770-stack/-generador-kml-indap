@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Kit Terreno - Poligonos</title>
-<link rel="manifest" href="manifest.json?v=2">
+<title>Kit de Herramienta de Terreno - Poligonos</title>
+<link rel="manifest" href="manifest.json?v=3">
 <meta name="theme-color" content="#ffc700">
-<link rel="icon" href="icons/icon-192.png?v=2">
-<link rel="apple-touch-icon" href="icons/icon-192.png?v=2">
+<link rel="icon" href="icons/icon-192.png?v=3">
+<link rel="apple-touch-icon" href="icons/icon-192.png?v=3">
 <style>
 /* required styles */
 
@@ -2336,8 +2336,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 
 <div class="wrap">
-  <h1>Kit Terreno</h1>
-  <p class="sub">Tu kit de herramientas para el trabajo de campo: crear un punto o polígono, guardarlo listo para volver a usarlo, navegar hasta el lugar con o sin señal, tomar fotografías georreferenciadas, generar un mapa del terreno, y elaborar un informe técnico automatizado donde respaldes tu visita a terreno y lo que encontraste ahí — todo junto, sin depender de conexión.</p>
+  <h1>Kit de Herramienta de Terreno</h1>
+  <p class="sub">Tu kit de herramientas para el trabajo de campo: crea KML de un punto o polígono, navega hasta el lugar aunque no haya señal, toma fotografías georreferenciadas, genera un mapa automatizado del predio, y elabora un informe técnico donde respaldes tu visita a terreno y lo que encontraste ahí — todo junto, sin depender de conexión.</p>
 
   <!-- Pantalla de inicio: 3 tarjetas grandes, tipo dashboard moderno. Tocarlas "despliega"
        esa etapa a pantalla completa (ver cambiarEtapa) — la app arranca siempre acá, y cada
@@ -4156,7 +4156,7 @@ function generarMapaTerreno(){
     ctx.fillStyle = '#ffc700';
     ctx.font = 'bold 30px sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Plano de terreno — Kit Terreno', canvas.width/2, alturaBarra*0.36);
+    ctx.fillText('Plano de terreno — Kit de Herramienta de Terreno', canvas.width/2, alturaBarra*0.36);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 17px sans-serif';
     ctx.fillText(fechaTexto + '   ·   Huso ' + utmCentro.huso + utmCentro.hemisferio + sectorTexto, canvas.width/2, alturaBarra*0.78);
@@ -9273,8 +9273,18 @@ function iniciarMicInforme(){
 
   // Texto ya confirmado antes de este arranque — lo que venga nuevo se agrega DESPUES de
   // esto, nunca lo reemplaza (para no perder lo que ya habias escrito o dictado antes).
-  const textoBase = textarea.value.trim();
+  // "let" porque se vuelve a fijar cada vez que el reconocimiento se reinicia solo (ver
+  // onend mas abajo) — asi cada reinicio parte de cero relativo a lo que YA quedo escrito,
+  // en vez de volver a sumar (y duplicar) el texto de la sesion anterior. En el celular, el
+  // reconocimiento de voz de Chrome/Android a veces reentrega los resultados de la sesion
+  // vieja al reiniciarse solo — esto evita que eso se note como texto repetido.
+  let textoBase = textarea.value.trim();
   let textoFinalAcumulado = '';
+  // Ademas del reinicio de sesion, algunos celulares repiten la MISMA frase final varias
+  // veces seguidas dentro de una misma sesion (otro bug conocido de Android) — esta variable
+  // guarda la ultima frase final que ya se agrego, para no volver a sumarla si llega igual
+  // de nuevo justo despues.
+  let ultimaFraseFinalAgregada = '';
 
   reconocedorVozInforme.onresult = function(evento){
     let interino = '';
@@ -9287,7 +9297,11 @@ function iniciarMicInforme(){
         interino += trozo;
       }
     }
-    if(final) textoFinalAcumulado += final;
+    const finalLimpio = final.trim();
+    if(finalLimpio && finalLimpio !== ultimaFraseFinalAgregada){
+      textoFinalAcumulado += final;
+      ultimaFraseFinalAgregada = finalLimpio;
+    }
     const separador = textoBase ? '\n' : '';
     textarea.value = textoBase + separador + textoFinalAcumulado + interino;
   };
@@ -9301,8 +9315,13 @@ function iniciarMicInforme(){
   reconocedorVozInforme.onend = function(){
     // Si el navegador corta el reconocimiento solo (pasa despues de un rato de silencio) y
     // el usuario todavia no toco el boton para parar, lo reiniciamos para que la grabacion
-    // se sienta continua, no que se corte sin avisar.
+    // se sienta continua, no que se corte sin avisar. Antes de reiniciar, "cerramos" la
+    // sesion anterior: lo que quedo escrito pasa a ser la nueva base, y el acumulado de esta
+    // sesion se vacia — asi la sesion nueva no puede duplicar texto de la sesion vieja.
     if(grabandoVozInforme){
+      textoBase = textarea.value.trim();
+      textoFinalAcumulado = '';
+      ultimaFraseFinalAgregada = '';
       try{ reconocedorVozInforme.start(); }catch(e){}
     }
   };
@@ -9433,7 +9452,7 @@ function armarEImprimirInforme(item, planoDataUrl){
     '<div style="font-family:Arial, sans-serif; color:#1a1a1a; max-width:760px; margin:0 auto; padding:24px;">' +
       '<div style="border-bottom:3px solid #ffc700; padding-bottom:12px; margin-bottom:18px; break-inside:avoid; page-break-inside:avoid;">' +
         '<h1 style="margin:0; font-size:24px;">Informe técnico de terreno</h1>' +
-        '<p style="margin:4px 0 0 0; color:#555; font-size:13px;">Kit Terreno · ' + fechaTexto + '</p>' +
+        '<p style="margin:4px 0 0 0; color:#555; font-size:13px;">Kit de Herramienta de Terreno · ' + fechaTexto + '</p>' +
       '</div>' +
 
       '<div style="break-inside:avoid; page-break-inside:avoid;">' +
